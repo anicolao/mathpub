@@ -12,7 +12,7 @@
     "author": {"type": "string"},
     "profile": {"type": "string"},
     "paper": {"enum": ["letter", "a4"]},
-    "projections": {"type": "array", "items": {"enum": ["student", "answers", "solutions"]}, "uniqueItems": true},
+    "projections": {"type": "array", "items": {"enum": ["student", "answers", "solutions", "validation"]}, "uniqueItems": true},
     "student_fields": {"type": "object"},
     "instructions": {"type": "object"},
     "sections": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["questions"]}}

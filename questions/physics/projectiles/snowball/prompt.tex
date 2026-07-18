@@ -1,20 +1,34 @@
-A snowball is launched from level ground at \mpvalue{launch_speed}, at an angle
-\mpvalue{angle} above the horizontal. It lands at the same height. Ignore air resistance and use
-$g=\mpvalue{gravity}$.
+A snowball rolls off a barn roof that slopes downward at \mpvalue{roof_angle}, as shown. The roof
+edge is \mpvalue{barn_height} above the ground, and the snowball's speed as it leaves the roof is
+\mpvalue{launch_speed}. Ignore air resistance. How far from the barn does it strike the ground?
+Round to one decimal place.
 
 \begin{center}
-\begin{tikzpicture}[scale=0.85]
-  \draw[->] (0,0) -- (7.2,0) node[right] {$x$};
-  \draw[->] (0,0) -- (0,3.4) node[above] {$y$};
-  \draw[very thick,->] (0,0) -- (1.8,1.35)
-    node[above right] {$v_0=\mpvalue{launch_speed}$};
-  \draw (0.9,0) arc[start angle=0,end angle=37,radius=0.9];
-  \node at (1.25,0.32) {$\mpvalue{angle}$};
-  \draw[dashed,thick,domain=0:6.4,samples=40,smooth]
-    plot (\x,{0.92*\x-0.14*\x*\x});
-  \fill (0,0) circle (1.7pt);
-  \fill (6.4,0) circle (1.7pt) node[below] {landing point};
+\begin{tikzpicture}[scale=0.42]
+  \draw[very thick] (-1,0) -- (10,0);
+  \draw[very thick] (\mpvalue{wall_x},0) --
+    (\mpvalue{wall_x},\mpvalue{barn_height_number}) --
+    (\mpvalue{roof_left_x},\mpvalue{roof_left_y});
+  \draw[dashed] (\mpvalue{roof_left_x},\mpvalue{barn_height_number}) --
+    (\mpvalue{wall_x},\mpvalue{barn_height_number});
+  \draw[<->] (1.5,0) -- node[left] {\mpvalue{barn_height}}
+    (1.5,\mpvalue{barn_height_number});
+  \fill[green!20,draw=black]
+    (\mpvalue{wall_x},\mpvalue{barn_height_number}) --
+    (\mpvalue{wall_x}-1.1,\mpvalue{barn_height_number})
+    arc[start angle=180,end angle={180-\mpvalue{roof_angle_number}},radius=1.1] -- cycle;
+  \node at ({\mpvalue{wall_x}-1.7*cos(\mpvalue{roof_angle_number}/2)},
+    {\mpvalue{barn_height_number}+1.7*sin(\mpvalue{roof_angle_number}/2)})
+    {\mpvalue{roof_angle}};
+  \draw[fill=gray!5] (\mpvalue{wall_x},\mpvalue{barn_height_number}) circle (0.22);
+  \draw[green!50!black,very thick,->]
+    (\mpvalue{wall_x},\mpvalue{barn_height_number}) --
+    ++(\mpvalue{velocity_dx},\mpvalue{velocity_dy});
+  \node[above right] at
+    ({\mpvalue{wall_x}+0.5*\mpvalue{velocity_dx}},
+     {\mpvalue{barn_height_number}+0.5*\mpvalue{velocity_dy}})
+    {$v_0=\mpvalue{launch_speed}$};
+  \fill (\mpvalue{impact_x},0) circle (0.12);
+  \draw[<->] (\mpvalue{wall_x},-0.55) -- node[below] {$x$} (\mpvalue{impact_x},-0.55);
 \end{tikzpicture}
 \end{center}
-
-Find (a) the time of flight, (b) the horizontal range, and (c) the maximum height.

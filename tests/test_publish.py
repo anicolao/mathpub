@@ -25,7 +25,7 @@ title = "Physics Practice"
 course = "Physics"
 profile = "mathpub.exam"
 paper = "letter"
-projections = ["student", "answers", "solutions"]
+projections = ["student", "answers", "solutions", "validation"]
 
 [[sections]]
 title = "Review"
@@ -41,12 +41,16 @@ points = 2
         "student",
         "answers",
         "solutions",
+        "validation",
     }
     for output in manifest["outputs"]:
         assert len(PdfReader(edition / output["path"]).pages) >= 1
     student_tex = next((edition / "generated-tex").glob("*-student.tex")).read_text()
     assert "A reviewed fixed answer" not in student_tex
     assert "A reviewed fixed solution" not in student_tex
+    validation_source = next((edition / "generated-tex").glob("*-validation.tex")).read_text()
+    assert "Validation and justification" in validation_source
+    assert "computational evidence" in validation_source
 
     original_instances = {
         path.name: path.read_bytes() for path in (edition / "instances").iterdir()

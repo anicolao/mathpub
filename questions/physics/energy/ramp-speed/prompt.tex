@@ -1,3 +1,21 @@
-A \,\mpvalue{mass} block starts from rest at the top of a frictionless ramp whose vertical
-height is \mpvalue{height}. Use $g=\mpvalue{gravity}$ and conservation of energy to determine
-the block's speed at the bottom of the ramp.
+A block starts from rest and slides down a frictionless inclined ramp. If the ramp angle is
+\mpvalue{angle} and its length is \mpvalue{length}, find the speed of the block as it reaches the
+bottom. Round to one decimal place.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.13]
+  \coordinate (B) at (0,0);
+  \coordinate (T) at (\mpvalue{ramp_run},\mpvalue{ramp_rise});
+  \draw[very thick] (-2,0) -- (\mpvalue{ramp_run}+2,0);
+  \draw[very thick] (B) -- (T);
+  \draw[<->] (0,1.4) -- node[above,sloped] {\mpvalue{length}}
+    (\mpvalue{ramp_run},\mpvalue{ramp_rise}+1.4);
+  \draw (6,0) arc[start angle=0,end angle=\mpvalue{angle_number},radius=6];
+  \node at ({9*cos(\mpvalue{angle_number}/2)},
+    {9*sin(\mpvalue{angle_number}/2)}) {\mpvalue{angle}};
+  \draw[fill=gray!15,rotate around={\mpvalue{angle_number}:(T)}]
+    (\mpvalue{ramp_run}-2,\mpvalue{ramp_rise}+0.3) rectangle
+    (\mpvalue{ramp_run}+1,\mpvalue{ramp_rise}+3.3);
+  \draw[dashed] (T) -- (\mpvalue{ramp_run},0);
+\end{tikzpicture}
+\end{center}

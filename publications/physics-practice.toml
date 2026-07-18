@@ -6,7 +6,7 @@ subtitle = "Energy, circular motion, and projectiles"
 course = "Introductory Physics"
 profile = "mathpub.exam"
 paper = "letter"
-projections = ["student", "answers", "solutions"]
+projections = ["student", "answers", "solutions", "validation"]
 
 [instructions]
 tex = "Show your reasoning, include units, and use an appropriate number of significant figures."

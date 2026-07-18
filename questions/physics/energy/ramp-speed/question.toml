@@ -1,9 +1,9 @@
 schema = 1
 id = "physics.energy.ramp-speed"
-title = "Speed at the bottom of a frictionless ramp"
-kind = "numeric"
+title = "Speed down an inclined frictionless ramp"
+kind = "tikz"
 points = 5
-tags = ["energy", "mechanics", "units"]
+tags = ["energy", "mechanics", "diagram", "migration", "units"]
 difficulty = 2
 generator = "generate.sage"
 prompt = "prompt.tex"
@@ -18,5 +18,5 @@ sample_seeds = 30
 max_attempts = 100
 
 [[testing.exhaustive_domains]]
-name = "classroom-values"
-parameters = { mass = [2, 4, 6, 8], height = [3, 6, 9, 12, 15, 18] }
+name = "legacy-k-rampy-domain"
+parameters = { angle_degrees = [20, 25, 30], length_metres = [25, 35, 45] }
