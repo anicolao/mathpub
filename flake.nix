@@ -40,13 +40,15 @@
           };
           tex = pkgs.texliveSmall.withPackages (ps: with ps; [
             exam
+            fontspec
             latexmk
-            libertinus
             libertinus-fonts
+            lualatex-math
             mathtools
             microtype
             siunitx
             standalone
+            unicode-math
           ]);
           mathpub = pythonPackages.buildPythonApplication {
             pname = "mathpub";
@@ -59,11 +61,17 @@
               pythonPackages.numpy
               pythonPackages.pypdf
             ];
-            nativeCheckInputs = [ pythonPackages.pytestCheckHook ];
+            nativeCheckInputs = [
+              pkgs.git
+              pkgs.poppler-utils
+              pythonPackages.pytestCheckHook
+              sage
+              tex
+            ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/mathpub \
-                --prefix PATH : ${pkgs.lib.makeBinPath [ sage tex pkgs.poppler-utils ]}
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git sage tex pkgs.poppler-utils ]}
             '';
             pythonImportsCheck = [ "mathpub" ];
             pytestFlags = [ "tests" ];
@@ -92,13 +100,15 @@
           };
           tex = pkgs.texliveSmall.withPackages (ps: with ps; [
             exam
+            fontspec
             latexmk
-            libertinus
             libertinus-fonts
+            lualatex-math
             mathtools
             microtype
             siunitx
             standalone
+            unicode-math
           ]);
         in {
           default = pkgs.mkShell {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -60,6 +61,11 @@ def instantiate(
             text=True,
             timeout=120,
             check=False,
+            env={
+                **os.environ,
+                "HOME": temporary,
+                "XDG_CACHE_HOME": str(Path(temporary) / ".cache"),
+            },
         )
         if not output_path.exists():
             raise MathpubError(
