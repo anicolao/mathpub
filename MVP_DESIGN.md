@@ -27,8 +27,9 @@ A successful MVP lets an author:
 6. generate several named variants without answer drift;
 7. reject mathematically or pedagogically invalid instances;
 8. validate individual questions across many seeds;
-9. inspect the exact parameters, derived values, and checks used in a build; and
-10. receive errors referring to the question and build stage rather than only generated TeX.
+9. inspect the exact parameters, derived values, and checks used in a build;
+10. receive errors referring to the question and build stage rather than only generated TeX; and
+11. use an LLM coding harness such as Codex CLI as the primary authoring interface without requiring a separate agent-only API.
 
 The MVP is complete when it can faithfully migrate representative material from `mechanics`, including a numerical question, a symbolic question, and a parameterized TikZ diagram.
 
@@ -49,6 +50,7 @@ The MVP is complete when it can faithfully migrate representative material from 
 - Custom project-local TeX profiles.
 - Build manifests and immutable generated question instances.
 - Question-level tests, corpus checks, and basic PDF regression testing.
+- Repository instructions, scaffolds, discovery commands, and structured diagnostics suitable for an LLM coding harness.
 - A Nix flake supporting Apple Silicon macOS, Intel macOS where practical, and common 64-bit Linux systems supported by SageMath in nixpkgs.
 
 ### 3.2 Explicitly deferred
@@ -61,6 +63,8 @@ The MVP is complete when it can faithfully migrate representative material from 
 - Automatic grading, answer-sheet scanning, and student data.
 - Collaborative editing or a hosted service.
 - Remote execution of untrusted question code.
+- A built-in chat interface, hosted agent, or direct dependency on a particular LLM vendor.
+- An MCP server or autonomous modification of project source by the mathpub runtime.
 - Arbitrary conversion of existing TeX documents.
 - Global content registries, dependency servers, and package marketplaces.
 - Guaranteed byte-for-byte reproducible PDFs across different operating systems.
@@ -111,6 +115,16 @@ Changing one question, inserting a new question, or reordering a publication mus
 
 All intermediates live under the build directory. Authored source never depends on an untracked SageTeX cache or auxiliary file.
 
+### 5.8 The authoring interface is agent-operable
+
+The source tree and CLI are the public authoring interface for humans and LLM harnesses alike. Their schemas, examples, discovery operations, diagnostics, and validation loop must be explicit enough that an agent can make a bounded change and verify it without scraping incidental terminal output or reverse-engineering generated files.
+
+Agent support must not create a second, privileged representation of a question. An agent edits the same reviewable TOML, Sage, and TeX source that a human edits.
+
+### 5.9 Mathematical evidence is typed
+
+A successful computation, numeric comparison, exhaustive test, and formal proof are not equivalent. Checks and future claims carry an evidence type, assumptions, backend, and status so that tools and agents cannot accidentally present every successful check as proof.
+
 ## 6. User workflow
 
 ### 6.1 Enter the environment
@@ -122,15 +136,20 @@ mathpub --version
 
 No global TeX, SageMath, Python package, or font installation is required.
 
+For the intended primary workflow, the user starts an LLM coding harness in the project directory and asks it to create or modify material. The harness reads the repository's `AGENTS.md`, discovers available content through the CLI, edits ordinary project source, and runs the same checks shown below. mathpub itself does not invoke the LLM.
+
 ### 6.2 Create or migrate a question
 
 ```console
 mathpub new question mechanics.kinematics.ramp-speed
+mathpub show question mechanics.kinematics.ramp-speed --json
 mathpub check question mechanics.kinematics.ramp-speed
 mathpub preview mechanics.kinematics.ramp-speed --seed 42
 ```
 
 `preview` creates a small PDF showing the prompt followed by its worked solution and writes it beneath `build/previews/`.
+
+`mathpub new question` creates a complete, valid fixed-question scaffold with explanatory comments and a passing preview fixture. Options select parameterized numeric, symbolic, or TikZ examples. It must never create a collection of empty files that forces either a human or an agent to reconstruct the format from memory.
 
 ### 6.3 Assemble a publication
 
@@ -172,6 +191,7 @@ The reference project layout is:
 mathpub-project/
 ├── flake.nix
 ├── flake.lock
+├── AGENTS.md
 ├── mathpub.toml
 ├── questions/
 │   └── mechanics/
@@ -197,6 +217,24 @@ mathpub-project/
 ```
 
 Only `flake.nix`, `flake.lock`, project configuration, authored content, profiles, and intentionally accepted test fixtures belong in version control. `build/` is ignored.
+
+### 7.1 Agent instructions
+
+`mathpub init` creates an `AGENTS.md` containing concise operational instructions for an LLM coding harness. It specifies:
+
+- how to list and inspect existing questions, publications, and profiles;
+- when to reuse an existing question rather than copy it;
+- how to scaffold each supported question kind;
+- which authored files may be edited and why `build/` must not be edited;
+- the required edit, check, preview, build, and inspection loop;
+- how seeds and variants must be preserved;
+- how to distinguish a constraint, mathematical check, and display-formatting operation;
+- how to report the assurance level of the resulting mathematics; and
+- which commands must pass before work is considered complete.
+
+The generated file is normal project source and may be extended with local conventions. `mathpub init` does not overwrite an existing `AGENTS.md`; upgrades emit a proposed companion file or diff for review.
+
+The repository should also contain short, reviewed examples of fixed, randomized numeric, symbolic, unit-aware, and diagram questions. These examples are part of the agent interface because they establish patterns an LLM can safely imitate.
 
 ## 8. Project configuration
 
@@ -293,6 +331,7 @@ def generate(ctx):
         "energy-conservation",
         lhs=(QQ(1) / 2 * speed^2).simplify_full(),
         rhs=g * length * sin(theta),
+        assumptions=["g > 0", "length_m > 0", "0 < angle_deg < 90"],
     )
 
     ctx.display.integer("angle", angle)
@@ -311,9 +350,9 @@ The public MVP generator API is deliberately small:
 - `ctx.parameter(name, value)`;
 - `ctx.derived(name, value)`;
 - `ctx.require(name, condition, detail=None)`;
-- `ctx.check_equal(name, lhs, rhs)`;
-- `ctx.check_close(name, lhs, rhs, atol, rtol=0)`;
-- `ctx.check_true(name, condition, detail=None)`;
+- `ctx.check_equal(name, lhs, rhs, assumptions=())`;
+- `ctx.check_close(name, lhs, rhs, atol, rtol=0, assumptions=())`;
+- `ctx.check_true(name, condition, detail=None, assumptions=())`;
 - `ctx.display.text(name, value)`;
 - `ctx.display.integer(name, value)`;
 - `ctx.display.decimal(name, value, places, trailing_zeros=True, unit=None)`;
@@ -352,6 +391,8 @@ Canonical instances sort object keys, use UTF-8, normalize line endings to LF, a
 
 Symbolic expressions are serialized for inspection and rendering, not evaluated when an edition is reproduced. Reproduction consumes the stored display values and generated TeX. A future version may define a stronger symbolic interchange format.
 
+Sage source text and rendered TeX are not the permanent semantic representation of important mathematics. The canonical value schema must remain versioned and evolvable toward a typed expression interchange containing operators, domains, bindings, and assumptions. The MVP need not define a universal mathematical abstract syntax tree, but it must not discard exact structure when Sage exposes it or make opaque display strings the only available record.
+
 ### 9.4 Constraints and rejection
 
 `ctx.require` is for suitability constraints. When a constraint fails, the entire proposal is discarded and generation resumes with the next deterministic attempt stream.
@@ -373,6 +414,20 @@ If no proposal is accepted within `max_attempts`, generation fails with the ques
 A constraint can reject a proposed pedagogical instance, such as an undesirable repeated root. A check asserts that the accepted computation is internally consistent, such as substitution of an answer into the original equation.
 
 A failed check fails the build immediately. It is not treated as random bad luck and does not cause another proposal to be chosen. This prevents a faulty model from being hidden by retrying until a check happens to pass.
+
+Every check result is a structured evidence record containing:
+
+- a stable check ID local to the question;
+- `status`, initially `passed` or `failed`;
+- `evidence`, one of `symbolic-check`, `exact-computation`, `exhaustive-check`, `sampled-property-test`, or `numerical-residual`;
+- the backend and backend version;
+- declared assumptions and variable domains;
+- a concise result or residual where applicable; and
+- hashes of relevant canonical inputs.
+
+The check method selects a conservative default evidence type, which the author may narrow but not strengthen without using an API that provides the stronger evidence. In particular, the MVP never emits `formal-proof`. That value is reserved for a future proof backend whose kernel has checked an attached artifact.
+
+Question and check IDs form the future linking boundary for general mathematical claims. A later question schema may associate a check with a stable, parameter-independent theorem ID and a proof artifact, while the MVP continues to verify the particular generated instance. Selecting a proof assistant and translating Sage expressions into it are explicitly deferred.
 
 ### 9.6 TeX fragments
 
@@ -504,17 +559,34 @@ The CLI loads `mathpub.toml`, indexes question metadata, indexes profiles, and r
 
 TOML schemas, identifiers, TeX fragment restrictions, generator interface, projection availability, and asset paths are checked without generating an edition.
 
-### 11.3 Instantiation
+### 11.3 Agent discovery
+
+Discovery is a supported CLI operation, not an accidental directory convention. JSON output uses versioned schemas and includes stable IDs, paths relative to the project root, titles, tags, difficulty, points, available projections, generator presence, declared checks, profile capabilities, and publication membership. It excludes generated values unless an explicit instance or manifest is inspected.
+
+The required discovery commands are:
+
+```console
+mathpub list questions --json
+mathpub list publications --json
+mathpub list profiles --json
+mathpub show question QUESTION_ID --json
+mathpub inspect publication PATH --json
+mathpub inspect manifest PATH --json
+```
+
+Human-readable output remains available when `--json` is omitted. JSON goes to standard output, diagnostics go to standard error, and successful structured output is never mixed with progress messages.
+
+### 11.4 Instantiation
 
 Each question generator runs in a separate Sage process. Per-question processes provide failure isolation and eliminate cross-question global state. The orchestrator supplies a JSON request containing the seed material and receives canonical JSON on a dedicated file descriptor or output file, never mixed with diagnostic output.
 
 Parallel generation is permitted because seeds are question-local. The initial implementation may run serially for simpler diagnostics.
 
-### 11.4 Instance validation
+### 11.5 Instance validation
 
 The orchestrator validates the returned schema, canonicalizes values, confirms all requested display names exist, verifies checks succeeded, and writes one immutable JSON file per question.
 
-### 11.5 TeX generation
+### 11.6 TeX generation
 
 For each projection, mathpub:
 
@@ -526,7 +598,7 @@ For each projection, mathpub:
 
 The source map is used to augment TeX failures with the question ID and fragment path.
 
-### 11.6 Compilation
+### 11.7 Compilation
 
 The MVP uses LuaLaTeX through `latexmk` with:
 
@@ -540,7 +612,7 @@ The MVP uses LuaLaTeX through `latexmk` with:
 
 The default profile uses the `exam`, `fontspec`, `amsmath`, `mathtools`, `siunitx`, `tikz`, `microtype`, and `geometry` packages. The precise TeX Live closure is pinned in `flake.lock`.
 
-### 11.7 PDF inspection
+### 11.8 PDF inspection
 
 After compilation, the MVP verifies:
 
@@ -588,7 +660,17 @@ Visual excellence still requires human review. Automated checks catch regression
       "attempt": 0,
       "instance": "instances/mechanics.kinematics.ramp-speed.json",
       "sha256": "...",
-      "checks": ["energy-conservation"]
+      "checks": [
+        {
+          "id": "energy-conservation",
+          "status": "passed",
+          "evidence": "symbolic-check",
+          "backend": "sagemath",
+          "backend_version": "...",
+          "assumptions": ["g > 0", "length_m > 0", "0 < angle_deg < 90"],
+          "inputs_sha256": "..."
+        }
+      ]
     }
   ],
   "outputs": [
@@ -608,13 +690,17 @@ A dirty tree is allowed for local development and clearly recorded. Release buil
 
 ## 13. Command-line interface
 
-The executable is `mathpub`. Commands return zero on success and nonzero on failure. Human-readable diagnostics go to standard error; machine-readable results requested with `--json` go to standard output.
+The executable is `mathpub`. Commands return zero on success and nonzero on failure. Human-readable diagnostics go to standard error; machine-readable results requested with `--json` go to standard output. All discovery, inspection, check, preview, and build operations must support versioned JSON result envelopes so an LLM harness does not need to parse prose. Binary PDFs remain files referenced by those results.
 
 ### 13.1 Commands
 
 ```text
 mathpub init [DIRECTORY]
-mathpub new question QUESTION_ID
+mathpub new question QUESTION_ID [--kind fixed|numeric|symbolic|tikz]
+mathpub list questions|publications|profiles [--json]
+mathpub show question QUESTION_ID [--json]
+mathpub inspect publication PATH [--json]
+mathpub inspect manifest PATH [--json]
 mathpub check project [--all-seeds N]
 mathpub check question QUESTION_ID [--seeds N] [--exhaustive]
 mathpub check publication PATH
@@ -715,6 +801,12 @@ End-to-end tests cover:
 
 `nix flake check` runs formatting, static analysis, unit tests, generator tests, and a small end-to-end TeX build. Expensive exhaustive and visual suites may be separate flake checks but must run in continuous integration.
 
+### 14.11 Agent workflow tests
+
+Integration tests start from `mathpub init`, follow only the generated `AGENTS.md` and CLI discovery data, scaffold each supported question kind, and complete the documented conformance loop. Tests verify that JSON outputs conform to their schemas, contain no progress text, use project-relative paths, and provide enough information to locate authored sources and required validation commands.
+
+These are interface-contract tests; they do not require invoking an LLM in CI. Periodic evaluations with the intended Codex CLI workflow can assess instruction quality without making model behavior a deterministic MVP dependency.
+
 ## 15. Default profile
 
 The built-in `mathpub.exam` profile provides a professional but restrained baseline:
@@ -767,6 +859,7 @@ mathpub.tex          TeX expansion, staging, and source maps
 mathpub.compile      latexmk invocation and log diagnostics
 mathpub.pdf          structural and visual inspection
 mathpub.manifest     provenance and reproduction
+mathpub.evidence     typed check results and future claim links
 ```
 
 The first implementation may combine modules, but their responsibilities and data boundaries should remain recognizable.
@@ -893,6 +986,7 @@ For each example, the reviewed numerical answer and visual layout should match t
 ### Milestone 1: reproducible shell and fixed question
 
 - Flake, CLI skeleton, project discovery, schemas.
+- Agent instructions, JSON discovery, and complete question scaffolds.
 - Default profile and one fixed question.
 - Student and solution PDFs in an isolated build directory.
 - Basic manifest and CI build.
@@ -939,6 +1033,9 @@ The MVP is ready for use when all of the following are demonstrated in CI and on
 15. Visual regression protects the default profile and migration examples.
 16. Build intermediates do not pollute authored source directories.
 17. No build step contains a machine-specific SageMath or TeX path.
+18. `mathpub init` creates usable agent instructions and complete passing scaffolds without overwriting local instructions.
+19. Discovery, inspection, checking, previewing, and building expose schema-validated JSON results without mixed progress output.
+20. Check results identify their evidence type, assumptions, backend, status, and canonical inputs without claiming formal proof.
 
 ## 23. Decisions requested in review
 
@@ -956,9 +1053,15 @@ The following choices should be approved or changed before implementation:
 10. **Reproduction:** stored instances are authoritative and generators are not rerun.
 11. **Trust:** local generators and profiles are trusted code; hostile-code sandboxing is outside the MVP.
 12. **Migration target:** representative compatibility with the mechanics corpus, not source compatibility with old `.q` files.
+13. **Primary interface:** humans and LLM harnesses use the same source tree and CLI, supported by `AGENTS.md`, reviewed examples, scaffolds, and JSON discovery.
+14. **LLM boundary:** mathpub does not embed or invoke a model in the MVP; Codex-like harnesses orchestrate it externally.
+15. **Evidence model:** MVP checks use structured, conservatively typed evidence records and reserve `formal-proof` for a future checked proof artifact.
+16. **Proof boundary:** stable question/check IDs, exact values, domains, and assumptions are preserved, but proof-assistant selection and a universal mathematical AST remain deferred.
 
 ## 24. Summary
 
 The MVP preserves what worked in the earlier mechanics project: modular questions, TeX-quality presentation, SageMath-powered variation, worked solutions beside their questions, and paired student and teacher publications.
 
 Its key architectural change is to place an immutable, validated question instance between SageMath and TeX. That boundary gives mathpub deterministic editions, matching answer keys, independent tests, explicit constraints, meaningful provenance, cleaner builds, and a foundation that can grow without asking TeX or SageTeX to act as the entire publishing system.
+
+The same boundary supports the longer-term direction without pulling it into the MVP: Codex-like harnesses get a discoverable, structured, verifiable authoring interface, while future proof backends get stable claims, exact values, explicit assumptions, and typed evidence to attach checked artifacts to.
