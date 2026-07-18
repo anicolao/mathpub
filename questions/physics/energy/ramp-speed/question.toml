@@ -1,0 +1,18 @@
+schema = 1
+id = "physics.energy.ramp-speed"
+title = "Speed at the bottom of a frictionless ramp"
+kind = "numeric"
+points = 5
+tags = ["energy", "mechanics", "units"]
+difficulty = 2
+generator = "generate.sage"
+prompt = "prompt.tex"
+answer = "answer.tex"
+solution = "solution.tex"
+
+[workspace]
+student = "42mm"
+
+[testing]
+sample_seeds = 30
+max_attempts = 100

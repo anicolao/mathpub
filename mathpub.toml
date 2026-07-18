@@ -1,0 +1,10 @@
+schema = 1
+project = "mathpub"
+question_roots = ["questions"]
+publication_roots = ["publications"]
+profile_roots = ["profiles"]
+build_dir = "build"
+default_profile = "mathpub.exam"
+
+[generation]
+max_attempts = 100

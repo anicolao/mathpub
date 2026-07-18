@@ -1,0 +1,18 @@
+schema = 1
+id = "physics.projectiles.snowball"
+title = "Snowball projectile range"
+kind = "tikz"
+points = 7
+tags = ["kinematics", "projectile-motion", "diagram", "units"]
+difficulty = 3
+generator = "generate.sage"
+prompt = "prompt.tex"
+answer = "answer.tex"
+solution = "solution.tex"
+
+[workspace]
+student = "46mm"
+
+[testing]
+sample_seeds = 30
+max_attempts = 100
