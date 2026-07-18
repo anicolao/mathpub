@@ -1,30 +1,20 @@
-A snowball rolls from a barn roof whose surface slopes downward at \mpvalue{roof_angle}. At the
-roof edge, \mpvalue{barn_height} above level ground, its speed is \mpvalue{launch_speed}. Ignore
-air resistance. How far horizontally from the roof edge does it strike the ground? Round to one
-decimal place.
+A snowball is launched from level ground at \mpvalue{launch_speed}, at an angle
+\mpvalue{angle} above the horizontal. It lands at the same height. Ignore air resistance and use
+$g=\mpvalue{gravity}$.
 
 \begin{center}
-\begin{tikzpicture}[x=1cm,y=1cm]
-  \coordinate (E) at (0,\mpvalue{edge_height});
-  \draw[very thick] (-2,0) -- (\mpvalue{impact_x}+0.55,0);
-  \draw[very thick] (-2,0) -- (-2,{\mpvalue{edge_height}+\mpvalue{roof_dy}})
-    -- (E);
-  \draw[dashed] (E) -- (0,0);
-  \draw[<->] (-0.25,0) -- node[left] {\mpvalue{barn_height}}
-    (-0.25,\mpvalue{edge_height});
-  \draw[thick,->] (E) --
-    ++(\mpvalue{velocity_dx},\mpvalue{velocity_dy})
-    node[right] {$v_0=\mpvalue{launch_speed}$};
-  \draw (0.72,\mpvalue{edge_height})
-    arc[start angle=0,end angle=-\mpvalue{roof_angle_number},radius=0.72];
-  \node at ({0.95*cos(\mpvalue{roof_angle_number}/2)},
-    {\mpvalue{edge_height}-0.95*sin(\mpvalue{roof_angle_number}/2)})
-    {\mpvalue{roof_angle}};
-  \draw[thick,dashed] plot[smooth] coordinates {\mpvalue{trajectory_coordinates}};
-  \fill (E) circle (1.7pt);
-  \fill (\mpvalue{impact_x},0) circle (1.7pt);
-  \draw[<->] (0,-0.28) -- node[below] {$x$} (\mpvalue{impact_x},-0.28);
+\begin{tikzpicture}[scale=0.85]
+  \draw[->] (0,0) -- (7.2,0) node[right] {$x$};
+  \draw[->] (0,0) -- (0,3.4) node[above] {$y$};
+  \draw[very thick,->] (0,0) -- (1.8,1.35)
+    node[above right] {$v_0=\mpvalue{launch_speed}$};
+  \draw (0.9,0) arc[start angle=0,end angle=37,radius=0.9];
+  \node at (1.25,0.32) {$\mpvalue{angle}$};
+  \draw[dashed,thick,domain=0:6.4,samples=40,smooth]
+    plot (\x,{0.92*\x-0.14*\x*\x});
+  \fill (0,0) circle (1.7pt);
+  \fill (6.4,0) circle (1.7pt) node[below] {landing point};
 \end{tikzpicture}
-
-\small Diagram to scale: $1\,\mathrm{cm}=2.5\,\mathrm{m}$ in both axes.
 \end{center}
+
+Find (a) the time of flight, (b) the horizontal range, and (c) the maximum height.
