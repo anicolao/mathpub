@@ -1,0 +1,18 @@
+schema = 1
+id = "physics.forces.car-curve"
+title = "Centripetal force on a car"
+kind = "symbolic"
+points = 6
+tags = ["circular-motion", "forces", "symbolic", "units"]
+difficulty = 2
+generator = "generate.sage"
+prompt = "prompt.tex"
+answer = "answer.tex"
+solution = "solution.tex"
+
+[workspace]
+student = "48mm"
+
+[testing]
+sample_seeds = 30
+max_attempts = 100

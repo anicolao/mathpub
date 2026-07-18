@@ -1,0 +1,27 @@
+schema = 1
+id = "physics.practice"
+kind = "worksheet"
+title = "Physics Practice Worksheet"
+subtitle = "Energy, circular motion, and projectiles"
+course = "Introductory Physics"
+profile = "mathpub.exam"
+paper = "letter"
+projections = ["student", "answers", "solutions"]
+
+[instructions]
+tex = "Show your reasoning, include units, and use an appropriate number of significant figures."
+
+[[sections]]
+title = "Mechanics"
+
+[[sections.questions]]
+id = "physics.energy.ramp-speed"
+points = 5
+
+[[sections.questions]]
+id = "physics.forces.car-curve"
+points = 6
+
+[[sections.questions]]
+id = "physics.projectiles.snowball"
+points = 7
