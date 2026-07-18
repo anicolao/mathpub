@@ -14,6 +14,7 @@ from mathpub.config import find_project, load_toml, relative
 from mathpub.errors import MathpubError
 from mathpub.instance import instantiate
 from mathpub.output import emit
+from mathpub.publish import build, reproduce
 from mathpub.scaffold import init_project, new_question
 
 
@@ -59,6 +60,36 @@ def parser() -> argparse.ArgumentParser:
     check.add_argument("--seeds", type=int)
     check.add_argument("--exhaustive", action="store_true")
     _json_flag(check)
+
+    preview = commands.add_parser("preview", help="render one question with its solution")
+    preview.add_argument("identifier")
+    preview.add_argument("--seed", required=True)
+    preview.add_argument("--replace", action="store_true")
+    _json_flag(preview)
+
+    build_parser = commands.add_parser("build", help="build a publication edition")
+    build_parser.add_argument("publication", type=Path)
+    build_parser.add_argument("--seed", required=True)
+    build_parser.add_argument("--variant", default="A")
+    build_parser.add_argument(
+        "--projection", action="append", choices=("student", "answers", "solutions")
+    )
+    build_parser.add_argument("--replace", action="store_true")
+    build_parser.add_argument("--require-clean", action="store_true")
+    _json_flag(build_parser)
+
+    variants = commands.add_parser("variants", help="build named variants")
+    variants.add_argument("publication", type=Path)
+    variants.add_argument("--seed", required=True)
+    variants.add_argument("--count", required=True, type=int)
+    variants.add_argument("--replace", action="store_true")
+    _json_flag(variants)
+
+    reproduce_parser = commands.add_parser("reproduce", help="rebuild from stored instances")
+    reproduce_parser.add_argument("manifest", type=Path)
+    reproduce_parser.add_argument("--replace", action="store_true")
+    reproduce_parser.add_argument("--allow-different-toolchain", action="store_true")
+    _json_flag(reproduce_parser)
     return result
 
 
@@ -91,6 +122,59 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
         return "new question", new_question(project, args.identifier, args.kind)
 
     catalog = Catalog(project)
+    if args.command == "preview":
+        entry = catalog.get("question", args.identifier)
+        preview_dir = project.root / project.config.get("build_dir", "build") / ".previews"
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        source = preview_dir / f"{args.identifier}.toml"
+        source.write_text(
+            f'''schema = 1
+id = "preview.{args.identifier}"
+kind = "worksheet"
+title = "Preview: {entry.metadata["title"]}"
+profile = "mathpub.exam"
+projections = ["solutions"]
+[[sections]]
+[[sections.questions]]
+id = "{args.identifier}"
+''',
+            encoding="utf-8",
+        )
+        return "preview", build(
+            project,
+            source,
+            root_seed=args.seed,
+            variant="preview",
+            replace=args.replace,
+        )
+    if args.command == "build":
+        return "build", build(
+            project,
+            args.publication,
+            root_seed=args.seed,
+            variant=args.variant,
+            projections=args.projection,
+            replace=args.replace,
+        )
+    if args.command == "variants":
+        if args.count < 1:
+            raise MathpubError("MP-CLI-003", "variant count must be positive", exit_code=2)
+        editions = []
+        for index in range(args.count):
+            label = chr(ord("A") + index) if index < 26 else f"A{chr(ord('A') + index - 26)}"
+            editions.append(
+                build(
+                    project,
+                    args.publication,
+                    root_seed=args.seed,
+                    variant=label,
+                    replace=args.replace,
+                )
+            )
+        return "variants", editions
+    if args.command == "reproduce":
+        path = args.manifest if args.manifest.is_absolute() else project.root / args.manifest
+        return "reproduce", reproduce(project, path, replace=args.replace)
     if args.command == "list":
         data = [entry.summary(project) for entry in catalog.entries(args.content).values()]
         return f"list {args.content}", data
