@@ -1,17 +1,16 @@
-Resolve the launch velocity into components. Returning to the launch height gives
+Take upward as positive. Since the roof slopes downward, the initial components are
 \[
-  t=\frac{2v_0\sin\theta}{g}=\boxed{\mpvalue{flight_time}}.
+  v_x=v_0\cos\theta,
+  \qquad
+  v_y=-v_0\sin\theta.
 \]
-The horizontal velocity is constant, so
+At impact, vertical position relative to the ground is zero:
 \[
-  R=(v_0\cos\theta)t
-   =\frac{v_0^2\sin(2\theta)}{g}
-   =\boxed{\mpvalue{range}}.
+  0=h+v_y t-\frac12gt^2.
 \]
-At the top, the vertical velocity is zero. Thus
+The positive root gives $t=\mpvalue{impact_time}$. Horizontal motion is uniform, hence
 \[
-  h_{\max}=\frac{v_0^2\sin^2\theta}{2g}
-  =\boxed{\mpvalue{maximum_height}}.
+  x=v_xt=\boxed{\mpvalue{impact_distance}}.
 \]
-The generator checks the range identity symbolically and verifies that the vertical displacement
-at the computed landing time is exactly zero.
+The validation record substitutes the impact time back into the vertical equation and checks the
+drawn launch angle, impact point, and common axis scale against the generated values.

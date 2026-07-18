@@ -1,0 +1,23 @@
+schema = 1
+id = "physics.validation"
+kind = "worksheet"
+title = "Physics Validation Examples"
+subtitle = "Scale-accurate diagrams and independently checked computations"
+course = "Introductory Physics"
+profile = "mathpub.exam"
+paper = "letter"
+projections = ["student", "answers", "solutions"]
+
+[instructions]
+tex = "Use the scale drawings as a consistency check; show the governing physical equations."
+
+[[sections]]
+title = "Migrated mechanics examples"
+
+[[sections.questions]]
+id = "physics.energy.k-rampy"
+points = 5
+
+[[sections.questions]]
+id = "physics.projectiles.snowball"
+points = 7
