@@ -14,6 +14,52 @@ from mathpub.errors import MathpubError
 LOOKUP = re.compile(r"\\mp(value|parameter|derived)\{([a-z][a-z0-9_]*)\}")
 
 
+def _tex_escape(value: str) -> str:
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+    }
+    return "".join(replacements.get(character, character) for character in value)
+
+
+def validation_tex(instance: dict[str, Any]) -> str:
+    notes = instance.get("validation_notes", {})
+    items = []
+    for check in instance.get("checks", []):
+        assumptions = ", ".join(check.get("assumptions", ())) or "none beyond the model"
+        note = notes.get(check["id"], "No additional author note supplied.")
+        items.append(
+            "\n".join(
+                [
+                    rf"\item \textbf{{{_tex_escape(check['id'])}}} "
+                    rf"[{_tex_escape(check['evidence'])}; {_tex_escape(check['backend'])}]",
+                    _tex_escape(note),
+                    rf"\emph{{Assumptions:}} {_tex_escape(assumptions)}. "
+                    rf"\emph{{Status:}} {_tex_escape(check['status'])}.",
+                ]
+            )
+        )
+    if not items:
+        items.append(
+            r"\item No executable checks are declared; this fixed content requires review."
+        )
+    return "\n".join(
+        [
+            r"\medskip\textbf{Validation and justification}",
+            r"\begin{itemize}",
+            *items,
+            r"\end{itemize}",
+            r"\small This is computational evidence, not a kernel-checked formal proof.",
+        ]
+    )
+
+
 def _serialized_tex(value: Any) -> str:
     if isinstance(value, (str, bool)):
         return str(value)
@@ -65,13 +111,15 @@ def question_tex(
             )
         answer = expand((entry.path / metadata["answer"]).read_text(), instance, metadata["id"])
         pieces.append(rf"\begin{{solution}}{answer}\end{{solution}}")
-    elif projection == "solutions":
+    elif projection in {"solutions", "validation"}:
         if not metadata.get("solution"):
             raise MathpubError(
                 "MP-TEX-005", f"question has no solution: {metadata['id']}", exit_code=3
             )
         solution = expand((entry.path / metadata["solution"]).read_text(), instance, metadata["id"])
         pieces.append(rf"\begin{{solution}}{solution}\end{{solution}}")
+        if projection == "validation":
+            pieces.append(validation_tex(instance))
     else:
         raise MathpubError("MP-TEX-006", f"unknown projection: {projection}", exit_code=3)
     return "\n".join(pieces)
@@ -83,6 +131,13 @@ def document_tex(publication: dict[str, Any], projection: str, questions: list[s
     instructions = publication.get("instructions", {}).get("tex", "")
     course = publication.get("course", "")
     title = publication["title"]
+    projection_label = {
+        "student": "Student",
+        "answers": "Short Answers",
+        "solutions": "Worked Solutions",
+        "validation": "Validation and Justification",
+    }[projection]
+    display_title = f"{title} — {projection_label}"
     author = publication.get("author", "")
     return rf"""\documentclass[12pt,addpoints,{paper}]{{exam}}
 \usepackage[margin=0.8in]{{geometry}}
@@ -109,11 +164,11 @@ def document_tex(publication: dict[str, Any], projection: str, questions: list[s
 {answers}
 \framedsolutions
 \pagestyle{{headandfoot}}
-\firstpageheader{{{course}}}{{\textbf{{{title}}}}}{{{author}}}
-\runningheader{{{course}}}{{{title}}}{{Page \thepage\ of \numpages}}
+\firstpageheader{{{course}}}{{\textbf{{{display_title}}}}}{{{author}}}
+\runningheader{{{course}}}{{{display_title}}}{{Page \thepage\ of \numpages}}
 \begin{{document}}
 \begin{{center}}
-  {{\Large\bfseries {title}}}\\[3pt]
+  {{\Large\bfseries {display_title}}}\\[3pt]
   {publication.get("subtitle", "")}
 \end{{center}}
 \noindent Name: \rule{{2.7in}}{{0.4pt}}\hfill Date: \rule{{1.5in}}{{0.4pt}}

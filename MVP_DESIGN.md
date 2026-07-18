@@ -77,7 +77,7 @@ The MVP will leave extension points for some deferred features, but it will not 
 - **Question instance:** an immutable accepted parameter set and all values derived from it.
 - **Publication:** an ordered specification for a test or worksheet.
 - **Edition:** one publication built with a particular variant and root seed.
-- **Projection:** a rendering of an edition, such as `student`, `answers`, or `solutions`.
+- **Projection:** a rendering of an edition: `student`, `answers`, `solutions`, or `validation`.
 - **Profile:** shared TeX document structure and visual styling.
 - **Generator:** SageMath code that proposes parameters and derives answers.
 - **Constraint:** a predicate that determines whether a proposed instance is suitable.
@@ -489,7 +489,7 @@ course = "Mechanics"
 author = "Ethan Nicolaou"
 profile = "mathpub.exam"
 paper = "letter"
-projections = ["student", "answers", "solutions"]
+projections = ["student", "answers", "solutions", "validation"]
 
 [student_fields]
 name = true
@@ -524,6 +524,8 @@ The publication order controls rendering only. It does not affect generation.
 - **student:** prompt and configured workspace; no answer or solution content is loaded into generated student TeX.
 - **answers:** prompt followed by the final answer, using a compact profile layout by default.
 - **solutions:** prompt followed by the worked solution; if `answer.tex` exists, the profile may show it as a summary.
+- **validation:** prompt and worked solution followed by the declared computational checks,
+  assumptions, evidence classifications, and author-supplied justification notes.
 
 This is stronger than conditionally hiding solutions in one TeX document: the generated student source does not contain them. A static leak check fails if known answer or solution fragment hashes appear in student generated source. This check reduces accidental leakage but is not a semantic proof that prose does not reveal an answer.
 
@@ -832,7 +834,7 @@ schema = 1
 id = "school.exam"
 document = "document.tex"
 style = "profile.sty"
-supports = ["student", "answers", "solutions"]
+supports = ["student", "answers", "solutions", "validation"]
 ```
 
 The profile receives a generated content file and publication metadata commands. It does not receive direct access to SageMath or generator source.

@@ -8,7 +8,7 @@
     "title": {"type": "string"},
     "document": {"type": "string"},
     "style": {"type": "string"},
-    "supports": {"type": "array", "items": {"enum": ["student", "answers", "solutions"]}}
+    "supports": {"type": "array", "items": {"enum": ["student", "answers", "solutions", "validation"]}}
   },
   "additionalProperties": false
 }

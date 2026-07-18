@@ -76,7 +76,9 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--seed", required=True)
     build_parser.add_argument("--variant", default="A")
     build_parser.add_argument(
-        "--projection", action="append", choices=("student", "answers", "solutions")
+        "--projection",
+        action="append",
+        choices=("student", "answers", "solutions", "validation"),
     )
     build_parser.add_argument("--replace", action="store_true")
     build_parser.add_argument("--require-clean", action="store_true")

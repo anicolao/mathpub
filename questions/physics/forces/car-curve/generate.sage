@@ -30,6 +30,18 @@ def generate(ctx):
         mass_value * speed_value^2 / radius_value,
         atol=1e-10,
     )
+    ctx.validation_note(
+        "newtons-second-law",
+        "Multiplying the radial-force model by radius recovers mass times speed squared.",
+    )
+    ctx.validation_note(
+        "numeric-substitution",
+        "The exact selected mass, speed, and radius satisfy the unrounded force equation.",
+    )
+    ctx.validation_note(
+        "floating-residual",
+        "An independent floating-point evaluation agrees within the declared tolerance.",
+    )
 
     ctx.display.quantity("mass", mass_value, r"\kilogram")
     ctx.display.quantity("speed", speed_value, r"\meter\per\second")

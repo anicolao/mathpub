@@ -17,6 +17,12 @@ fragments for its prompt, short answer, and worked solution. Copy the closest re
 when possible. Keep exact mathematical values in `ctx.parameter` and `ctx.derived`; use
 `ctx.display.*` only to define presentation. Use `ctx.require` for pedagogical suitability and
 `ctx.check_*` for mathematical evidence. A computational check is not a formal proof.
+Attach a plain-language explanation to every important check with
+`ctx.validation_note(CHECK_ID, NOTE)`; it appears only in the validation projection.
+
+Parameterized diagram coordinates must be derived from the same canonical parameters used by the
+mathematics. Use one common coordinate scale for measurable axes and validate lengths, angles, and
+endpoints with `ctx.check_*`. Do not label student diagrams with implementation-scale commentary.
 
 Required validation loop after authoring or changing a question:
 

@@ -114,6 +114,7 @@ class Context:
         self.derived_values: dict[str, Any] = {}
         self.display_values: dict[str, dict[str, Any]] = {}
         self.checks: list[dict[str, Any]] = []
+        self.validation_notes: dict[str, str] = {}
 
     def _put(self, target: dict[str, Any], name: str, value: Any) -> None:
         if name in target:
@@ -175,6 +176,12 @@ class Context:
     def check_true(self, name: str, condition: Any, detail=None, assumptions=()) -> None:
         self._record(name, bool(condition), "exact-computation", assumptions, detail)
 
+    def validation_note(self, check_id: str, note: str) -> None:
+        """Attach a plain-language justification to a declared mathematical check."""
+        if check_id in self.validation_notes:
+            raise ValueError(f"duplicate validation note: {check_id}")
+        self.validation_notes[check_id] = str(note)
+
     def _display(self, name: str, kind: str, tex: str, *, trusted: bool = False) -> None:
         self._put(self.display_values, name, {"kind": kind, "tex": tex, "trusted": trusted})
 
@@ -228,4 +235,5 @@ class Context:
             "derived": serialize(self.derived_values),
             "display": self.display_values,
             "checks": self.checks,
+            "validation_notes": self.validation_notes,
         }

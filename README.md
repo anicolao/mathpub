@@ -2,7 +2,7 @@
 
 `mathpub` is a reproducible publishing system for trustworthy mathematical tests and worksheets.
 Its MVP turns reviewed TeX fragments and deterministic SageMath generators into professional
-student worksheets, compact answer keys, and worked-solution editions.
+student worksheets, compact answer keys, worked solutions, and validation/justification editions.
 
 The project combines:
 
@@ -39,6 +39,11 @@ nix run .#mathpub -- build publications/physics-practice.toml \
 Outputs are written beneath `build/physics.practice/A/`. The manifest records the seed, variant,
 question-instance hashes, mathematical checks, source identity, toolchain identity, and output
 hashes. Generated output is disposable and must not be edited.
+
+The example publication declares four PDFs: `student`, `answers`, `solutions`, and `validation`.
+The validation edition contains every question, its worked solution, check classification,
+assumptions, status, and plain-language justification notes. Diagram scales are validated in that
+evidence without adding scale commentary to student-facing figures.
 
 Useful authoring commands include:
 
