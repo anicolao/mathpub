@@ -12,6 +12,7 @@ from mathpub import __version__
 from mathpub.catalog import Catalog
 from mathpub.config import find_project, load_toml, relative
 from mathpub.errors import MathpubError
+from mathpub.instance import instantiate
 from mathpub.output import emit
 from mathpub.scaffold import init_project, new_question
 
@@ -114,7 +115,13 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
                 )
             entry = catalog.get("question", args.target)
             checked = _validate_files(project, entry)
-            return "check question", {"id": args.target, "checked": checked}
+            seeds = args.seeds or 1
+            instances = [instantiate(entry, str(seed), "check") for seed in range(seeds)]
+            return "check question", {
+                "id": args.target,
+                "checked": checked,
+                "instances": [instance.get("sha256") for instance in instances],
+            }
         if args.content == "publication":
             if not args.target:
                 raise MathpubError("MP-CLI-002", "check publication requires a path", exit_code=2)
