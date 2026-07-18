@@ -16,3 +16,7 @@ student = "42mm"
 [testing]
 sample_seeds = 30
 max_attempts = 100
+
+[[testing.exhaustive_domains]]
+name = "classroom-values"
+parameters = { mass = [2, 4, 6, 8], height = [3, 6, 9, 12, 15, 18] }

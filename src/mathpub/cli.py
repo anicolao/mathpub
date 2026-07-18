@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
+import re
+import shutil
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -90,6 +94,10 @@ def parser() -> argparse.ArgumentParser:
     reproduce_parser.add_argument("--replace", action="store_true")
     reproduce_parser.add_argument("--allow-different-toolchain", action="store_true")
     _json_flag(reproduce_parser)
+
+    clean = commands.add_parser("clean", help="remove generated build output")
+    clean.add_argument("--edition")
+    _json_flag(clean)
     return result
 
 
@@ -110,7 +118,48 @@ def _validate_files(project, entry) -> list[str]:
                         "MP-SRC-012", f"missing {key} for {entry.metadata['id']}: {path}"
                     )
                 checked.append(relative(project, path))
+                source = path.read_text(encoding="utf-8")
+                if key in {"prompt", "answer", "solution"}:
+                    forbidden = re.search(
+                        r"\\(?:documentclass|begin\s*\{document\}|end\s*\{document\}|include|input|openin|openout)",
+                        source,
+                    )
+                    if forbidden:
+                        raise MathpubError(
+                            "MP-TEX-008",
+                            "forbidden TeX command in "
+                            f"{relative(project, path)}: {forbidden.group()}",
+                        )
+                if key == "generator" and re.search(
+                    r"(?<!ctx\.)\brandom\.|\b(?:numpy|np)\.random|\bset_random_seed\s*\(",
+                    source,
+                ):
+                    raise MathpubError(
+                        "MP-GEN-006",
+                        f"use ctx.random or ctx.domain in {relative(project, path)}",
+                    )
     return checked
+
+
+def _variant_label(index: int) -> str:
+    label = ""
+    value = index + 1
+    while value:
+        value, remainder = divmod(value - 1, 26)
+        label = chr(ord("A") + remainder) + label
+    return label
+
+
+def _require_clean(project) -> None:
+    process = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=project.root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if process.returncode or process.stdout.strip():
+        raise MathpubError("MP-BUILD-003", "release build requires a clean Git tree", exit_code=3)
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
@@ -122,6 +171,19 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
         return "new question", new_question(project, args.identifier, args.kind)
 
     catalog = Catalog(project)
+    if args.command == "clean":
+        build_root = project.root / project.config.get("build_dir", "build")
+        target = build_root / args.edition if args.edition else build_root
+        try:
+            target.resolve().relative_to(build_root.resolve())
+        except ValueError as error:
+            raise MathpubError(
+                "MP-SRC-005", f"edition escapes build directory: {target}"
+            ) from error
+        existed = target.exists()
+        if existed:
+            shutil.rmtree(target)
+        return "clean", {"path": relative(project, target), "removed": existed}
     if args.command == "preview":
         entry = catalog.get("question", args.identifier)
         preview_dir = project.root / project.config.get("build_dir", "build") / ".previews"
@@ -148,6 +210,8 @@ id = "{args.identifier}"
             replace=args.replace,
         )
     if args.command == "build":
+        if args.require_clean:
+            _require_clean(project)
         return "build", build(
             project,
             args.publication,
@@ -161,7 +225,7 @@ id = "{args.identifier}"
             raise MathpubError("MP-CLI-003", "variant count must be positive", exit_code=2)
         editions = []
         for index in range(args.count):
-            label = chr(ord("A") + index) if index < 26 else f"A{chr(ord('A') + index - 26)}"
+            label = _variant_label(index)
             editions.append(
                 build(
                     project,
@@ -174,7 +238,12 @@ id = "{args.identifier}"
         return "variants", editions
     if args.command == "reproduce":
         path = args.manifest if args.manifest.is_absolute() else project.root / args.manifest
-        return "reproduce", reproduce(project, path, replace=args.replace)
+        return "reproduce", reproduce(
+            project,
+            path,
+            replace=args.replace,
+            allow_different_toolchain=args.allow_different_toolchain,
+        )
     if args.command == "list":
         data = [entry.summary(project) for entry in catalog.entries(args.content).values()]
         return f"list {args.content}", data
@@ -199,12 +268,55 @@ id = "{args.identifier}"
                 )
             entry = catalog.get("question", args.target)
             checked = _validate_files(project, entry)
+            if args.exhaustive:
+                domains = entry.metadata.get("testing", {}).get("exhaustive_domains", [])
+                if not domains:
+                    raise MathpubError(
+                        "MP-GEN-007", f"no finite exhaustive domain declared for {args.target}"
+                    )
+                reports = []
+                for domain in domains:
+                    parameters = domain["parameters"]
+                    names = sorted(parameters)
+                    instances = []
+                    for values in itertools.product(*(parameters[name] for name in names)):
+                        overrides = dict(zip(names, values, strict=True))
+                        instances.append(
+                            instantiate(entry, "exhaustive", domain["name"], overrides=overrides)
+                        )
+                    reports.append(
+                        {
+                            "name": domain["name"],
+                            "evidence": "exhaustive-check",
+                            "total": len(instances),
+                            "accepted": len(instances),
+                            "rejected": 0,
+                            "instance_hashes": [item["sha256"] for item in instances],
+                        }
+                    )
+                return "check question", {
+                    "id": args.target,
+                    "checked": checked,
+                    "verification": reports,
+                }
             seeds = args.seeds or 1
-            instances = [instantiate(entry, str(seed), "check") for seed in range(seeds)]
+            instances = []
+            for seed in range(seeds):
+                first = instantiate(entry, str(seed), "check")
+                second = instantiate(entry, str(seed), "check")
+                if first != second:
+                    raise MathpubError(
+                        "MP-GEN-005", f"non-deterministic generator: {args.target}", exit_code=5
+                    )
+                instances.append(first)
             return "check question", {
                 "id": args.target,
                 "checked": checked,
-                "instances": [instance.get("sha256") for instance in instances],
+                "verification": "sampled-property-test",
+                "instances": [
+                    {"sha256": instance["sha256"], "checks": instance["checks"]}
+                    for instance in instances
+                ],
             }
         if args.content == "publication":
             if not args.target:

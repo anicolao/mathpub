@@ -107,6 +107,7 @@ def serialize(value: Any) -> Any:
 @dataclass
 class Context:
     random: RandomContext
+    overrides: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.parameters: dict[str, Any] = {}
@@ -121,6 +122,18 @@ class Context:
 
     def parameter(self, name: str, value: Any) -> None:
         self._put(self.parameters, name, value)
+
+    def domain(self, name: str, values) -> Any:
+        """Select from a declared finite domain, or use an exhaustive override."""
+        choices = list(values)
+        if not choices:
+            raise ValueError(f"empty domain: {name}")
+        if self.overrides and name in self.overrides:
+            value = self.overrides[name]
+            if value not in choices:
+                raise ValueError(f"override for {name} is outside its declared domain")
+            return value
+        return self.random.choice(choices)
 
     def derived(self, name: str, value: Any) -> None:
         self._put(self.derived_values, name, value)

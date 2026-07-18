@@ -23,7 +23,11 @@ def instance_hash(data: Any) -> str:
 
 
 def instantiate(
-    entry: Entry, root_seed: str, variant: str, max_attempts: int | None = None
+    entry: Entry,
+    root_seed: str,
+    variant: str,
+    max_attempts: int | None = None,
+    overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     generator = entry.metadata.get("generator")
     if not generator:
@@ -48,6 +52,7 @@ def instantiate(
         "root_seed": str(root_seed),
         "variant": str(variant),
         "max_attempts": attempts,
+        "overrides": overrides or {},
     }
     runner = Path(__file__).with_name("sage_runner.py")
     with tempfile.TemporaryDirectory(prefix="mathpub-sage-") as temporary:

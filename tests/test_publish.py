@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from pypdf import PdfReader
 
 from mathpub.config import find_project
+from mathpub.errors import MathpubError
 from mathpub.publish import build, reproduce
 from mathpub.scaffold import init_project, new_question
 
@@ -46,5 +48,30 @@ points = 2
     assert "A reviewed fixed answer" not in student_tex
     assert "A reviewed fixed solution" not in student_tex
 
+    original_instances = {
+        path.name: path.read_bytes() for path in (edition / "instances").iterdir()
+    }
+    original_outputs = {
+        output["projection"]: [
+            page.extract_text() for page in PdfReader(edition / output["path"]).pages
+        ]
+        for output in manifest["outputs"]
+    }
     reproduced = reproduce(project, edition / "manifest.json", replace=True)
     assert (root / reproduced["manifest"]).is_file()
+    rebuilt_manifest = json.loads((root / reproduced["manifest"]).read_text())
+    assert {
+        path.name: path.read_bytes() for path in (edition / "instances").iterdir()
+    } == original_instances
+    assert {
+        output["projection"]: [
+            page.extract_text() for page in PdfReader(edition / output["path"]).pages
+        ]
+        for output in rebuilt_manifest["outputs"]
+    } == original_outputs
+
+    rebuilt_manifest["toolchain"]["sagemath"] = "different"
+    (edition / "manifest.json").write_text(json.dumps(rebuilt_manifest))
+    with pytest.raises(MathpubError) as mismatch:
+        reproduce(project, edition / "manifest.json", replace=True)
+    assert mismatch.value.code == "MP-REPRO-001"
