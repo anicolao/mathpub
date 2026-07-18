@@ -20,9 +20,6 @@ reproduction from stored instances, and a representative three-question physics 
 [MVP_DESIGN.md](MVP_DESIGN.md) for the contract and [VISION.md](VISION.md) for the longer-term
 publishing and formal-proof direction.
 
-Generator and mathematical-evidence details, including worked `k-rampy` and barn-roof snowball
-checks, are documented separately in [MVP_VALIDATION.md](MVP_VALIDATION.md).
-
 ## Quick start
 
 No host Python, SageMath, TeX installation, or font installation is used. With Nix flakes enabled:

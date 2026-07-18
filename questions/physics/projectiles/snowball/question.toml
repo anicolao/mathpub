@@ -1,6 +1,6 @@
 schema = 1
 id = "physics.projectiles.snowball"
-title = "Snowball leaving a sloped barn roof"
+title = "Snowball projectile range"
 kind = "tikz"
 points = 7
 tags = ["kinematics", "projectile-motion", "diagram", "units"]

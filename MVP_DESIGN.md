@@ -303,14 +303,133 @@ Question IDs must match `[a-z0-9]+([.-][a-z0-9]+)*` and must be unique across al
 
 The MVP treats tags and difficulty as descriptive metadata. It will not automatically select questions by them.
 
-### 9.2 Generation and validation
+### 9.2 Sage generator interface
 
-The generator API, canonical value model, constraints, checks, exhaustive validation, and worked
-physics examples now live in [MVP_VALIDATION.md](MVP_VALIDATION.md). Keeping that executable
-validation contract separate makes it easier to review and extend without obscuring the publishing
-architecture.
+`generate.sage` is executed by SageMath in an isolated working directory with the question directory available read-only by convention. It exports one function:
 
-### 9.3 TeX fragments
+```python
+from mathpub import question
+
+@question.generator
+def generate(ctx):
+    angle = ctx.random.integer(20, 30)
+    length = ctx.random.integer(25, 45)
+
+    g = QQ(98) / 10
+    theta = angle * pi / 180
+    speed = sqrt(2 * g * sin(theta) * length)
+
+    ctx.parameter("angle_deg", angle)
+    ctx.parameter("length_m", length)
+    ctx.derived("theta", theta)
+    ctx.derived("speed", speed)
+
+    ctx.require("positive-speed", speed > 0)
+    ctx.require("reasonable-speed", speed < 40)
+
+    ctx.check_equal(
+        "energy-conservation",
+        lhs=(QQ(1) / 2 * speed^2).simplify_full(),
+        rhs=g * length * sin(theta),
+        assumptions=["g > 0", "length_m > 0", "0 < angle_deg < 90"],
+    )
+
+    ctx.display.integer("angle", angle)
+    ctx.display.quantity("length", length, unit=r"\meter")
+    ctx.display.decimal("speed", speed, places=1, unit=r"\meter\per\second")
+    ctx.display.math("speed_exact", speed)
+```
+
+The generator returns through `ctx`; arbitrary standard output is captured in the question log and never parsed as data.
+
+The public MVP generator API is deliberately small:
+
+- `ctx.random.integer(low, high)`, inclusive;
+- `ctx.random.choice(sequence)`;
+- `ctx.random.rational(numerators, denominators)`;
+- `ctx.parameter(name, value)`;
+- `ctx.derived(name, value)`;
+- `ctx.require(name, condition, detail=None)`;
+- `ctx.check_equal(name, lhs, rhs, assumptions=())`;
+- `ctx.check_close(name, lhs, rhs, atol, rtol=0, assumptions=())`;
+- `ctx.check_true(name, condition, detail=None, assumptions=())`;
+- `ctx.display.text(name, value)`;
+- `ctx.display.integer(name, value)`;
+- `ctx.display.decimal(name, value, places, trailing_zeros=True, unit=None)`;
+- `ctx.display.significant(name, value, digits, unit=None)`;
+- `ctx.display.math(name, value)` using Sage's LaTeX formatter;
+- `ctx.display.quantity(name, value, unit)`; and
+- `ctx.display.tex(name, trusted_tex)` for an explicitly trusted TeX fragment.
+
+Names must be unique within their namespace and match `[a-z][a-z0-9_]*`. The implementation rejects non-finite decimal results, undeclared display values, duplicate declarations, and values it cannot serialize.
+
+Direct use of global Sage/Python random functions is forbidden by policy and detected by a lint check for common calls. It cannot be made impossible for trusted local code in the MVP, so determinism is also tested by running a generator twice and comparing canonical instances.
+
+### 9.3 Value serialization
+
+Question instances use canonical JSON with tagged mathematical values. The MVP supports:
+
+- integers;
+- rational numbers as signed numerator and positive denominator;
+- finite real approximations as decimal strings plus declared precision;
+- Sage symbolic expressions as Sage source text plus rendered TeX;
+- booleans and strings;
+- homogeneous lists of supported values; and
+- records with sorted string keys.
+
+Example:
+
+```json
+{
+  "type": "rational",
+  "numerator": 49,
+  "denominator": 5
+}
+```
+
+Canonical instances sort object keys, use UTF-8, normalize line endings to LF, and end with one newline. Their SHA-256 hashes are recorded in the edition manifest.
+
+Symbolic expressions are serialized for inspection and rendering, not evaluated when an edition is reproduced. Reproduction consumes the stored display values and generated TeX. A future version may define a stronger symbolic interchange format.
+
+Sage source text and rendered TeX are not the permanent semantic representation of important mathematics. The canonical value schema must remain versioned and evolvable toward a typed expression interchange containing operators, domains, bindings, and assumptions. The MVP need not define a universal mathematical abstract syntax tree, but it must not discard exact structure when Sage exposes it or make opaque display strings the only available record.
+
+### 9.4 Constraints and rejection
+
+`ctx.require` is for suitability constraints. When a constraint fails, the entire proposal is discarded and generation resumes with the next deterministic attempt stream.
+
+For question ID `Q`, root seed `S`, variant `V`, and attempt `N`, the random seed is:
+
+```text
+SHA-256("mathpub-mvp\0" || S || "\0" || V || "\0" || Q || "\0" || N)
+```
+
+Fields are UTF-8 strings, and `N` is an unsigned base-10 integer. The 256-bit digest is interpreted as an unsigned big-endian integer and passed to NumPy's seed sequence to initialize mathpub's documented pseudorandom generator. The MVP must choose and version a concrete generator rather than relying on Python's or Sage's default global generator. The proposed choice is NumPy `PCG64`, with its package version pinned by Nix and `rng_algorithm = "pcg64-v1"` recorded in manifests.
+
+Question values therefore do not depend on publication order. Duplicate question IDs in one publication are rejected in the MVP; authors should create distinct wrapper question IDs when intentional repeats need independent values.
+
+If no proposal is accepted within `max_attempts`, generation fails with the question ID, attempted seeds, rejection count by constraint, and the final rejection details. It never silently relaxes a constraint.
+
+### 9.5 Checks versus constraints
+
+A constraint can reject a proposed pedagogical instance, such as an undesirable repeated root. A check asserts that the accepted computation is internally consistent, such as substitution of an answer into the original equation.
+
+A failed check fails the build immediately. It is not treated as random bad luck and does not cause another proposal to be chosen. This prevents a faulty model from being hidden by retrying until a check happens to pass.
+
+Every check result is a structured evidence record containing:
+
+- a stable check ID local to the question;
+- `status`, initially `passed` or `failed`;
+- `evidence`, one of `symbolic-check`, `exact-computation`, `exhaustive-check`, `sampled-property-test`, or `numerical-residual`;
+- the backend and backend version;
+- declared assumptions and variable domains;
+- a concise result or residual where applicable; and
+- hashes of relevant canonical inputs.
+
+The check method selects a conservative default evidence type, which the author may narrow but not strengthen without using an API that provides the stronger evidence. In particular, the MVP never emits `formal-proof`. That value is reserved for a future proof backend whose kernel has checked an attached artifact.
+
+Question and check IDs form the future linking boundary for general mathematical claims. A later question schema may associate a check with a stable, parameter-independent theorem ID and a proof artifact, while the MVP continues to verify the particular generated instance. Selecting a proof assistant and translating Sage expressions into it are explicitly deferred.
+
+### 9.6 TeX fragments
 
 `prompt.tex`, `answer.tex`, and `solution.tex` are ordinary TeX fragments with mathpub lookup commands:
 
@@ -350,7 +469,7 @@ Missing names fail before LuaLaTeX runs. Plain text display values are TeX-escap
 
 TeX fragments may use profile-provided packages and commands but may not contain `\documentclass`, `\begin{document}`, `\end{document}`, `\include`, or direct file access outside `\mpasset`. The MVP enforces common cases with linting and compiles in an isolated build directory with shell escape disabled. Since TeX is not a secure sandbox, projects must treat question and profile source as trusted code.
 
-### 9.4 Diagrams
+### 9.7 Diagrams
 
 TikZ is the required parameterized-diagram mechanism for the MVP. A prompt or solution may contain TikZ directly and use declared values. Complex repeated diagrams can live in `assets/*.tex` and be included only through `\mpasset`.
 
