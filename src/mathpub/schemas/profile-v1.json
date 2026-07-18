@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "id", "document", "supports"],
+  "properties": {
+    "schema": {"const": 1},
+    "id": {"type": "string"},
+    "title": {"type": "string"},
+    "document": {"type": "string"},
+    "style": {"type": "string"},
+    "supports": {"type": "array", "items": {"enum": ["student", "answers", "solutions"]}}
+  },
+  "additionalProperties": false
+}

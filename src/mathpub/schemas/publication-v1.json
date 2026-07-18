@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "id", "kind", "title", "profile", "sections"],
+  "properties": {
+    "schema": {"const": 1},
+    "id": {"type": "string"},
+    "kind": {"enum": ["test", "worksheet"]},
+    "title": {"type": "string"},
+    "subtitle": {"type": "string"},
+    "course": {"type": "string"},
+    "author": {"type": "string"},
+    "profile": {"type": "string"},
+    "paper": {"enum": ["letter", "a4"]},
+    "projections": {"type": "array", "items": {"enum": ["student", "answers", "solutions"]}, "uniqueItems": true},
+    "student_fields": {"type": "object"},
+    "instructions": {"type": "object"},
+    "sections": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["questions"]}}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "id", "title", "kind", "points", "prompt"],
+  "properties": {
+    "schema": {"const": 1},
+    "id": {"type": "string"},
+    "title": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["fixed", "numeric", "symbolic", "tikz"]},
+    "points": {"type": "integer", "minimum": 0},
+    "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
+    "generator": {"type": "string"},
+    "prompt": {"type": "string"},
+    "answer": {"type": "string"},
+    "solution": {"type": "string"},
+    "workspace": {"type": "object"},
+    "testing": {"type": "object"}
+  },
+  "additionalProperties": false
+}
