@@ -105,6 +105,7 @@ def document_tex(publication: dict[str, Any], projection: str, questions: list[s
 \setmathfont{{LibertinusMath-Regular.otf}}
 \usepackage[per-mode=symbol]{{siunitx}}
 \usepackage{{tikz,microtype}}
+\usetikzlibrary{{calc}}
 \setlength\parindent{{0pt}}
 {answers}
 \framedsolutions

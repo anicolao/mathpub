@@ -18,6 +18,10 @@ when possible. Keep exact mathematical values in `ctx.parameter` and `ctx.derive
 `ctx.display.*` only to define presentation. Use `ctx.require` for pedagogical suitability and
 `ctx.check_*` for mathematical evidence. A computational check is not a formal proof.
 
+For parameterized diagrams, follow [MVP_VALIDATION.md](MVP_VALIDATION.md): derive measurable
+coordinates from canonical parameters, use a common stated scale, and add checks for lengths,
+angles, equations, and endpoints. Never hard-code geometry that merely carries a generated label.
+
 Required validation loop after authoring or changing a question:
 
 ```console

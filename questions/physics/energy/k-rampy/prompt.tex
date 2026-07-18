@@ -1,0 +1,21 @@
+A block starts from rest and slides down a frictionless ramp of length \mpvalue{length}, inclined
+at \mpvalue{angle} above the horizontal. Find its speed at the bottom. Round to one decimal place.
+
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \coordinate (B) at (0,0);
+  \coordinate (T) at (\mpvalue{diagram_run},\mpvalue{diagram_rise});
+  \draw[very thick] (-0.35,0) -- ($(T)+(0.35,0)$);
+  \draw[very thick] (B) -- (T);
+  \draw[<->] ($(B)+(-0.12,0.18)$) -- node[above left] {\mpvalue{length}}
+    ($(T)+(-0.12,0.18)$);
+  \draw (0.8,0) arc[start angle=0,end angle=\mpvalue{angle_number},radius=0.8];
+  \node at ({1.08*cos(\mpvalue{angle_number}/2)},
+    {1.08*sin(\mpvalue{angle_number}/2)}) {\mpvalue{angle}};
+  \draw[fill=gray!20,rotate around={\mpvalue{angle_number}:(T)}]
+    ($(T)+(-0.32,0.03)$) rectangle ($(T)+(0.20,0.45)$);
+  \draw[dashed] (T) -- (\mpvalue{diagram_run},0);
+\end{tikzpicture}
+
+\small Diagram to scale: $1\,\mathrm{cm}=8\,\mathrm{m}$.
+\end{center}

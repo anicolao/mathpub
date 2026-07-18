@@ -1,0 +1,22 @@
+schema = 1
+id = "physics.energy.k-rampy"
+title = "Frictionless inclined ramp"
+kind = "tikz"
+points = 5
+tags = ["energy", "mechanics", "diagram", "migration", "units"]
+difficulty = 2
+generator = "generate.sage"
+prompt = "prompt.tex"
+answer = "answer.tex"
+solution = "solution.tex"
+
+[workspace]
+student = "40mm"
+
+[testing]
+sample_seeds = 30
+max_attempts = 100
+
+[[testing.exhaustive_domains]]
+name = "legacy-teaching-domain"
+parameters = { angle_degrees = [20, 25, 30], length_metres = [25, 35, 45] }
