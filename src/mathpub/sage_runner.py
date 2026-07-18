@@ -38,7 +38,8 @@ def execute(request: dict) -> dict:
                     seed_for(
                         request["root_seed"], request["variant"], request["question_id"], attempt
                     )
-                )
+                ),
+                overrides=request.get("overrides"),
             )
             function(context)
             return {

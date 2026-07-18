@@ -49,6 +49,19 @@ def _git_source(project: Project) -> dict[str, Any]:
     return {"git_commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
 
 
+def _toolchain() -> dict[str, str]:
+    def version(*command: str) -> str:
+        process = subprocess.run(command, capture_output=True, text=True, check=False)
+        output = process.stdout or process.stderr
+        return output.splitlines()[0].strip() if output else "unknown"
+
+    return {
+        "mathpub": __version__,
+        "sagemath": version("sage", "--version"),
+        "lualatex": version("lualatex", "--version"),
+    }
+
+
 def _inspect_pdf(path: Path, title: str) -> dict[str, Any]:
     reader = PdfReader(path)
     if not reader.pages:
@@ -75,6 +88,7 @@ def build(
     projections: list[str] | None = None,
     replace: bool = False,
     stored_instances: dict[str, dict[str, Any]] | None = None,
+    reproduction_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     publication_path = _publication_path(project, publication_source)
     publication = load_toml(publication_path, "publication")
@@ -144,6 +158,7 @@ def build(
             "variant": variant,
             "root_seed": str(root_seed),
             "rng_algorithm": "pcg64-v1",
+            "toolchain": _toolchain(),
             "source": {
                 **_git_source(project),
                 "publication_sha256": _file_hash(publication_path),
@@ -165,6 +180,8 @@ def build(
             ],
             "outputs": outputs,
         }
+        if reproduction_override is not None:
+            manifest["reproduction_override"] = reproduction_override
         (temporary / "manifest.json").write_text(canonical_json(manifest), encoding="utf-8")
         os.replace(temporary, destination)
     except Exception:
@@ -179,9 +196,46 @@ def build(
     }
 
 
-def reproduce(project: Project, manifest_path: Path, *, replace: bool = False) -> dict[str, Any]:
+def reproduce(
+    project: Project,
+    manifest_path: Path,
+    *,
+    replace: bool = False,
+    allow_different_toolchain: bool = False,
+) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     base = manifest_path.parent
+    publication_path = _publication_path(project, manifest["publication_path"])
+    catalog = Catalog(project)
+    current_source = {
+        "publication_sha256": _file_hash(publication_path),
+        "question_sources": {
+            question["id"]: _source_hash(catalog.get("question", question["id"]))
+            for question in manifest["questions"]
+        },
+        "flake_lock_sha256": _file_hash(project.root / "flake.lock")
+        if (project.root / "flake.lock").is_file()
+        else None,
+    }
+    mismatches = {}
+    for key, value in current_source.items():
+        if manifest["source"].get(key) != value:
+            mismatches[f"source.{key}"] = {
+                "expected": manifest["source"].get(key),
+                "actual": value,
+            }
+    current_toolchain = _toolchain()
+    if manifest.get("toolchain") != current_toolchain:
+        mismatches["toolchain"] = {
+            "expected": manifest.get("toolchain"),
+            "actual": current_toolchain,
+        }
+    if mismatches and not allow_different_toolchain:
+        raise MathpubError(
+            "MP-REPRO-001",
+            f"source or toolchain differs from manifest: {', '.join(mismatches)}",
+            exit_code=8,
+        )
     instances = {}
     for question in manifest["questions"]:
         instance = json.loads((base / question["instance"]).read_text(encoding="utf-8"))
@@ -194,4 +248,5 @@ def reproduce(project: Project, manifest_path: Path, *, replace: bool = False) -
         projections=[output["projection"] for output in manifest["outputs"]],
         replace=replace,
         stored_instances=instances,
+        reproduction_override={"allowed": True, "mismatches": mismatches} if mismatches else None,
     )

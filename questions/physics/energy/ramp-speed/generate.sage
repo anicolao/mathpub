@@ -3,8 +3,8 @@ from mathpub.question import generator
 
 @generator
 def generate(ctx):
-    mass = ctx.random.integer(2, 12)
-    height = ctx.random.integer(3, 18)
+    mass = ctx.domain("mass", [2, 4, 6, 8])
+    height = ctx.domain("height", [3, 6, 9, 12, 15, 18])
     gravity = QQ(98) / 10
     speed = sqrt(2 * gravity * height)
 
