@@ -1,14 +1,22 @@
 schema = 1
 id = "physics.projectiles.snowball"
 title = "Snowball leaving a sloped barn roof"
-kind = "tikz"
+kind = "question"
+status = "reviewed"
+concepts = ["physics.projectile-motion"]
 points = 7
-tags = ["kinematics", "projectile-motion", "diagram", "migration", "units"]
+tags = ["kinematics", "projectile-motion", "diagram", "units"]
 difficulty = 3
 generator = "generate.sage"
+[fragments]
 prompt = "prompt.tex"
 answer = "answer.tex"
 solution = "solution.tex"
+
+[fragment_modes]
+prompt = "mixed-tex"
+answer = "mixed-tex"
+solution = "mixed-tex"
 
 [workspace]
 student = "46mm"

@@ -89,8 +89,14 @@ class Catalog:
         return entries
 
     def entries(self, kind: str) -> dict[str, Entry]:
+        if kind == "questions":
+            component_questions = {
+                identifier: entry
+                for identifier, entry in self.components.items()
+                if entry.metadata["kind"] == "question"
+            }
+            return {**self.questions, **component_questions}
         return {
-            "questions": self.questions,
             "components": self.components,
             "profiles": self.profiles,
             "publications": self.publications,

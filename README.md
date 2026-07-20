@@ -48,10 +48,10 @@ evidence without adding scale commentary to student-facing figures.
 Useful authoring commands include:
 
 ```console
-nix run .#mathpub -- list questions --json
-nix run .#mathpub -- show question physics.energy.ramp-speed --json
-nix run .#mathpub -- check question physics.energy.ramp-speed --seeds 20 --json
-nix run .#mathpub -- check question physics.energy.ramp-speed --exhaustive --json
+nix run .#mathpub -- list components --kind question --json
+nix run .#mathpub -- show component physics.energy.ramp-speed --json
+nix run .#mathpub -- check component physics.energy.ramp-speed --seeds 20 --json
+nix run .#mathpub -- check component physics.energy.ramp-speed --exhaustive --json
 nix run .#mathpub -- preview physics.projectiles.snowball --seed 2026 --replace --json
 nix run .#mathpub -- variants publications/physics-practice.toml --seed 2026 --count 3 --json
 nix run .#mathpub -- reproduce build/physics.practice/A/manifest.json --replace --json

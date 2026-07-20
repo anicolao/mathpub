@@ -64,6 +64,17 @@ def _file_hash(path: Path) -> str:
 
 
 def _source_hash(entry: Entry) -> str:
+    if entry.kind == "component":
+        digest = hashlib.sha256()
+        paths = [entry.path / "component.toml"]
+        if generator := entry.metadata.get("generator"):
+            paths.append(entry.path / generator)
+        for name in entry.metadata.get("fragments", {}).values():
+            paths.append(entry.path / name)
+        for path in sorted(paths):
+            digest.update(path.name.encode())
+            digest.update(path.read_bytes())
+        return digest.hexdigest()
     digest = hashlib.sha256()
     paths = [entry.path / "question.toml"]
     for key in ("generator", "prompt", "answer", "solution"):
