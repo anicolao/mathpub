@@ -61,6 +61,24 @@ The repository’s [AGENTS.md](AGENTS.md) is the operational interface for Codex
 harnesses. `mathpub init` generates equivalent instructions and complete question scaffolds for a
 new authoring project.
 
+## Public tooling and private publications
+
+This repository is the public GPLv3 engine plus intentionally public base examples. Proprietary
+books, worksheets, answer keys, and teaching material belong in separate private repositories.
+Those repositories consume mathpub as a pinned flake input; they do not copy the engine or share
+Git history with manuscript-development branches.
+
+Create a content-only repository with:
+
+```console
+nix run .#mathpub -- init ../private-math-book \
+  --mathpub-url github:anicolao/mathpub
+```
+
+The generated flake supplies `nix develop`, `nix run .#mathpub`, and content checks from the pinned
+tooling revision. See [PRIVATE_PUBLICATIONS.md](PRIVATE_PUBLICATIONS.md) for the repository layout,
+fresh-history requirement, publication checks, and private GitHub creation commands.
+
 ## What we want to build
 
 A mathpub document should be able to express prose, notation, theorems, proofs, examples, exercises, generators, and solutions without copying the same content between student and instructor editions.

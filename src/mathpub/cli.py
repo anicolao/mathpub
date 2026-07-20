@@ -40,6 +40,18 @@ def parser() -> argparse.ArgumentParser:
 
     init = commands.add_parser("init", help="create a complete mathpub project")
     init.add_argument("directory", nargs="?", type=Path, default=Path.cwd())
+    init.add_argument(
+        "--mathpub-url",
+        default="github:anicolao/mathpub",
+        help="Nix flake URL for the public mathpub tooling input",
+    )
+    init.add_argument(
+        "--publication",
+        action="append",
+        default=[],
+        dest="publication_paths",
+        help="repository-relative publication to validate during nix flake check",
+    )
     _json_flag(init)
 
     new = commands.add_parser("new", help="create authored source")
@@ -211,7 +223,11 @@ def _require_clean(project) -> None:
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
     if args.command == "init":
-        return "init", init_project(args.directory)
+        return "init", init_project(
+            args.directory,
+            mathpub_url=args.mathpub_url,
+            publication_paths=args.publication_paths,
+        )
 
     project = find_project()
     if args.command == "new":

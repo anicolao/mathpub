@@ -56,6 +56,52 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert len(payload["data"]["checked"]) == 4
 
 
+def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):
+    project = tmp_path / "private-course"
+    code = main(
+        [
+            "init",
+            str(project),
+            "--mathpub-url",
+            "github:publisher/mathpub/reviewed",
+            "--publication",
+            "publications/book.toml",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["data"]["flake"] == "flake.nix"
+    flake = (project / "flake.nix").read_text()
+    assert 'inputs.mathpub.url = "github:publisher/mathpub/reviewed";' in flake
+    assert 'projectName = "private-course";' in flake
+    assert 'publicationPaths = [ "publications/book.toml" ];' in flake
+    assert "mathpub.lib.mkPublicationProject" in flake
+    assert "private publication source" in (project / "README.md").read_text()
+    assert "/build/" in (project / ".gitignore").read_text()
+    assert (
+        "Do not copy private content into the tooling checkout"
+        in (project / "AGENTS.md").read_text()
+    )
+
+
+def test_init_rejects_publication_paths_outside_the_content_repository(tmp_path, capsys):
+    code = main(
+        [
+            "init",
+            str(tmp_path / "private-course"),
+            "--publication",
+            "../outside.toml",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 3
+    assert payload["error"]["code"] == "MP-SRC-005"
+
+
 def test_discovery_is_structured_and_relative(tmp_path, monkeypatch, capsys):
     project = tmp_path / "course"
     assert main(["init", str(project)]) == 0
