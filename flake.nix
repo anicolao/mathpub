@@ -39,7 +39,12 @@
             withDoc = false;
           };
           tex = pkgs.texliveSmall.withPackages (ps: with ps; [
+            cm-unicode
+            doublestroke
             exam
+            enumitem
+            euler-math
+            fancyhdr
             fontspec
             latexmk
             libertinus-fonts
@@ -99,7 +104,12 @@
             withDoc = false;
           };
           tex = pkgs.texliveSmall.withPackages (ps: with ps; [
+            cm-unicode
+            doublestroke
             exam
+            enumitem
+            euler-math
+            fancyhdr
             fontspec
             latexmk
             libertinus-fonts

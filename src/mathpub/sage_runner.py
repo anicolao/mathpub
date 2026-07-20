@@ -36,10 +36,15 @@ def execute(request: dict) -> dict:
             context = Context(
                 RandomContext(
                     seed_for(
-                        request["root_seed"], request["variant"], request["question_id"], attempt
+                        request["root_seed"],
+                        request["variant"],
+                        request.get("seed_key", request["question_id"]),
+                        attempt,
                     )
                 ),
                 overrides=request.get("overrides"),
+                variant=request["variant"],
+                identifier=request["question_id"],
             )
             function(context)
             return {

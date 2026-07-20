@@ -108,6 +108,8 @@ def serialize(value: Any) -> Any:
 class Context:
     random: RandomContext
     overrides: dict[str, Any] | None = None
+    variant: str = ""
+    identifier: str = ""
 
     def __post_init__(self) -> None:
         self.parameters: dict[str, Any] = {}

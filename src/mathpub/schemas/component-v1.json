@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "id", "kind", "title"],
+  "properties": {
+    "schema": {"const": 1},
+    "id": {"type": "string"},
+    "kind": {
+      "enum": [
+        "concept",
+        "term",
+        "objective",
+        "motivation",
+        "exposition",
+        "transition",
+        "calculation",
+        "figure",
+        "definition",
+        "claim",
+        "lemma",
+        "theorem",
+        "corollary",
+        "proof",
+        "example",
+        "question",
+        "hint",
+        "misconception",
+        "teaching-tip",
+        "self-assessment"
+      ]
+    },
+    "title": {"type": "string", "minLength": 1},
+    "status": {"enum": ["draft", "reviewed"]},
+    "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "audiences": {
+      "type": "array",
+      "items": {"enum": ["student", "parent", "teacher", "general"]},
+      "uniqueItems": true
+    },
+    "concepts": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "prerequisites": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "objectives": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "supports": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "addresses": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "generator": {"type": "string"},
+    "points": {"type": "integer", "minimum": 0},
+    "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
+    "layout": {"enum": ["default", "workbook"]},
+    "workspace": {"type": "object"},
+    "fragments": {
+      "type": "object",
+      "properties": {
+        "body": {"type": "string"},
+        "summary": {"type": "string"},
+        "recognition": {"type": "string"},
+        "check": {"type": "string"},
+        "prompt": {"type": "string"},
+        "answer": {"type": "string"},
+        "solution": {"type": "string"},
+        "thought_process": {"type": "string"},
+        "steps": {"type": "string"},
+        "result": {"type": "string"},
+        "wrong": {"type": "string"},
+        "diagnosis": {"type": "string"},
+        "correction": {"type": "string"},
+        "validation": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "fragment_modes": {
+      "type": "object",
+      "properties": {
+        "body": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "summary": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "recognition": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "check": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "prompt": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "answer": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "solution": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "thought_process": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "steps": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "result": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "wrong": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "diagnosis": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "correction": {"enum": ["math", "plain-text", "mixed-tex"]},
+        "validation": {"enum": ["math", "plain-text", "mixed-tex"]}
+      },
+      "additionalProperties": false
+    },
+    "testing": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "concept"}}},
+      "then": {
+        "required": ["fragments"],
+        "properties": {
+          "fragments": {"required": ["summary"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "question"}}},
+      "then": {
+        "required": ["concepts", "fragments"],
+        "properties": {
+          "fragments": {"required": ["prompt", "answer", "solution"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "example"}}},
+      "then": {
+        "required": ["concepts", "fragments"],
+        "properties": {
+          "fragments": {
+            "oneOf": [
+              {
+                "required": ["body"],
+                "not": {
+                  "anyOf": [
+                    {"required": ["prompt"]},
+                    {"required": ["thought_process"]},
+                    {"required": ["steps"]},
+                    {"required": ["result"]}
+                  ]
+                }
+              },
+              {
+                "required": ["prompt", "result"],
+                "not": {"required": ["body"]}
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

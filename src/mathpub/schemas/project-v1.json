@@ -6,6 +6,7 @@
     "schema": {"const": 1},
     "project": {"type": "string", "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*$"},
     "question_roots": {"type": "array", "items": {"type": "string"}},
+    "component_roots": {"type": "array", "items": {"type": "string"}},
     "publication_roots": {"type": "array", "items": {"type": "string"}},
     "profile_roots": {"type": "array", "items": {"type": "string"}},
     "build_dir": {"type": "string"},

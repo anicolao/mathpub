@@ -1,35 +1,63 @@
-"""Create complete, agent-friendly mathpub projects and questions."""
+"""Create complete, agent-friendly mathpub projects and components."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from mathpub.config import ID_PATTERN, Project
 from mathpub.errors import MathpubError
 
-AGENTS = """# AGENTS.md
+AGENTS = r"""# Working with mathpub
 
-This is a mathpub project. Edit authored TOML, Sage, and TeX files; never edit `build/`.
+This is a mathpub authoring project. Use only the programs supplied by its Nix flake. Enter the
+environment with `nix develop`, or run `nix run .#mathpub -- COMMAND`. Never use host Python,
+Sage, TeX, formatters, or test runners, and never edit generated files beneath `build/`.
 
-Before creating content, run `mathpub list questions --json` and reuse an existing question
-when it already represents the requested mathematics. Create new content with
-`mathpub new question ID --kind KIND`.
+Before authoring, inspect the component catalog:
 
-Required loop for every question change:
+```console
+nix run .#mathpub -- list components --json
+nix run .#mathpub -- show component COMPONENT_ID --json
+```
 
-1. `mathpub check question ID --json`
-2. `mathpub preview ID --seed SEED --json`
-3. `mathpub check publication PATH --json` when the question belongs to a publication
-4. `mathpub build PATH --seed SEED --variant NAME --json`
+Persisted component kinds are singular: `objective`, `misconception`, `teaching-tip`, `example`,
+and `question`. Directory names such as `objectives/` and `questions/` are plural because they are
+collections. Create reviewed source by copying the closest component, or start a complete scaffold:
 
-Use `ctx.require` for suitability constraints, `ctx.check_*` for mathematical evidence,
-and `ctx.display.*` only for presentation. Preserve explicit seeds and never describe a
-symbolic or numerical check as a formal proof.
+```console
+nix run .#mathpub -- new component ID --kind objective --concept CONCEPT_ID
+nix run .#mathpub -- new component ID --kind misconception --concept CONCEPT_ID
+nix run .#mathpub -- new component ID --kind teaching-tip --concept CONCEPT_ID
+nix run .#mathpub -- new component ID --kind example --concept CONCEPT_ID
+nix run .#mathpub -- new question ID --concept CONCEPT_ID --template numeric
+```
+
+A question component has reviewed TOML metadata and separate prompt, short-answer, and worked-
+solution fragments. Keep exact mathematical values in `ctx.parameter` and `ctx.derived`; use
+`ctx.display.*` only for presentation. Use `ctx.require` for pedagogical suitability and
+`ctx.check_*` for mathematical evidence. Attach a reader-friendly explanation to every important
+check with `ctx.validation_note(CHECK_ID, NOTE)`. Computational evidence is not a formal proof.
+
+Required loop after changing a question component:
+
+```console
+nix run .#mathpub -- check component QUESTION_ID --seeds 20 --json
+nix run .#mathpub -- preview QUESTION_ID --seed 2026 --replace --json
+nix run .#mathpub -- check publication PUBLICATION_PATH --json
+nix run .#mathpub -- build PUBLICATION_PATH --seed 2026 --variant A --replace --json
+```
+
+Keep answer and solution content out of `prompt.tex`; source boundaries enforce projection
+isolation. Parameterized diagrams must derive coordinates from the same canonical parameters as
+the mathematics and validate their measurements with `ctx.check_*`. Do not label student diagrams
+with implementation-scale commentary. Preserve explicit seeds in reports and commits.
 """
 
 PROJECT = """schema = 1
 project = "{name}"
-question_roots = ["questions"]
+question_roots = []
+component_roots = ["components"]
 publication_roots = ["publications"]
 profile_roots = ["profiles"]
 build_dir = "build"
@@ -39,38 +67,41 @@ default_profile = "mathpub.exam"
 max_attempts = 100
 """
 
-QUESTION = """schema = 1
-id = "{identifier}"
-title = "New {kind} question"
-kind = "{kind}"
-points = 1
-tags = []
-prompt = "prompt.tex"
-answer = "answer.tex"
-solution = "solution.tex"
-{generator}
-[workspace]
-student = "35mm"
+COLLECTIONS = {
+    "objective": "objectives",
+    "misconception": "misconceptions",
+    "teaching-tip": "teaching-tips",
+    "example": "examples",
+    "question": "questions",
+}
 
-[testing]
-sample_seeds = 20
-max_attempts = 100
-"""
+DEFAULT_TITLES = {
+    "objective": "What You Will Learn",
+    "misconception": "Common Mistake to Avoid",
+    "teaching-tip": "Teaching Tip for Tutors and Parents",
+}
+
+QUESTION_TEMPLATES = ("fixed", "numeric", "symbolic", "tikz")
 
 GENERATORS = {
-    "numeric": """from mathpub.question import generator
+    "numeric": r"""from mathpub.question import generator
 
 @generator
 def generate(ctx):
     value = ctx.random.integer(2, 12)
+    answer = 2 * value
     ctx.parameter("value", value)
-    ctx.derived("answer", value * 2)
-    ctx.require("positive", value > 0)
-    ctx.check_equal("doubling", value * 2, 2 * value)
+    ctx.derived("answer", answer)
+    ctx.require("positive-input", value > 0)
+    ctx.check_equal("doubling", value + value, answer)
+    ctx.validation_note(
+        "doubling",
+        "Adding a number to itself gives the same result as multiplying it by two.",
+    )
     ctx.display.integer("value", value)
-    ctx.display.integer("answer", value * 2)
+    ctx.display.integer("answer", answer)
 """,
-    "symbolic": """from mathpub.question import generator
+    "symbolic": r"""from mathpub.question import generator
 
 @generator
 def generate(ctx):
@@ -82,19 +113,41 @@ def generate(ctx):
     ctx.derived("expression", expression)
     ctx.derived("derivative", derivative)
     ctx.check_equal("differentiate", diff(expression, x), derivative)
+    ctx.validation_note(
+        "differentiate",
+        "Independent differentiation reproduces the displayed derivative.",
+    )
     ctx.display.math("expression", expression)
     ctx.display.math("answer", derivative)
 """,
-    "tikz": """from mathpub.question import generator
+    "tikz": r"""from mathpub.question import generator
 
 @generator
 def generate(ctx):
-    length = ctx.random.integer(2, 8)
+    length = ctx.random.integer(2, 5)
+    endpoint_x = length
+    endpoint_y = length
+    area = length^2
     ctx.parameter("length", length)
-    ctx.derived("answer", length^2)
-    ctx.check_equal("square", length * length, length^2)
+    ctx.derived("endpoint_x", endpoint_x)
+    ctx.derived("endpoint_y", endpoint_y)
+    ctx.derived("answer", area)
+    ctx.check_equal("area", length * length, area)
+    ctx.validation_note("area", "The area is the product of the two generated side lengths.")
+    ctx.check_equal("diagram-width", endpoint_x, length)
+    ctx.validation_note(
+        "diagram-width",
+        "The horizontal diagram coordinate equals the generated side length.",
+    )
+    ctx.check_equal("diagram-height", endpoint_y, length)
+    ctx.validation_note(
+        "diagram-height",
+        "The vertical diagram coordinate equals the generated side length.",
+    )
     ctx.display.integer("length", length)
-    ctx.display.integer("answer", length^2)
+    ctx.display.integer("endpoint_x", endpoint_x)
+    ctx.display.integer("endpoint_y", endpoint_y)
+    ctx.display.integer("answer", area)
 """,
 }
 
@@ -106,6 +159,16 @@ def _write_new(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _toml_array(values: list[str]) -> str:
+    return json.dumps(values, ensure_ascii=False)
+
+
+def _default_title(identifier: str, kind: str) -> str:
+    if kind in DEFAULT_TITLES:
+        return DEFAULT_TITLES[kind]
+    return identifier.rsplit(".", 1)[-1].replace("-", " ").title()
+
+
 def init_project(directory: Path) -> dict[str, str]:
     root = directory.resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -115,43 +178,173 @@ def init_project(directory: Path) -> dict[str, str]:
     _write_new(root / "mathpub.toml", PROJECT.format(name=name))
     if not (root / "AGENTS.md").exists():
         _write_new(root / "AGENTS.md", AGENTS)
-    for child in ("questions", "publications", "profiles"):
+    for child in ("components", "publications", "profiles"):
         (root / child).mkdir(exist_ok=True)
     return {"root": str(root), "config": "mathpub.toml", "instructions": "AGENTS.md"}
 
 
-def new_question(project: Project, identifier: str, kind: str) -> dict[str, str]:
-    if not ID_PATTERN.fullmatch(identifier):
-        raise MathpubError("MP-SRC-006", f"invalid question ID: {identifier}")
-    if kind not in {"fixed", *GENERATORS}:
-        raise MathpubError("MP-SRC-011", f"unsupported question kind: {kind}")
-    directory = project.question_roots[0] / Path(*identifier.split("."))
-    generator_line = 'generator = "generate.sage"\n' if kind != "fixed" else ""
-    _write_new(
-        directory / "question.toml",
-        QUESTION.format(identifier=identifier, kind=kind, generator=generator_line),
-    )
-    if kind != "fixed":
-        _write_new(directory / "generate.sage", GENERATORS[kind])
-        prompt = (
-            "Compute twice $\\mpvalue{value}$."
-            if kind == "numeric"
-            else "Compute the requested value: $\\mpvalue{expression}$."
+def _question_sources(template: str) -> tuple[str, str, str]:
+    if template == "fixed":
+        return (
+            "State and justify your answer.\n",
+            "A reviewed fixed answer.\n",
+            "Explain the reasoning that leads to the answer, and check it against the question.\n",
         )
-        if kind == "tikz":
-            prompt = """Find the area of the square.
-\\begin{center}
-\\begin{tikzpicture}
-  \\draw (0,0) rectangle (2,2);
-  \\node[below] at (1,0) {$\\mpvalue{length}$};
-\\end{tikzpicture}
-\\end{center}
-"""
-        _write_new(directory / "prompt.tex", prompt + "\n")
-        _write_new(directory / "answer.tex", "$\\mpvalue{answer}$\n")
-        _write_new(directory / "solution.tex", "The result is $\\mpvalue{answer}$.\n")
+    if template == "numeric":
+        return (
+            r"Compute twice \(\mpvalue{value}\)." "\n",
+            r"\mpvalue{answer}" "\n",
+            r"Doubling means multiplying by two: \(2(\mpvalue{value})=\mpvalue{answer}\)." "\n",
+        )
+    if template == "symbolic":
+        return (
+            r"Differentiate \(\mpvalue{expression}\) with respect to \(x\)." "\n",
+            r"\mpvalue{answer}" "\n",
+            r"Apply the power rule to obtain \(\mpvalue{answer}\)." "\n",
+        )
+    return (
+        r"""Find the area of the square.
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \draw (0,0) rectangle (\mpvalue{endpoint_x},\mpvalue{endpoint_y});
+  \node[below] at (\mpvalue{endpoint_x}/2,0) {\(\mpvalue{length}\)};
+\end{tikzpicture}
+\end{center}
+""",
+        r"\mpvalue{answer}" "\n",
+        r"A square with side \(\mpvalue{length}\) has area \(\mpvalue{length}^2=\mpvalue{answer}\)."
+        "\n",
+    )
+
+
+def new_component(
+    project: Project,
+    identifier: str,
+    kind: str,
+    *,
+    concepts: list[str] | None = None,
+    title: str | None = None,
+    template: str = "fixed",
+    form: str = "cohesive",
+) -> dict[str, str]:
+    """Create one complete component using the canonical component schema."""
+    if not ID_PATTERN.fullmatch(identifier):
+        raise MathpubError("MP-SRC-006", f"invalid component ID: {identifier}")
+    if kind not in COLLECTIONS:
+        raise MathpubError("MP-SRC-011", f"unsupported scaffold component kind: {kind}")
+    concepts = concepts or []
+    if not concepts:
+        raise MathpubError("MP-SRC-015", f"new {kind} requires at least one --concept ID")
+    invalid_concept = next((value for value in concepts if not ID_PATTERN.fullmatch(value)), None)
+    if invalid_concept:
+        raise MathpubError("MP-SRC-006", f"invalid concept ID: {invalid_concept}")
+    if kind != "question" and template != "fixed":
+        raise MathpubError("MP-SRC-011", "--template is only valid for question components")
+    if template not in QUESTION_TEMPLATES:
+        raise MathpubError("MP-SRC-011", f"unsupported question template: {template}")
+    if kind != "example" and form != "cohesive":
+        raise MathpubError("MP-SRC-011", "--form is only valid for example components")
+
+    directory = project.component_roots[0] / COLLECTIONS[kind] / Path(*identifier.split("."))
+    metadata_title = title or _default_title(identifier, kind)
+    common = (
+        "schema = 1\n"
+        f"id = {json.dumps(identifier)}\n"
+        f"kind = {json.dumps(kind)}\n"
+        f"title = {json.dumps(metadata_title)}\n"
+        'status = "draft"\n'
+    )
+
+    if kind == "question":
+        generator = 'generator = "generate.sage"\n' if template != "fixed" else ""
+        answer_mode = "plain-text" if template == "fixed" else "math"
+        metadata = (
+            common
+            + f"concepts = {_toml_array(concepts)}\n"
+            + "points = 1\n"
+            + generator
+            + "[fragments]\n"
+            + 'prompt = "prompt.tex"\nanswer = "answer.tex"\nsolution = "solution.tex"\n'
+            + "[fragment_modes]\n"
+            + f'prompt = "mixed-tex"\nanswer = "{answer_mode}"\nsolution = "mixed-tex"\n'
+            + '[workspace]\nstudent = "35mm"\n'
+            + "[testing]\nsample_seeds = 20\nmax_attempts = 100\n"
+        )
+        _write_new(directory / "component.toml", metadata)
+        if template != "fixed":
+            _write_new(directory / "generate.sage", GENERATORS[template])
+        prompt, answer, solution = _question_sources(template)
+        _write_new(directory / "prompt.tex", prompt)
+        _write_new(directory / "answer.tex", answer)
+        _write_new(directory / "solution.tex", solution)
+    elif kind == "example":
+        if form not in {"cohesive", "structured"}:
+            raise MathpubError("MP-SRC-011", f"unsupported example form: {form}")
+        metadata = common + f"concepts = {_toml_array(concepts)}\n[fragments]\n"
+        if form == "cohesive":
+            metadata += 'body = "body.tex"\n[fragment_modes]\nbody = "mixed-tex"\n'
+            _write_new(directory / "component.toml", metadata)
+            _write_new(
+                directory / "body.tex",
+                "Work through a concrete example here, explaining why each "
+                "mathematical step is valid.\n",
+            )
+        else:
+            metadata += (
+                'prompt = "prompt.tex"\nresult = "result.tex"\n'
+                '[fragment_modes]\nprompt = "mixed-tex"\nresult = "mixed-tex"\n'
+            )
+            _write_new(directory / "component.toml", metadata)
+            _write_new(directory / "prompt.tex", "State the example problem here.\n")
+            _write_new(directory / "result.tex", "Show and explain the result here.\n")
     else:
-        _write_new(directory / "prompt.tex", "State and justify your answer.\n")
-        _write_new(directory / "answer.tex", "A reviewed fixed answer.\n")
-        _write_new(directory / "solution.tex", "A reviewed fixed solution.\n")
-    return {"id": identifier, "kind": kind, "path": directory.relative_to(project.root).as_posix()}
+        audiences = (
+            'audiences = ["parent", "teacher"]\n'
+            if kind == "teaching-tip"
+            else 'audiences = ["student"]\n'
+        )
+        metadata = (
+            common
+            + f"concepts = {_toml_array(concepts)}\n"
+            + audiences
+            + '[fragments]\nbody = "body.tex"\n'
+            + '[fragment_modes]\nbody = "mixed-tex"\n'
+        )
+        body = {
+            "objective": "After this lesson, you will be able to explain and apply this idea.\n",
+            "misconception": (
+                "Watch for this common error, and use the original conditions to check your work.\n"
+            ),
+            "teaching-tip": (
+                "Ask the student to explain the idea in their own words before introducing a "
+                "shortcut.\n"
+            ),
+        }[kind]
+        _write_new(directory / "component.toml", metadata)
+        _write_new(directory / "body.tex", body)
+
+    return {
+        "id": identifier,
+        "kind": kind,
+        "path": directory.relative_to(project.root).as_posix(),
+    }
+
+
+def new_question(
+    project: Project,
+    identifier: str,
+    template: str,
+    concepts: list[str],
+    title: str | None = None,
+) -> dict[str, str]:
+    """Convenience command backed by the one component scaffolder."""
+    result = new_component(
+        project,
+        identifier,
+        "question",
+        concepts=concepts,
+        title=title,
+        template=template,
+    )
+    result["template"] = template
+    return result
