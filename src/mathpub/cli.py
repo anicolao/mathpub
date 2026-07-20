@@ -379,7 +379,7 @@ placement = {json.dumps(placement)}
                 )
             entry = catalog.get(args.content, args.target)
             checked = _validate_files(project, entry)
-            if args.exhaustive and args.content == "question":
+            if args.exhaustive:
                 domains = entry.metadata.get("testing", {}).get("exhaustive_domains", [])
                 if not domains:
                     raise MathpubError(
@@ -392,9 +392,22 @@ placement = {json.dumps(placement)}
                     instances = []
                     for values in itertools.product(*(parameters[name] for name in names)):
                         overrides = dict(zip(names, values, strict=True))
-                        instances.append(
-                            instantiate(entry, "exhaustive", domain["name"], overrides=overrides)
-                        )
+                        if args.content == "component":
+                            instance = instantiate_component(
+                                entry,
+                                "exhaustive",
+                                domain["name"],
+                                f"exhaustive.{domain['name']}",
+                                overrides=overrides,
+                            )
+                        else:
+                            instance = instantiate(
+                                entry,
+                                "exhaustive",
+                                domain["name"],
+                                overrides=overrides,
+                            )
+                        instances.append(instance)
                     reports.append(
                         {
                             "name": domain["name"],
@@ -405,7 +418,7 @@ placement = {json.dumps(placement)}
                             "instance_hashes": [item["sha256"] for item in instances],
                         }
                     )
-                return "check question", {
+                return f"check {args.content}", {
                     "id": args.target,
                     "checked": checked,
                     "verification": reports,
@@ -519,7 +532,7 @@ placement = {json.dumps(placement)}
             _validate_files(project, entry)
         return "check project", {
             "project": project.config["project"],
-            "questions": len(catalog.questions),
+            "questions": len(catalog.entries("questions")),
             "components": len(catalog.components),
             "publications": len(catalog.publications),
             "profiles": len(catalog.profiles),

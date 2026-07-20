@@ -1,14 +1,22 @@
 schema = 1
 id = "physics.forces.car-curve"
 title = "Centripetal force on a car"
-kind = "symbolic"
+kind = "question"
+status = "reviewed"
+concepts = ["physics.circular-motion"]
 points = 6
 tags = ["circular-motion", "forces", "symbolic", "units"]
 difficulty = 2
 generator = "generate.sage"
+[fragments]
 prompt = "prompt.tex"
 answer = "answer.tex"
 solution = "solution.tex"
+
+[fragment_modes]
+prompt = "mixed-tex"
+answer = "mixed-tex"
+solution = "mixed-tex"
 
 [workspace]
 student = "48mm"
