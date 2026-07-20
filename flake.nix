@@ -124,6 +124,7 @@
           default = pkgs.mkShell {
             inputsFrom = [ package ];
             packages = [
+              pkgs.gh
               pkgs.git
               pkgs.jq
               pkgs.ripgrep
@@ -158,5 +159,53 @@
         });
 
       formatter = forAllSystems (system: (pkgsFor system).nixpkgs-fmt);
+
+      lib.mkPublicationProject =
+        { src
+        , projectName
+        , publicationPaths ? [ ]
+        }:
+        {
+          packages = self.packages;
+          apps = self.apps;
+          devShells = forAllSystems (system:
+            let
+              pkgs = pkgsFor system;
+            in {
+              default = pkgs.mkShell {
+                packages = [
+                  self.packages.${system}.mathpub
+                  pkgs.gh
+                  pkgs.git
+                  pkgs.jq
+                  pkgs.ripgrep
+                ];
+              };
+            });
+          formatter = self.formatter;
+          checks = forAllSystems (system:
+            let
+              pkgs = pkgsFor system;
+              mathpub = self.packages.${system}.mathpub;
+              publicationCommands = pkgs.lib.concatStringsSep "\n"
+                (pkgs.lib.imap0
+                  (index: publicationPath: ''
+                    ${mathpub}/bin/mathpub check publication \
+                      ${pkgs.lib.escapeShellArg publicationPath} --json \
+                      > "$out/publication-${toString index}.json"
+                  '')
+                  publicationPaths);
+            in {
+              content = pkgs.runCommand "${projectName}-mathpub-content" { } ''
+                cp -R ${src} source
+                chmod -R u+w source
+                cd source
+                export HOME="$TMPDIR"
+                mkdir -p "$out"
+                ${mathpub}/bin/mathpub check project --json > "$out/project.json"
+                ${publicationCommands}
+              '';
+            });
+        };
     };
 }

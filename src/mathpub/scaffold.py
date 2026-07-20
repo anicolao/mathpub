@@ -10,9 +10,11 @@ from mathpub.errors import MathpubError
 
 AGENTS = r"""# Working with mathpub
 
-This is a mathpub authoring project. Use only the programs supplied by its Nix flake. Enter the
-environment with `nix develop`, or run `nix run .#mathpub -- COMMAND`. Never use host Python,
-Sage, TeX, formatters, or test runners, and never edit generated files beneath `build/`.
+This is a publication-content repository. Its authored components and publications are separate
+from the public mathpub tooling repository. Do not copy private content into the tooling checkout.
+Use only the programs supplied by this repository's Nix flake. Enter the environment with
+`nix develop`, or run `nix run .#mathpub -- COMMAND`. Never use host Python, Sage, TeX,
+formatters, or test runners, and never edit generated files beneath `build/`.
 
 Before authoring, inspect the component catalog:
 
@@ -65,6 +67,58 @@ default_profile = "mathpub.exam"
 
 [generation]
 max_attempts = 100
+"""
+
+CONTENT_FLAKE = """{{
+  description = {description};
+
+  inputs.mathpub.url = {mathpub_url};
+
+  outputs = {{ self, mathpub }}:
+    mathpub.lib.mkPublicationProject {{
+      src = self;
+      projectName = {project_name};
+      publicationPaths = {publication_paths};
+    }};
+}}
+"""
+
+CONTENT_README = """# {title}
+
+This repository contains private publication source built with
+[mathpub](https://github.com/anicolao/mathpub). The publishing engine is a pinned flake input;
+authored components, questions, solutions, and publication assemblies remain in this repository.
+
+## First checkout
+
+```console
+nix flake lock
+nix develop
+nix run .#mathpub -- check project --json
+```
+
+Add publication paths to `publicationPaths` in `flake.nix` so `nix flake check` validates them.
+Build a publication with an explicit seed and variant:
+
+```console
+nix run .#mathpub -- build publications/BOOK.toml \\
+  --seed 2026 --variant review --replace --json
+```
+
+Generated files beneath `build/` are disposable and must not be committed. Repository visibility,
+collaborators, branch protection, backups, and any content licence are controlled by this private
+repository's owner.
+"""
+
+CONTENT_GITIGNORE = """/build/
+/result
+/result-*
+/.direnv/
+/.pytest_cache/
+/.ruff_cache/
+*.egg-info/
+__pycache__/
+*.py[cod]
 """
 
 COLLECTIONS = {
@@ -169,18 +223,56 @@ def _default_title(identifier: str, kind: str) -> str:
     return identifier.rsplit(".", 1)[-1].replace("-", " ").title()
 
 
-def init_project(directory: Path) -> dict[str, str]:
+def _nix_list(values: list[str]) -> str:
+    return "[ " + " ".join(json.dumps(value) for value in values) + " ]"
+
+
+def init_project(
+    directory: Path,
+    *,
+    mathpub_url: str = "github:anicolao/mathpub",
+    publication_paths: list[str] | None = None,
+) -> dict[str, str]:
     root = directory.resolve()
     root.mkdir(parents=True, exist_ok=True)
     if (root / "mathpub.toml").exists():
         raise MathpubError("MP-SRC-010", f"already a mathpub project: {root}")
     name = root.name.lower().replace("_", "-")
+    if not ID_PATTERN.fullmatch(name):
+        raise MathpubError("MP-SRC-006", f"invalid project name derived from directory: {name}")
+    publication_paths = publication_paths or []
+    for publication_path in publication_paths:
+        path = Path(publication_path)
+        if path.is_absolute() or ".." in path.parts:
+            raise MathpubError(
+                "MP-SRC-005", f"publication path must stay inside the repository: {path}"
+            )
     _write_new(root / "mathpub.toml", PROJECT.format(name=name))
     if not (root / "AGENTS.md").exists():
         _write_new(root / "AGENTS.md", AGENTS)
+    if not (root / "flake.nix").exists():
+        _write_new(
+            root / "flake.nix",
+            CONTENT_FLAKE.format(
+                description=json.dumps(f"Private mathpub publication: {name}"),
+                mathpub_url=json.dumps(mathpub_url),
+                project_name=json.dumps(name),
+                publication_paths=_nix_list(publication_paths),
+            ),
+        )
+    if not (root / ".gitignore").exists():
+        _write_new(root / ".gitignore", CONTENT_GITIGNORE)
+    if not (root / "README.md").exists():
+        _write_new(root / "README.md", CONTENT_README.format(title=root.name))
     for child in ("components", "publications", "profiles"):
         (root / child).mkdir(exist_ok=True)
-    return {"root": str(root), "config": "mathpub.toml", "instructions": "AGENTS.md"}
+    return {
+        "root": str(root),
+        "config": "mathpub.toml",
+        "instructions": "AGENTS.md",
+        "flake": "flake.nix",
+        "readme": "README.md",
+    }
 
 
 def _question_sources(template: str) -> tuple[str, str, str]:
