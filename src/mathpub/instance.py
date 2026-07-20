@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from mathpub.catalog import Entry
-from mathpub.errors import MathpubError
+from mathpub.errors import MathpubError, timeout_transcript
 
 
 def canonical_json(data: Any) -> str:
@@ -28,6 +28,7 @@ def instantiate(
     variant: str,
     max_attempts: int | None = None,
     overrides: dict[str, Any] | None = None,
+    seed_key: str | None = None,
 ) -> dict[str, Any]:
     generator = entry.metadata.get("generator")
     if not generator:
@@ -48,6 +49,7 @@ def instantiate(
     attempts = max_attempts or entry.metadata.get("testing", {}).get("max_attempts", 100)
     request = {
         "question_id": entry.metadata["id"],
+        "seed_key": seed_key or entry.metadata["id"],
         "generator": str((entry.path / generator).resolve()),
         "root_seed": str(root_seed),
         "variant": str(variant),
@@ -59,19 +61,34 @@ def instantiate(
         request_path = Path(temporary) / "request.json"
         output_path = Path(temporary) / "instance.json"
         request_path.write_text(canonical_json(request), encoding="utf-8")
-        process = subprocess.run(
-            ["sage", "--python", str(runner), str(request_path), str(output_path)],
-            cwd=temporary,
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-            env={
-                **os.environ,
-                "HOME": temporary,
-                "XDG_CACHE_HOME": str(Path(temporary) / ".cache"),
-            },
-        )
+        command = ["sage", "--python", str(runner), str(request_path), str(output_path)]
+        try:
+            process = subprocess.run(
+                command,
+                cwd=temporary,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+                env={
+                    **os.environ,
+                    "HOME": temporary,
+                    "XDG_CACHE_HOME": str(Path(temporary) / ".cache"),
+                },
+            )
+        except subprocess.TimeoutExpired as error:
+            transcript = timeout_transcript(error).strip()
+            raise MathpubError(
+                "MP-GEN-008",
+                f"Sage generation timed out after 120 seconds for {entry.metadata['id']}",
+                exit_code=4,
+                details={
+                    "question_id": entry.metadata["id"],
+                    "generator": str((entry.path / generator).resolve()),
+                    "timeout_seconds": 120,
+                    "diagnostic": transcript[-2000:] or "Sage produced no output before timeout",
+                },
+            ) from error
         if not output_path.exists():
             raise MathpubError(
                 "MP-GEN-001",
@@ -98,5 +115,30 @@ def instantiate(
             f"Sage runner failed for {entry.metadata['id']}: {result.get('error')}",
             exit_code=1,
         )
+    result["sha256"] = instance_hash(result)
+    return result
+
+
+def instantiate_component(
+    entry: Entry,
+    root_seed: str,
+    variant: str,
+    placement_id: str,
+    *,
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Instantiate a component with placement-isolated deterministic randomness."""
+    result = instantiate(
+        entry,
+        root_seed,
+        variant,
+        overrides=overrides,
+        seed_key=f"{entry.metadata['id']}@{placement_id}",
+    )
+    result = {
+        **{key: value for key, value in result.items() if key != "sha256"},
+        "component_id": entry.metadata["id"],
+        "placement_id": placement_id,
+    }
     result["sha256"] = instance_hash(result)
     return result

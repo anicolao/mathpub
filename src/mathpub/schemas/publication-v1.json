@@ -1,21 +1,259 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema", "id", "kind", "title", "profile", "sections"],
+  "required": ["schema", "id", "kind", "title", "profile"],
   "properties": {
     "schema": {"const": 1},
     "id": {"type": "string"},
-    "kind": {"enum": ["test", "worksheet"]},
+    "kind": {"enum": ["test", "worksheet", "textbook"]},
     "title": {"type": "string"},
     "subtitle": {"type": "string"},
     "course": {"type": "string"},
     "author": {"type": "string"},
     "profile": {"type": "string"},
     "paper": {"enum": ["letter", "a4"]},
-    "projections": {"type": "array", "items": {"enum": ["student", "answers", "solutions", "validation"]}, "uniqueItems": true},
+    "font": {"enum": ["concrete", "libertinus", "computer-modern"]},
+    "style": {"enum": ["mathpub", "workbook"]},
+    "projections": {"type": "array", "items": {"enum": ["student", "answers", "solutions", "validation", "parent"]}, "uniqueItems": true},
     "student_fields": {"type": "object"},
     "instructions": {"type": "object"},
-    "sections": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["questions"]}}
+    "sections": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["questions"]}},
+    "chapters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["title", "lessons"],
+        "properties": {
+          "title": {"type": "string"},
+          "introduction": {"type": "string"},
+          "practice": {
+            "type": "object",
+            "required": ["id", "title", "exercises", "self_assessment", "answers", "solutions"],
+            "properties": {
+              "id": {"type": "string"},
+              "title": {"type": "string"},
+              "exercises": {"type": "string"},
+              "self_assessment": {"type": "string"},
+              "answers": {"type": "string"},
+              "solutions": {"type": "string"},
+              "validation": {"type": "string"}
+            },
+            "additionalProperties": false
+          },
+          "lessons": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "title", "content", "exercises", "answers", "solutions"],
+              "properties": {
+                "id": {"type": "string"},
+                "number": {"type": "string"},
+                "heading": {"type": "string"},
+                "title": {"type": "string"},
+                "objectives": {"type": "array", "items": {"type": "string"}},
+                "content": {"type": "string"},
+                "exercises": {"type": "string"},
+                "self_assessment": {"type": "string"},
+                "answers": {"type": "string"},
+                "solutions": {"type": "string"},
+                "validation": {"type": "string"}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "component_chapters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "lessons"],
+        "properties": {
+          "id": {"type": "string"},
+          "title": {"type": "string"},
+          "introduction": {"type": "string"},
+          "lessons": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "title", "concepts", "blocks"],
+              "properties": {
+                "id": {"type": "string"},
+                "number": {"type": "string"},
+                "heading": {"type": "string"},
+                "title": {"type": "string"},
+                "concepts": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {"type": "string"},
+                  "uniqueItems": true
+                },
+                "objectives": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "uniqueItems": true
+                },
+                "blocks": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "heading": {"type": "string"},
+                      "page_break_before": {"type": "boolean"},
+                      "include": {"type": "string"},
+                      "placement": {"type": "string"},
+                      "derive": {
+                        "enum": ["objectives", "common-errors", "concept-summary", "teaching-tips"]
+                      },
+                      "title": {"type": "string"},
+                      "audience": {"enum": ["student", "parent", "teacher", "general"]},
+                      "overrides": {"type": "object"},
+                      "problem_set": {
+                        "type": "object",
+                        "required": ["id", "title"],
+                        "properties": {
+                          "id": {"type": "string"},
+                          "number": {"type": "string"},
+                          "title": {"type": "string"},
+                          "show_title": {"type": "boolean"},
+                          "answer_title": {"type": "string"},
+                          "directions": {"type": "string"},
+                          "direction_lines": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "required": ["text"],
+                              "properties": {
+                                "label": {"type": "string"},
+                                "text": {"type": "string"}
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "page_break_before": {"type": "boolean"},
+                          "answer_page_break_before": {"type": "boolean"},
+                          "self_assessment": {"type": "string"},
+                          "self_assessment_placement": {"type": "string"},
+                          "self_assessment_page_break_before": {"type": "boolean"},
+                          "questions": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "required": ["id", "placement"],
+                              "properties": {
+                                "id": {"type": "string"},
+                                "placement": {"type": "string"},
+                                "overrides": {"type": "object"},
+                                "workspace": {"type": "string"},
+                                "emphasize_answer": {"type": "boolean"},
+                                "response": {"enum": ["workspace", "truth-blank", "answer-line"]},
+                                "page_break_before": {"type": "boolean"}
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "parts": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "required": ["id", "title", "questions"],
+                              "properties": {
+                                "id": {"type": "string"},
+                                "title": {"type": "string"},
+                                "answer_title": {"type": "string"},
+                                "directions": {"type": "string"},
+                                "direction_lines": {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "object",
+                                    "required": ["text"],
+                                    "properties": {
+                                      "label": {"type": "string"},
+                                      "text": {"type": "string"}
+                                    },
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "response": {"enum": ["workspace", "truth-blank", "answer-line"]},
+                                "workspace": {"type": "string"},
+                                "emphasize_answers": {"type": "boolean"},
+                                "page_break_before": {"type": "boolean"},
+                                "answer_page_break_before": {"type": "boolean"},
+                                "questions": {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "object",
+                                    "required": ["id", "placement"],
+                                    "properties": {
+                                      "id": {"type": "string"},
+                                      "placement": {"type": "string"},
+                                      "overrides": {"type": "object"},
+                                      "workspace": {"type": "string"},
+                                      "emphasize_answer": {"type": "boolean"},
+                                      "response": {"enum": ["workspace", "truth-blank", "answer-line"]},
+                                      "page_break_before": {"type": "boolean"}
+                                    },
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "dependentRequired": {
+                          "self_assessment": ["self_assessment_placement"],
+                          "self_assessment_placement": ["self_assessment"]
+                        },
+                        "oneOf": [
+                          {"required": ["questions"]},
+                          {"required": ["parts"]}
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "oneOf": [
+                      {"required": ["heading"]},
+                      {"required": ["include", "placement"]},
+                      {"required": ["derive"]},
+                      {"required": ["problem_set"]}
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "textbook"}}},
+      "then": {
+        "not": {"required": ["sections"]},
+        "oneOf": [
+          {"required": ["chapters"], "not": {"required": ["component_chapters"]}},
+          {"required": ["component_chapters"], "not": {"required": ["chapters"]}}
+        ]
+      },
+      "else": {"required": ["sections"], "not": {"required": ["chapters"]}}
+    }
+  ]
 }

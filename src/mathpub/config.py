@@ -6,6 +6,8 @@ import json
 import re
 import tomllib
 from dataclasses import dataclass
+from difflib import get_close_matches
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,17 @@ from mathpub.errors import MathpubError
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 
 
+@lru_cache
+def schema_definition(schema: str) -> dict[str, Any]:
+    """Return one packaged schema as the authoritative metadata definition."""
+    schema_text = resources.files("mathpub.schemas").joinpath(f"{schema}-v1.json").read_text()
+    return json.loads(schema_text)
+
+
+def schema_enum(schema: str, property_name: str) -> tuple[str, ...]:
+    return tuple(schema_definition(schema)["properties"][property_name]["enum"])
+
+
 @dataclass(frozen=True)
 class Project:
     root: Path
@@ -25,6 +38,10 @@ class Project:
     @property
     def question_roots(self) -> list[Path]:
         return [self.root / path for path in self.config.get("question_roots", ["questions"])]
+
+    @property
+    def component_roots(self) -> list[Path]:
+        return [self.root / path for path in self.config.get("component_roots", ["components"])]
 
     @property
     def profile_roots(self) -> list[Path]:
@@ -42,13 +59,21 @@ def load_toml(path: Path, schema: str) -> dict[str, Any]:
         raise MathpubError("MP-SRC-001", f"source file does not exist: {path}") from error
     except tomllib.TOMLDecodeError as error:
         raise MathpubError("MP-SRC-002", f"invalid TOML in {path}: {error}") from error
-    schema_text = resources.files("mathpub.schemas").joinpath(f"{schema}-v1.json").read_text()
     try:
-        jsonschema.validate(data, json.loads(schema_text))
+        jsonschema.validate(data, schema_definition(schema))
     except jsonschema.ValidationError as error:
         location = ".".join(str(part) for part in error.absolute_path) or "document"
+        details: dict[str, Any] = {"source": str(path), "location": location}
+        suggestion = ""
+        if schema == "component" and list(error.absolute_path) == ["kind"]:
+            matches = get_close_matches(str(error.instance), schema_enum("component", "kind"), n=1)
+            if matches:
+                details["suggestion"] = matches[0]
+                suggestion = f"; did you mean {matches[0]!r}?"
         raise MathpubError(
-            "MP-SRC-003", f"invalid {schema} metadata in {path} at {location}: {error.message}"
+            "MP-SRC-003",
+            f"invalid {schema} metadata in {path} at {location}: {error.message}{suggestion}",
+            details=details,
         ) from error
     return data
 
