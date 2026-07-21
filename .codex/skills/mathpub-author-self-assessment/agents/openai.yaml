@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mathpub Self-Assessment Author"
+  short_description: "Create actionable learner reflection"
+  default_prompt: "Use $mathpub-author-self-assessment to create a topic or unit self-assessment tied to demonstrated skills."

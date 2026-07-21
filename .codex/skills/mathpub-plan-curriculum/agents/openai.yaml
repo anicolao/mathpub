@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mathpub Curriculum Planner"
+  short_description: "Plan complete curriculum scope"
+  default_prompt: "Use $mathpub-plan-curriculum to create a standards-complete workbook scope and dependency sequence."

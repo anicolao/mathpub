@@ -347,12 +347,15 @@ The public MVP generator API is deliberately small:
 - `ctx.random.integer(low, high)`, inclusive;
 - `ctx.random.choice(sequence)`;
 - `ctx.random.rational(numerators, denominators)`;
+- `ctx.domain(name, sequence)` for values that may be exhaustively overridden;
+- `ctx.variant`, the explicit edition variant name supplied by the build;
 - `ctx.parameter(name, value)`;
 - `ctx.derived(name, value)`;
 - `ctx.require(name, condition, detail=None)`;
 - `ctx.check_equal(name, lhs, rhs, assumptions=())`;
 - `ctx.check_close(name, lhs, rhs, atol, rtol=0, assumptions=())`;
 - `ctx.check_true(name, condition, detail=None, assumptions=())`;
+- `ctx.validation_note(check_id, note)` for the validation projection;
 - `ctx.display.text(name, value)`;
 - `ctx.display.integer(name, value)`;
 - `ctx.display.decimal(name, value, places, trailing_zeros=True, unit=None)`;
@@ -364,6 +367,10 @@ The public MVP generator API is deliberately small:
 Names must be unique within their namespace and match `[a-z][a-z0-9_]*`. The implementation rejects non-finite decimal results, undeclared display values, duplicate declarations, and values it cannot serialize.
 
 Direct use of global Sage/Python random functions is forbidden by policy and detected by a lint check for common calls. It cannot be made impossible for trusted local code in the MVP, so determinism is also tested by running a generator twice and comparing canonical instances.
+
+A migration generator may reserve the variant name `original` for a reviewed source fixture and use
+other variant names for constrained alternatives. The branch must be explicit in source and both
+modes must run the same mathematical checks.
 
 ### 9.3 Value serialization
 
@@ -612,7 +619,9 @@ The MVP uses LuaLaTeX through `latexmk` with:
 - a bounded number of passes; and
 - `SOURCE_DATE_EPOCH` derived from the Git commit time when available, otherwise zero.
 
-The default profile uses the `exam`, `fontspec`, `amsmath`, `mathtools`, `siunitx`, `tikz`, `microtype`, and `geometry` packages. The precise TeX Live closure is pinned in `flake.lock`.
+The default profile uses `exam`, `fontspec`, `unicode-math`, `amsmath`, `mathtools`, `siunitx`,
+`tikz`, `microtype`, and `geometry`. CMU Concrete with Euler Math and Libertinus are both supplied
+by the precise TeX Live closure pinned in `flake.lock`.
 
 ### 11.8 PDF inspection
 
@@ -813,7 +822,7 @@ These are interface-contract tests; they do not require invoking an LLM in CI. P
 
 The built-in `mathpub.exam` profile provides a professional but restrained baseline:
 
-- LuaLaTeX with OpenType text and math fonts available in the Nix closure;
+- LuaLaTeX with CMU Concrete, Euler Math, and Libertinus fonts available in the Nix closure;
 - `exam` class question numbering and point accounting;
 - configurable US Letter and A4 paper;
 - consistent heading hierarchy, margins, line spacing, and page furniture;
@@ -825,7 +834,10 @@ The built-in `mathpub.exam` profile provides a professional but restrained basel
 - embedded fonts; and
 - conservative grayscale-safe styling.
 
-The initial fonts should be open licensed and selected only after visual review. A likely baseline is Libertinus Serif with Libertinus Math, but this is a review decision rather than a fixed MVP requirement.
+The reviewed font options are CMU Concrete text with Euler mathematics, which modernizes the
+earlier mechanics project's Concrete/Euler appearance with a genuine bold face, and Libertinus
+text with Libertinus mathematics. Libertinus is the default; Concrete is an explicit build option.
+Both are supplied by the pinned Nix TeX closure.
 
 Profiles are trusted TeX code. A custom profile has:
 

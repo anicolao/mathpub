@@ -13,7 +13,7 @@
     "profile": {"type": "string"},
     "paper": {"enum": ["letter", "a4"]},
     "font": {"enum": ["concrete", "libertinus", "computer-modern"]},
-    "style": {"enum": ["mathpub", "workbook"]},
+    "style": {"enum": ["mathpub", "anna"]},
     "projections": {"type": "array", "items": {"enum": ["student", "answers", "solutions", "validation", "parent"]}, "uniqueItems": true},
     "student_fields": {"type": "object"},
     "instructions": {"type": "object"},

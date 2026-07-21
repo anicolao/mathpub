@@ -105,7 +105,7 @@ def parser() -> argparse.ArgumentParser:
         choices=("student", "answers", "solutions", "validation"),
         help="projection to render; omit to render all four",
     )
-    preview.add_argument("--style", choices=("mathpub", "workbook"), default="mathpub")
+    preview.add_argument("--style", choices=("mathpub", "anna"), default="mathpub")
     preview.add_argument(
         "--font", choices=("concrete", "libertinus", "computer-modern"), default=None
     )
@@ -379,7 +379,7 @@ placement = {json.dumps(placement)}
                 )
             entry = catalog.get(args.content, args.target)
             checked = _validate_files(project, entry)
-            if args.exhaustive:
+            if args.exhaustive and args.content == "question":
                 domains = entry.metadata.get("testing", {}).get("exhaustive_domains", [])
                 if not domains:
                     raise MathpubError(

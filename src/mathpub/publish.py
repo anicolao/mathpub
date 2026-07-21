@@ -329,17 +329,17 @@ def _component_book_chapters(
 
     rendered_chapters = []
     for chapter in publication["component_chapters"]:
-        workbook_style = publication.get("style") == "workbook"
-        chapter_parts = [] if workbook_style else [rf"\chapter{{{chapter['title']}}}"]
+        anna_style = publication.get("style") == "anna"
+        chapter_parts = [] if anna_style else [rf"\chapter{{{chapter['title']}}}"]
         if introduction := chapter.get("introduction"):
             chapter_parts.append(introduction)
         for lesson in chapter["lessons"]:
-            if workbook_style:
+            if anna_style:
                 if heading := lesson.get("heading"):
-                    chapter_parts.append(rf"\workbookpractice{{{heading}}}{{{lesson['title']}}}")
+                    chapter_parts.append(rf"\annapractice{{{heading}}}{{{lesson['title']}}}")
                 else:
                     chapter_parts.append(
-                        rf"\workbookchapter{{{lesson.get('number', lesson['id'])}}}"
+                        rf"\annachapter{{{lesson.get('number', lesson['id'])}}}"
                         rf"{{{lesson['title']}}}"
                     )
             else:
@@ -403,12 +403,12 @@ def _component_book_chapters(
                                 r"\end{itemize}",
                             )
                         )
-                    elif workbook_style:
+                    elif anna_style:
                         body = "\n".join(
                             (
-                                rf"\begin{{workbooksummary}}{{{title}}}",
+                                rf"\begin{{annasummary}}{{{title}}}",
                                 *items,
-                                r"\end{workbooksummary}",
+                                r"\end{annasummary}",
                             )
                         )
                     else:
@@ -417,16 +417,14 @@ def _component_book_chapters(
                     continue
                 problem_set = block["problem_set"]
                 parts = [r"\clearpage"] if problem_set.get("page_break_before") else []
-                if workbook_style and problem_set.get("show_title", True):
+                if anna_style and problem_set.get("show_title", True):
                     parts.append(
-                        rf"\workbookproblemset{{{problem_set.get('number', '')}}}"
+                        rf"\annaproblemset{{{problem_set.get('number', '')}}}"
                         rf"{{{problem_set['title']}}}"
                     )
                     if directions := _directions_tex(problem_set):
-                        parts.append(
-                            rf"\begin{{workbookdirections}}{directions}\end{{workbookdirections}}"
-                        )
-                elif not workbook_style:
+                        parts.append(rf"\begin{{annadirections}}{directions}\end{{annadirections}}")
+                elif not anna_style:
                     parts.extend(
                         (
                             rf"\subsection*{{{problem_set['title']}}}",
@@ -438,7 +436,7 @@ def _component_book_chapters(
                         parts.append(r"\clearpage")
                     if problem_part.get("title"):
                         parts.append(rf"\problempart{{{problem_part['title']}}}")
-                    if part_directions := _directions_tex(problem_part, italic=workbook_style):
+                    if part_directions := _directions_tex(problem_part, italic=anna_style):
                         parts.append(part_directions)
                     enumeration = (
                         r"\begin{enumerate}[leftmargin=*,label=\arabic*.,series=problemset]"
@@ -467,7 +465,7 @@ def _component_book_chapters(
                     parts.append(render(problem_set["self_assessment_placement"], projection))
                 if projection in {"answers", "solutions", "validation", "parent"}:
                     phase = "answer" if projection == "answers" else projection
-                    if problem_set.get("answer_page_break_before", workbook_style):
+                    if problem_set.get("answer_page_break_before", anna_style):
                         parts.append(r"\clearpage")
                     answer_title = problem_set.get("answer_title", problem_set["title"])
                     parts.append(rf"\answerkeytitle{{{answer_title}}}")
@@ -498,6 +496,7 @@ def _component_book_chapters(
                             for question in problem_part["questions"]
                         )
                         parts.append(r"\end{enumerate}")
+                parts.append("\n")
                 chapter_parts.append("\n".join(parts))
         rendered_chapters.append("\n".join(chapter_parts))
     return rendered_chapters
@@ -518,9 +517,9 @@ def build(
 ) -> dict[str, Any]:
     publication_path = _publication_path(project, publication_source)
     publication = load_toml(publication_path, "publication")
-    workbook_style = publication.get("style") == "workbook"
+    anna_style = publication.get("style") == "anna"
     selected_font = font_family or (
-        "computer-modern" if workbook_style else publication.get("font", "libertinus")
+        "computer-modern" if anna_style else publication.get("font", "libertinus")
     )
     if selected_font not in {"concrete", "libertinus", "computer-modern"}:
         raise MathpubError("MP-TEX-010", f"unknown font family: {selected_font}", exit_code=3)
@@ -639,7 +638,7 @@ def build(
                     **_inspect_pdf(
                         final_pdf,
                         publication["component_chapters"][0]["lessons"][0]["title"]
-                        if publication.get("style") == "workbook"
+                        if publication.get("style") == "anna"
                         else publication["title"],
                     ),
                 }
