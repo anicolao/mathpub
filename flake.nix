@@ -10,7 +10,7 @@
       pkgsFor = system: import nixpkgs {
         inherit system;
         overlays = [
-          (_final: prev: {
+          (_final: prev: if system == "aarch64-darwin" || system == "x86_64-darwin" then {
             # Singular 4.4.1's randomized omalloc test is flaky on
             # aarch64-darwin. Runtime behavior is covered by mathpub's Sage
             # integration tests instead of this package-time allocator test.
@@ -24,7 +24,7 @@
                 [ "test ! -f doc/singular.info || cp doc/singular.info $out/share/info" ]
                 old.installPhase;
             });
-          })
+          } else { })
         ];
       };
     in {
