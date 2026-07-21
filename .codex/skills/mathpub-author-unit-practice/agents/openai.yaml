@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mathpub Unit Practice Author"
+  short_description: "Create balanced cumulative unit reviews"
+  default_prompt: "Use $mathpub-author-unit-practice to create a cumulative unit practice and explained solution key."

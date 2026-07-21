@@ -1,6 +1,6 @@
 schema = 1
 project = "mathpub"
-question_roots = []
+question_roots = ["questions"]
 component_roots = ["components"]
 publication_roots = ["publications"]
 profile_roots = ["profiles"]

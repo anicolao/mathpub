@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mathpub Problem Set Author"
+  short_description: "Create scaffolded explained practice"
+  default_prompt: "Use $mathpub-author-problem-set to create a 20-plus-question section problem set with explained answers."

@@ -204,27 +204,27 @@ def question_tex(
     entry: Entry, instance: dict[str, Any], projection: str, points: int | None = None
 ) -> str:
     metadata = entry.metadata
-    prompt = component_fragment(entry, instance, "prompt")
-    pieces = [rf"\question[{points if points is not None else metadata.get('points', 1)}]", prompt]
+    prompt = expand((entry.path / metadata["prompt"]).read_text(), instance, metadata["id"])
+    pieces = [rf"\question[{points if points is not None else metadata['points']}]", prompt]
     fragment_name = "prompt"
     if projection == "student":
         workspace = metadata.get("workspace", {}).get("student", "25mm")
         pieces.append(rf"\vspace{{{workspace}}}")
     elif projection == "answers":
         fragment_name = "answer"
-        if not _component_metadata(entry)[1].get("answer"):
+        if not metadata.get("answer"):
             raise MathpubError(
                 "MP-TEX-004", f"question has no answer: {metadata['id']}", exit_code=3
             )
-        answer = component_fragment(entry, instance, "answer")
+        answer = expand((entry.path / metadata["answer"]).read_text(), instance, metadata["id"])
         pieces.append(rf"\begin{{solution}}{answer}\end{{solution}}")
     elif projection in {"solutions", "validation"}:
         fragment_name = "solution"
-        if not _component_metadata(entry)[1].get("solution"):
+        if not metadata.get("solution"):
             raise MathpubError(
                 "MP-TEX-005", f"question has no solution: {metadata['id']}", exit_code=3
             )
-        solution = component_fragment(entry, instance, "solution")
+        solution = expand((entry.path / metadata["solution"]).read_text(), instance, metadata["id"])
         pieces.append(rf"\begin{{solution}}{solution}\end{{solution}}")
         if projection == "validation":
             pieces.append(validation_tex(instance))
@@ -300,14 +300,14 @@ def component_tex(
             student_workspace = workspace or entry.metadata.get("workspace", {}).get(
                 "student", "12mm"
             )
-            if style == "workbook" and response == "truth-blank":
+            if style == "anna" and response == "truth-blank":
                 return _marked_source(
                     entry,
                     "prompt",
                     rf"\item \rule{{0.65in}}{{0.4pt}}\quad {prompt}"
                     rf"\par\vspace{{{student_workspace}}}",
                 )
-            if style == "workbook" and response == "answer-line":
+            if style == "anna" and response == "answer-line":
                 return _marked_source(
                     entry,
                     "prompt",
@@ -321,9 +321,9 @@ def component_tex(
             )
         fragment_name = "answer" if phase == "answer" else "solution"
         rendered = component_fragment(entry, instance, fragment_name)
-        if style == "workbook" and phase == "answer" and emphasize_answer:
-            rendered = rf"\workbookanswer{{{rendered}}}"
-        elif style == "workbook" and phase != "answer":
+        if style == "anna" and phase == "answer" and emphasize_answer:
+            rendered = rf"\annaanswer{{{rendered}}}"
+        elif style == "anna" and phase != "answer":
             solution = re.fullmatch(
                 r"\s*(.*?)\.\s*\\textbf\{Explanation:\}\s*(.*)\s*",
                 rendered,
@@ -334,7 +334,7 @@ def component_tex(
                 short_answer = component_fragment(entry, instance, "answer").strip()
                 if short_answer.endswith("."):
                     answer += "."
-                answer = rf"\workbookanswer{{{answer}}}" if emphasize_answer else answer
+                answer = rf"\annaanswer{{{answer}}}" if emphasize_answer else answer
                 rendered = rf"{answer}\\*\textit{{Explanation:}} {explanation}"
             elif emphasize_answer:
                 short_answer = component_fragment(entry, instance, "answer").strip()
@@ -343,7 +343,7 @@ def component_tex(
                 if short_answer and body.startswith(short_answer):
                     emphasized = short_answer[:-1] if short_answer.endswith(".") else short_answer
                     rendered = (
-                        rf"{leading_space}\workbookanswer{{{emphasized}}}" + body[len(emphasized) :]
+                        rf"{leading_space}\annaanswer{{{emphasized}}}" + body[len(emphasized) :]
                     )
                 else:
                     leading_answer = re.fullmatch(r"\s*(\S+)(\s+.*)?", rendered, flags=re.DOTALL)
@@ -351,20 +351,20 @@ def component_tex(
                         answer, remainder = leading_answer.groups()
                         if answer.endswith(".") and answer.count(".") == 1:
                             answer = answer[:-1]
-                        rendered = rf"\workbookanswer{{{answer}}}{remainder or ''}"
+                        rendered = rf"\annaanswer{{{answer}}}{remainder or ''}"
                     else:
-                        rendered = rf"\workbookanswer{{{rendered}}}"
+                        rendered = rf"\annaanswer{{{rendered}}}"
         if phase == "validation":
             rendered = "\n".join((rendered, validation_tex(instance)))
         return _marked_source(entry, fragment_name, rf"\item {rendered}")
     if kind == "example":
         if body := component_fragment(entry, instance, "body"):
             opening = (
-                rf"\begin{{workbookexample}}{{{title}}}"
-                if style == "workbook"
+                rf"\begin{{annaexample}}{{{title}}}"
+                if style == "anna"
                 else rf"\begin{{workedexample}}[{title}]"
             )
-            closing = r"\end{workbookexample}" if style == "workbook" else r"\end{workedexample}"
+            closing = r"\end{annaexample}" if style == "anna" else r"\end{workedexample}"
             rendered = "\n".join(
                 (
                     opening,
@@ -376,11 +376,11 @@ def component_tex(
                 rendered = "\n".join((rendered, validation_tex(instance)))
             return rendered
         opening = (
-            rf"\begin{{workbookexample}}{{{title}}}"
-            if style == "workbook"
+            rf"\begin{{annaexample}}{{{title}}}"
+            if style == "anna"
             else rf"\begin{{workedexample}}[{title}]"
         )
-        closing = r"\end{workbookexample}" if style == "workbook" else r"\end{workedexample}"
+        closing = r"\end{annaexample}" if style == "anna" else r"\end{workedexample}"
         parts = [
             opening,
             r"\textbf{Problem.}",
@@ -411,8 +411,8 @@ def component_tex(
         return _marked_source(entry, phase, component_fragment(entry, instance, phase))
     if kind == "misconception":
         if body := component_fragment(entry, instance, "body"):
-            if style == "workbook":
-                rendered = rf"\begin{{workbookmistakes}}{{{title}}}{body}\end{{workbookmistakes}}"
+            if style == "anna":
+                rendered = rf"\begin{{annamistakes}}{{{title}}}{body}\end{{annamistakes}}"
             else:
                 rendered = rf"\subsection*{{{title}}}{body}"
             return _marked_source(entry, "body", rendered)
@@ -430,25 +430,25 @@ def component_tex(
         return _marked_source(entry, "body", rf"\item \textbf{{{title}.}} {body}")
     if kind == "teaching-tip":
         body = component_fragment(entry, instance, "body")
-        if style == "workbook" and phase != "list-item":
-            rendered = rf"\begin{{workbooktips}}{{{title}}}{body}\end{{workbooktips}}"
+        if style == "anna" and phase != "list-item":
+            rendered = rf"\begin{{annatips}}{{{title}}}{body}\end{{annatips}}"
         else:
             rendered = rf"\item \textbf{{{title}.}} {body}" if phase == "list-item" else body
         return _marked_source(entry, "body", rendered)
     if kind == "objective":
         body = component_fragment(entry, instance, "body")
-        if style == "workbook" and phase != "list-item":
+        if style == "anna" and phase != "list-item":
             rendered = rf"\begin{{learningbox}}[{title}]{body}\end{{learningbox}}"
         else:
             rendered = rf"\item {body}" if phase == "list-item" else body
         return _marked_source(entry, "body", rendered)
-    if kind == "self-assessment" and style == "workbook":
+    if kind == "self-assessment" and style == "anna":
         body = component_fragment(entry, instance, "body")
         self_title = title if title.startswith("Unit ") else "Self-Assessment"
         return _marked_source(
             entry,
             "body",
-            rf"\begin{{workbookboxenv}}{{{self_title}}}{body}\end{{workbookboxenv}}",
+            rf"\begin{{annaboxenv}}{{{self_title}}}{body}\end{{annaboxenv}}",
         )
     rendered = component_fragment(entry, instance, "body")
     if projection == "validation" and instance.get("checks"):
@@ -504,8 +504,8 @@ def textbook_tex(
     publication: dict[str, Any], projection: str, chapters: list[str], font_family: str
 ) -> str:
     """Render a hierarchical textbook while preserving answer projection boundaries."""
-    if publication.get("style") == "workbook":
-        return workbook_textbook_tex(publication, projection, chapters)
+    if publication.get("style") == "anna":
+        return anna_textbook_tex(publication, projection, chapters)
     paper = "a4paper" if publication.get("paper") == "a4" else "letterpaper"
     projection_label = {
         "student": "Student Text",
@@ -516,11 +516,11 @@ def textbook_tex(
     }[projection]
     title = publication["title"]
     author = publication.get("author", "")
-    workbook_style = publication.get("style") == "workbook"
-    document_class = "article" if workbook_style else "book"
+    anna_style = publication.get("style") == "anna"
+    document_class = "article" if anna_style else "book"
     opening = (
         ""
-        if workbook_style
+        if anna_style
         else rf"""\frontmatter
 \begin{{titlepage}}\centering\vspace*{{1.2in}}
 {{\Huge\bfseries {title}\par}}\vspace{{0.25in}}
@@ -554,11 +554,11 @@ def textbook_tex(
   \par\smallskip}}
 \newcommand{{\answerkeytitle}}[1]{{\subsection*{{Answer Key: #1}}}}
 \newcommand{{\problempart}}[1]{{\subsection*{{#1}}}}
-\newcommand{{\workbookchapter}}[2]{{\clearpage\begin{{center}}
+\newcommand{{\annachapter}}[2]{{\clearpage\begin{{center}}
   {{\LARGE\bfseries Chapter #1}}\\[6pt]\rule{{\linewidth}}{{1.1pt}}\\[7pt]
   {{\Large\itshape #2}}\\[7pt]\rule{{\linewidth}}{{1.1pt}}
 \end{{center}}}}
-\newcommand{{\workbookpractice}}[2]{{\clearpage\begin{{center}}
+\newcommand{{\annapractice}}[2]{{\clearpage\begin{{center}}
   {{\LARGE\bfseries #1}}\\[6pt]{{\Large\bfseries #2}}
 \end{{center}}}}
 \newenvironment{{learningbox}}{{\par\medskip\noindent
@@ -576,88 +576,88 @@ def textbook_tex(
 """
 
 
-def workbook_textbook_tex(publication: dict[str, Any], projection: str, chapters: list[str]) -> str:
-    """Render Workbook's compact Computer Modern workbook design."""
+def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: list[str]) -> str:
+    """Render Anna's compact Computer Modern workbook design."""
     paper = "a4paper" if publication.get("paper") == "a4" else "letterpaper"
     return rf"""\documentclass[12pt,{paper}]{{article}}
 \usepackage[margin=1in,headheight=0pt,headsep=0pt]{{geometry}}
 \usepackage{{amsmath,amssymb,mathtools}}
 {NUMBER_SET_PREAMBLE}
 \usepackage{{tikz,xcolor,enumitem,microtype}}
-\definecolor{{workbookgray}}{{gray}}{{0.94}}
-\definecolor{{workbookdark}}{{gray}}{{0.20}}
+\definecolor{{annagray}}{{gray}}{{0.94}}
+\definecolor{{annadark}}{{gray}}{{0.20}}
 \setlength{{\parindent}}{{1.5em}}
 \setlength{{\parskip}}{{0pt}}
 \setlist[itemize]{{label=\textbullet,itemsep=7pt,topsep=6pt}}
 \setlist[enumerate]{{itemsep=8pt,topsep=6pt}}
 \pagestyle{{plain}}
 \raggedbottom
-\newsavebox{{\workbookbox}}
-\newenvironment{{workbookboxenv}}[1]{{%
-  \def\workbookboxtitle{{#1}}%
-  \begin{{lrbox}}{{\workbookbox}}\begin{{minipage}}{{0.935\linewidth}}\vspace{{8pt}}
+\newsavebox{{\annabox}}
+\newenvironment{{annaboxenv}}[1]{{%
+  \def\annaboxtitle{{#1}}%
+  \begin{{lrbox}}{{\annabox}}\begin{{minipage}}{{0.935\linewidth}}\vspace{{8pt}}
   \setlength{{\parindent}}{{0pt}}}}
   {{\vspace{{1pt}}\end{{minipage}}\end{{lrbox}}%
   \par\medskip\noindent\begin{{tikzpicture}}
-  \node[draw=workbookdark,rounded corners=10pt,fill=workbookgray,inner xsep=15pt,inner ysep=6pt] (b)
-    {{\usebox{{\workbookbox}}}};
-  \node[anchor=west,fill=workbookdark,rounded corners=4pt,text=white,
+  \node[draw=annadark,rounded corners=10pt,fill=annagray,inner xsep=15pt,inner ysep=6pt] (b)
+    {{\usebox{{\annabox}}}};
+  \node[anchor=west,fill=annadark,rounded corners=4pt,text=white,
     font=\sffamily\bfseries\large,inner xsep=10pt,inner ysep=3pt]
-    at ([xshift=12pt]b.north west) {{\workbookboxtitle}};
+    at ([xshift=12pt]b.north west) {{\annaboxtitle}};
   \end{{tikzpicture}}\par\medskip}}
-\newenvironment{{learningbox}}[1][What You Will Learn]{{\begin{{workbookboxenv}}{{#1}}}}
-  {{\end{{workbookboxenv}}}}
-\newenvironment{{workbookdirections}}{{\begin{{workbookboxenv}}{{Directions}}}}
-  {{\end{{workbookboxenv}}}}
-\newenvironment{{workbooksummary}}[1]{{\begin{{workbookboxenv}}{{#1}}}}
-  {{\end{{workbookboxenv}}}}
-\newsavebox{{\workbookwarningbox}}
-\newenvironment{{workbookmistakes}}[1]{{%
-  \def\workbookwarningtitle{{#1}}%
-  \begin{{lrbox}}{{\workbookwarningbox}}\begin{{minipage}}{{0.935\linewidth}}
+\newenvironment{{learningbox}}[1][What You Will Learn]{{\begin{{annaboxenv}}{{#1}}}}
+  {{\end{{annaboxenv}}}}
+\newenvironment{{annadirections}}{{\begin{{annaboxenv}}{{Directions}}}}
+  {{\end{{annaboxenv}}}}
+\newenvironment{{annasummary}}[1]{{\begin{{annaboxenv}}{{#1}}}}
+  {{\end{{annaboxenv}}}}
+\newsavebox{{\annawarningbox}}
+\newenvironment{{annamistakes}}[1]{{%
+  \def\annawarningtitle{{#1}}%
+  \begin{{lrbox}}{{\annawarningbox}}\begin{{minipage}}{{0.935\linewidth}}
   \vspace{{19pt}}\setlength{{\parindent}}{{0pt}}}}
   {{\end{{minipage}}\end{{lrbox}}%
   \par\medskip\noindent\begin{{tikzpicture}}
   \node[draw=black,line width=1.1pt,rounded corners=1.5pt,fill=white,
-    inner xsep=15pt,inner ysep=8pt] (b) {{\usebox{{\workbookwarningbox}}}};
+    inner xsep=15pt,inner ysep=8pt] (b) {{\usebox{{\annawarningbox}}}};
   \fill[black,rounded corners=1.5pt]
     (b.north west) rectangle ([yshift=-18pt]b.north east);
   \node[anchor=west,text=white,font=\sffamily\bfseries\normalsize]
     at ([xshift=15pt,yshift=-9pt]b.north west)
-    {{\(\blacktriangle\) \workbookwarningtitle!}};
+    {{\(\blacktriangle\) \annawarningtitle!}};
   \draw[black!25,line width=2pt]
     ([xshift=2pt,yshift=-3pt]b.south west) -- ([xshift=2pt,yshift=-3pt]b.south east);
   \end{{tikzpicture}}\par\medskip}}
-\newsavebox{{\workbooktipsbox}}
-\newenvironment{{workbooktips}}[1]{{%
-  \def\workbooktipstitle{{#1}}%
-  \begin{{lrbox}}{{\workbooktipsbox}}\begin{{minipage}}{{0.935\linewidth}}
+\newsavebox{{\annatipsbox}}
+\newenvironment{{annatips}}[1]{{%
+  \def\annatipstitle{{#1}}%
+  \begin{{lrbox}}{{\annatipsbox}}\begin{{minipage}}{{0.935\linewidth}}
   \vspace{{4pt}}\setlength{{\parindent}}{{0pt}}}}
   {{\vspace{{1pt}}\end{{minipage}}\end{{lrbox}}%
   \par\medskip\noindent\begin{{tikzpicture}}
   \node[draw=black,dash pattern=on 3pt off 3pt,line width=0.8pt,
     rounded corners=3pt,fill=white,inner xsep=15pt,inner ysep=8pt] (b)
-    {{\usebox{{\workbooktipsbox}}}};
-  \node[anchor=center,draw=black,rounded corners=2pt,fill=workbookgray,
+    {{\usebox{{\annatipsbox}}}};
+  \node[anchor=center,draw=black,rounded corners=2pt,fill=annagray,
     font=\sffamily\bfseries\large,inner xsep=9pt,inner ysep=2pt]
-    at (b.north) {{\(\checkmark\)\workbooktipstitle}};
+    at (b.north) {{\(\checkmark\)\annatipstitle}};
   \end{{tikzpicture}}\par\medskip}}
-\newenvironment{{workbookexample}}[1]{{\par\medskip\noindent
+\newenvironment{{annaexample}}[1]{{\par\medskip\noindent
   \begin{{minipage}}{{\linewidth}}\setlength{{\parindent}}{{0pt}}
   \vrule width 1.2pt\hspace{{0.8em}}\begin{{minipage}}{{0.94\linewidth}}
   {{\sffamily\bfseries #1}}\par\smallskip}}
   {{\end{{minipage}}\end{{minipage}}\par\medskip}}
-\newcommand{{\workbookchapter}}[2]{{\clearpage\thispagestyle{{plain}}\vspace*{{0.39in}}
+\newcommand{{\annachapter}}[2]{{\clearpage\thispagestyle{{plain}}\vspace*{{0.39in}}
   \begin{{center}}{{\Huge\sffamily\bfseries Chapter #1}}\par\vspace{{7pt}}
   \hrule height 1.1pt\vspace{{9pt}}
   {{\LARGE\sffamily\itshape #2}}\par\vspace{{9pt}}\hrule height 1.1pt
   \end{{center}}\vspace{{-2pt}}}}
-\newcommand{{\workbookpractice}}[2]{{\clearpage\thispagestyle{{plain}}\vspace*{{0.32in}}
+\newcommand{{\annapractice}}[2]{{\clearpage\thispagestyle{{plain}}\vspace*{{0.32in}}
   \begin{{center}}{{\Huge\sffamily\bfseries #1}}\par\vspace{{12pt}}
   \hrule height 1.1pt\vspace{{9pt}}
   {{\LARGE\sffamily\itshape #2}}\par\vspace{{9pt}}\hrule height 1.1pt
   \end{{center}}\vspace{{27pt}}}}
-\newcommand{{\workbookproblemset}}[2]{{\clearpage\thispagestyle{{plain}}\vspace*{{0.32in}}
+\newcommand{{\annaproblemset}}[2]{{\clearpage\thispagestyle{{plain}}\vspace*{{0.32in}}
   \begin{{center}}{{\Huge\sffamily\bfseries Problem Set #1}}\par\vspace{{12pt}}
   \hrule height 1.1pt\vspace{{9pt}}
   {{\LARGE\sffamily\itshape #2}}\par\vspace{{9pt}}\hrule height 1.1pt
@@ -666,9 +666,9 @@ def workbook_textbook_tex(publication: dict[str, Any], projection: str, chapters
   {{\LARGE\sffamily\bfseries Answer Key: #1}}\end{{center}}\vspace{{4pt}}
   \hrule height 1.1pt\vspace{{20pt}}}}
 \newcommand{{\problempart}}[1]{{\par\medskip\noindent{{\bfseries #1}}\par\smallskip}}
-\newcommand{{\workbookanswer}}[1]{{{{\bfseries\boldmath #1}}}}
-\newenvironment{{workedexample}}[1][Worked Example]{{\begin{{workbookexample}}{{#1}}}}
-  {{\end{{workbookexample}}}}
+\newcommand{{\annaanswer}}[1]{{{{\bfseries\boldmath #1}}}}
+\newenvironment{{workedexample}}[1][Worked Example]{{\begin{{annaexample}}{{#1}}}}
+  {{\end{{annaexample}}}}
 \newenvironment{{exercises}}{{\section*{{Exercises}}\begin{{enumerate}}}}
   {{\end{{enumerate}}}}
 \newenvironment{{lessonanswers}}[1]{{\section*{{#1}}\begin{{enumerate}}}}

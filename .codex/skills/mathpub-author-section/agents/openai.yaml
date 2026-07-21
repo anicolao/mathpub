@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mathpub Section Author"
+  short_description: "Write detailed instructional sections"
+  default_prompt: "Use $mathpub-author-section to write an Anna-style instructional section with examples and tutor guidance."

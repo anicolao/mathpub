@@ -40,6 +40,19 @@ Outputs are written beneath `build/physics.practice/A/`. The manifest records th
 question-instance hashes, mathematical checks, source identity, toolchain identity, and output
 hashes. Generated output is disposable and must not be edited.
 
+Choose typography per build without changing publication source. Libertinus text and mathematics
+are the default selected by Anna. Concrete remains available as an explicit alternative using CMU
+Concrete text, including its genuine bold face, with Euler mathematics:
+
+```console
+nix run .#mathpub -- build publications/algebra1-curriculum.toml \
+  --seed 2026 --variant concrete --font concrete --replace --json
+nix run .#mathpub -- build publications/algebra1-curriculum.toml \
+  --seed 2026 --variant libertinus --font libertinus --replace --json
+```
+
+The manifest records both the font family and selected TeX engine, and `reproduce` preserves them.
+
 The example publication declares four PDFs: `student`, `answers`, `solutions`, and `validation`.
 The validation edition contains every question, its worked solution, check classification,
 assumptions, status, and plain-language justification notes. Diagram scales are validated in that
@@ -48,18 +61,46 @@ evidence without adding scale commentary to student-facing figures.
 Useful authoring commands include:
 
 ```console
-nix run .#mathpub -- list components --kind question --json
+nix run .#mathpub -- list components --json
 nix run .#mathpub -- show component physics.energy.ramp-speed --json
 nix run .#mathpub -- check component physics.energy.ramp-speed --seeds 20 --json
 nix run .#mathpub -- check component physics.energy.ramp-speed --exhaustive --json
 nix run .#mathpub -- preview physics.projectiles.snowball --seed 2026 --replace --json
+nix run .#mathpub -- new question algebra.linear.solve --concept algebra.linear-equations --template numeric
 nix run .#mathpub -- variants publications/physics-practice.toml --seed 2026 --count 3 --json
 nix run .#mathpub -- reproduce build/physics.practice/A/manifest.json --replace --json
 ```
 
 The repository’s [AGENTS.md](AGENTS.md) is the operational interface for Codex CLI and other LLM
-harnesses. `mathpub init` generates equivalent instructions and complete question scaffolds for a
-new authoring project.
+harnesses. `mathpub init` generates equivalent instructions. New source is scaffolded beneath the
+component root with singular persisted kinds and plural collection directories; `new component`
+provides complete objective, misconception, teaching-tip, cohesive or structured example, and
+question templates.
+
+## Reviewed examples
+
+- [`physics-practice.toml`](publications/physics-practice.toml) exercises numeric, symbolic, and
+  scale-consistent diagram questions.
+- [`algebra2-get-ready.toml`](publications/algebra2-get-ready.toml) preserves the first three
+  diagnostic questions from Anna's locally supplied *Get Ready for Algebra 2* workbook: two linear
+  equations and one graphing problem. Build `--variant original` for the extracted questions, or
+  variants `A`, `B`, and so on for constrained alternatives with generated answers and graphs:
+
+  ```console
+  nix run .#mathpub -- build publications/algebra2-get-ready.toml --seed 2026 --variant original
+  nix run .#mathpub -- variants publications/algebra2-get-ready.toml --seed 2026 --count 3
+  ```
+
+  Exact answers, graph points, slope, and validation notes are encoded as reviewable source; the
+  source PDF itself is intentionally not copied into the repository.
+- [`algebra2-cumulative-quiz.toml`](publications/algebra2-cumulative-quiz.toml) is a twenty-question
+  appendix candidate covering all twenty workbook sections exactly once. It provides student,
+  short-answer, fully worked-solution, and validation editions; an automated coverage test guards
+  against accidentally omitting or duplicating a source section.
+- [`algebra1-curriculum.toml`](publications/algebra1-curriculum.toml) demonstrates the textbook
+  publication model with ten curriculum units, thirty concept sections, worked examples, and one
+  hundred exercises. Textbook builds produce a student text, a short-answer text, a teacher edition
+  with worked exercise solutions, and a validation edition from projection-isolated sources.
 
 ## Public tooling and private publications
 
@@ -112,7 +153,8 @@ The pinned flake supplies:
 - SageMath running generators out of process and returning canonical JSON instances;
 - a Python command-line orchestrator packaged by Nix;
 - declarative TOML metadata for questions and publications;
-- LuaLaTeX, TeX Live packages, and Libertinus fonts from the Nix closure; and
+- LuaLaTeX, TeX Live packages, CMU Concrete text, Euler mathematics, and Libertinus from the Nix
+  closure; and
 - formatter, static-analysis, generator, failure-path, PDF, and end-to-end tests.
 
 The exact proof assistant and expression interchange remain design decisions. SageMath checks are

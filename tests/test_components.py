@@ -155,7 +155,7 @@ id = "algebra.components"
 kind = "textbook"
 title = "Component Algebra"
 profile = "mathpub.exam"
-style = "workbook"
+style = "anna"
 font = "computer-modern"
 projections = ["student", "solutions", "validation"]
 [[component_chapters]]
@@ -241,10 +241,10 @@ placement = "foundations.doubling.q2"
     validation = next((edition / "generated-tex").glob("*-validation.tex")).read_text()
     source_map = json.loads((edition / "generated-tex/source-map.json").read_text())
     assert "Doubling multiplies" in student
-    assert r"\begin{workbooksummary}{Lesson Summary}" in student
+    assert r"\begin{annasummary}{Lesson Summary}" in student
     assert r"\begin{learningbox}[What You Will Learn]" in student
-    assert r"\begin{workbookmistakes}{Common Mistakes to Avoid}" in student
-    assert r"\begin{workbooktips}{Teaching Tips for Tutors \& Parents}" in student
+    assert r"\begin{annamistakes}{Common Mistakes to Avoid}" in student
+    assert r"\begin{annatips}{Teaching Tips for Tutors \& Parents}" in student
     assert "Guided Examples" in student
     assert "Double \\(4\\) to obtain \\(8\\)." in student
     assert "Double \\(7\\)." in student
@@ -259,7 +259,7 @@ placement = "foundations.doubling.q2"
     assert "rule{0.48\\linewidth}" in student
     assert "Validation and justification" not in student
     assert "2(" in solutions
-    assert r"\workbookanswer{" in solutions
+    assert r"\annaanswer{" in solutions
     assert r"$.}\\*\textit{Explanation:}" in solutions
     assert r"\*\textit{Explanation:}" in solutions
     assert "resume=answerset" in solutions

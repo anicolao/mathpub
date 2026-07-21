@@ -45,7 +45,7 @@
     "generator": {"type": "string"},
     "points": {"type": "integer", "minimum": 0},
     "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
-    "layout": {"enum": ["default", "workbook"]},
+    "layout": {"enum": ["default", "anna"]},
     "workspace": {"type": "object"},
     "fragments": {
       "type": "object",

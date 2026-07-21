@@ -21,18 +21,26 @@ def test_builds_isolated_projections_and_reproduces(tmp_path):
     publication.write_text(
         """schema = 1
 id = "physics.practice"
-kind = "worksheet"
+kind = "textbook"
 title = "Physics Practice"
-course = "Physics"
 profile = "mathpub.exam"
 paper = "letter"
 projections = ["student", "answers", "solutions", "validation"]
 
-[[sections]]
+[[component_chapters]]
+id = "review"
 title = "Review"
-[[sections.questions]]
+[[component_chapters.lessons]]
+id = "review"
+title = "Physics Practice"
+concepts = ["physics.review"]
+[[component_chapters.lessons.blocks]]
+[component_chapters.lessons.blocks.problem_set]
+id = "review"
+title = "Review"
+[[component_chapters.lessons.blocks.problem_set.questions]]
 id = "physics.fixed"
-points = 2
+placement = "review.fixed"
 """
     )
     result = build(project, publication, root_seed="42", variant="A")
