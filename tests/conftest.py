@@ -1,5 +1,6 @@
 import pytest
 
+
 def pytest_addoption(parser):
     parser.addoption(
         "--update-baselines",
@@ -7,6 +8,7 @@ def pytest_addoption(parser):
         default=False,
         help="Update visual regression test baselines",
     )
+
 
 @pytest.fixture
 def update_baselines(request):
