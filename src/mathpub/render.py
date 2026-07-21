@@ -204,27 +204,27 @@ def question_tex(
     entry: Entry, instance: dict[str, Any], projection: str, points: int | None = None
 ) -> str:
     metadata = entry.metadata
-    prompt = expand((entry.path / metadata["prompt"]).read_text(), instance, metadata["id"])
-    pieces = [rf"\question[{points if points is not None else metadata['points']}]", prompt]
+    prompt = component_fragment(entry, instance, "prompt")
+    pieces = [rf"\question[{points if points is not None else metadata.get('points', 1)}]", prompt]
     fragment_name = "prompt"
     if projection == "student":
         workspace = metadata.get("workspace", {}).get("student", "25mm")
         pieces.append(rf"\vspace{{{workspace}}}")
     elif projection == "answers":
         fragment_name = "answer"
-        if not metadata.get("answer"):
+        answer = component_fragment(entry, instance, "answer")
+        if not answer:
             raise MathpubError(
                 "MP-TEX-004", f"question has no answer: {metadata['id']}", exit_code=3
             )
-        answer = expand((entry.path / metadata["answer"]).read_text(), instance, metadata["id"])
         pieces.append(rf"\begin{{solution}}{answer}\end{{solution}}")
     elif projection in {"solutions", "validation"}:
         fragment_name = "solution"
-        if not metadata.get("solution"):
+        solution = component_fragment(entry, instance, "solution")
+        if not solution:
             raise MathpubError(
                 "MP-TEX-005", f"question has no solution: {metadata['id']}", exit_code=3
             )
-        solution = expand((entry.path / metadata["solution"]).read_text(), instance, metadata["id"])
         pieces.append(rf"\begin{{solution}}{solution}\end{{solution}}")
         if projection == "validation":
             pieces.append(validation_tex(instance))
