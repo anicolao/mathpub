@@ -1,0 +1,34 @@
+name: CI Validation
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Nix Flake Check
+        run: nix flake check
+
+      - name: Run Test Suite (Unit & E2E Visual Tests)
+        run: |
+          nix develop --command bash -c "PYTHONPATH=\$PWD:\$PWD/src pytest tests/"
+
+      - name: Upload Visual Regression Diffs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-diffs
+          path: tests/e2e/**/diffs/
+          if-no-files-found: ignore
