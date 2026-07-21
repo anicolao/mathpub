@@ -23,7 +23,7 @@ jobs:
 
       - name: Run Test Suite (Unit & E2E Visual Tests)
         run: |
-          nix develop --command bash -c "PYTHONPATH=\$PWD:\$PWD/src pytest tests/"
+          nix develop --command bash -c "PYTHONPATH=\$PWD:\$PWD/src:\$PYTHONPATH pytest tests/"
 
       - name: Upload Visual Regression Diffs on Failure
         if: failure()
