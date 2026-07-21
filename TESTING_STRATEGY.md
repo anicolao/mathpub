@@ -1,121 +1,277 @@
 # Mathpub Testing & Visual Validation Strategy
 
-This document outlines the testing strategy for the `mathpub` publication engine and tooling, covering local developer verification, automated CI testing, and visual validation of CLI/GUI outputs.
+This document outlines the testing strategy for the `mathpub` publication engine and tooling. It defines a strict, automated visual regression framework modeled after the **Zero-Pixel Tolerance** guidelines.
 
 ---
 
-## 1. Objectives
+## 1. Visual Validation Philosophy: "Zero-Pixel Tolerance"
 
-- **Core Engine Correctness**: Ensure the GPLv3 engine behaves deterministically (reproducibility of seeds, instance generation, and compilation).
-- **Format & Layout Stability**: Guard against regressions in output formats (worksheets, worksheets with component questions, and textbooks) across different PDF engines (`lualatex`, `pdflatex`) and fonts (`concrete`, `libertinus`, `computer-modern`).
-- **Visual Verification**: Allow developers and maintainers to inspect PDF styling and GUI interfaces visually during PR review using automated CI artifacts.
-- **Fast Feedback Loop**: Maintain a clear separation between quick local unit/integration tests and heavy end-to-end PDF rendering tests.
+Visual state is the primary output of the `mathpub` publication engine. Any unintended shift in margins, page breaks, fonts, TikZ diagram coordinates, or spacing is considered a regression bug. 
 
----
-
-## 2. Test Architecture
-
-Testing is split into three main tiers:
-
-### Tier 1: Unit & Integration Tests (Fast)
-- **Scope**:
-  - Metadata parsing, schema validation, and TOML deserialization.
-  - Sage generator instantiation and context evaluation (without calling fully compiled Sage if mockable).
-  - CLI argument parsing, directory discovery, and configuration resolution.
-- **Execution**: Run via standard Python unit testing in the Nix developer shell.
-- **Commands**:
-  ```bash
-  nix develop -c pytest tests/
-  ```
-
-### Tier 2: End-to-End (e2e) Document Verification (Medium)
-- **Scope**:
-  - Full compile loop validation using public sample fixtures (e.g., the physics review worksheet and textbook).
-  - Validation of all projections: `student`, `answers`, `solutions`, and `validation`.
-  - PDF property checks (pages, fonts, embedded elements) using tools like `pypdf` and `pdftotext` to ensure the structure and metadata are intact.
-- **Test Fixtures**:
-  - Retain `components/questions/physics/` and `publications/physics-practice.toml` as the primary reference and regression fixtures.
-  - **No algebra or private publication files may be added to these test fixtures.**
-- **Commands**:
-  ```bash
-  nix run .#mathpub -- check publication publications/physics-practice.toml --json
-  nix run .#mathpub -- build publications/physics-practice.toml --seed 2026 --variant A --replace --json
-  ```
-
-### Tier 3: Visual Verification & Playwright GUI Tests (CI-Driven)
-- **Scope**:
-  - Capturing GUI application layouts, interactive elements, terminal emulator mappings, and SyncTeX coordinates.
-  - Rendering PDFs to high-resolution images to verify exact visual layout.
-- **Execution**:
-  - Run Playwright-based tests inside a headless browser environment in CI.
-  - Automatically generate documentation screenshots (e.g. updating GUI screenshots in `README.md` or a `docs/` folder).
+To enforce this, we apply the following guidelines:
+1. **Zero-Pixel Threshold**: For all PDF previews and GUI pages, comparison tests must assert exactly **0 differing pixels** between the generated output and the committed baseline.
+2. **Software-Consistent Rendering**: PDF rasterization and browser rendering are executed with software-only settings and fixed compiler paths (packaged via Nix) to ensure 100% consistent rendering across local environments (macOS/Linux) and CI runner environments (GitHub Actions).
+3. **Strict Determinism**: Every test scenario utilizes a hardcoded, reproducible random seed.
 
 ---
 
-## 3. CI Pipeline Design (GitHub Actions)
+## 2. Directory Structure
 
-The proposed GitHub Actions workflow (`.github/workflows/ci.yml`) will validate all changes on every pull request.
+All visual and end-to-end tests live under `tests/e2e/`. Scenarios are isolated in their own folders and include automated documentation.
 
-```yaml
-name: CI Validation
-
-on:
-  push:
-    branches: [ main, tooling/* ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v25
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-
-      - name: Nix Flake Check
-        run: nix flake check
-
-      - name: Run Test Suite
-        run: nix develop -c pytest
-
-      - name: Run Playwright GUI Tests & Capture Screenshots
-        run: |
-          nix develop -c playwright install chromium
-          nix develop -c pytest tests/e2e_gui_playwright.py
-
-      - name: Build Sample Publications (Visual Proofs)
-        run: |
-          nix run .#mathpub -- build publications/physics-practice.toml --seed 2026 --variant A --replace --json
-          # Convert PDF pages to PNG for PR visual preview
-          nix develop -c pdftoppm -png -r 150 build/physics.practice/A/physics.practice-A-student.pdf build/physics.practice/A/preview-student
-          nix develop -c pdftoppm -png -r 150 build/physics.practice/A/physics.practice-A-solutions.pdf build/physics.practice/A/preview-solutions
-
-      - name: Upload Visual Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: visual-validation-proofs
-          path: |
-            build/physics.practice/A/preview-*.png
-            screenshots/gui-*.png
+```
+tests/e2e/
+├── helpers/                           # Shared test utilities
+│   ├── pdf_visual_helper.py           # Python visual diff engine for TeX/PDF rendering
+│   └── gui_step_helper.ts             # Playwright step recorder for GUI tests
+├── 001-physics-worksheet/             # Scenario folder
+│   ├── test_physics_worksheet.py      # E2E test file compiling and checking worksheet layout
+│   ├── README.md                      # Auto-generated verification walkthrough of the run
+│   └── baselines/                     # Committed 150 DPI baseline PNG images
+│       ├── student-page-001.png
+│       ├── answers-page-001.png
+│       ├── solutions-page-001.png
+│       └── validation-page-001.png
+└── 002-gui-workspace/                 # Scenario folder for the GUI editor
+    ├── gui_workspace.spec.ts          # Playwright specification
+    ├── README.md                      # Auto-generated verification walkthough
+    └── screenshots/                   # Committed GUI screenshots
 ```
 
 ---
 
-## 4. Visual Validation Workflow for Reviewers
+## 3. The PDF Visual Regression Framework (Python)
 
-When reviewing a PR, reviewers can validate layout changes and GUI updates without pulling the branch locally:
+For document rendering, our pytest suite converts generated PDF pages to high-resolution PNGs and compares them pixel-by-pixel.
 
-1. **GUI Screenshots**:
-   - The Playwright suite runs a headless server of the GUI editor, performs actions (e.g. loading a physics component, triggering a build, verifying SyncTeX maps), captures screenshots, and saves them to a `screenshots/` directory.
-   - If screenshots differ from the baseline in `main`, the test report lists the delta, and the generated images are uploaded as PR artifacts.
-2. **PDF Preview Proofs**:
-   - The CI build pipeline automatically compiles `publications/physics-practice.toml` (both the student view and solutions view).
-   - `pdftoppm` converts these compiled PDFs into PNG images.
-   - Reviewers can view these images directly in the PR's uploaded build artifacts under `visual-validation-proofs` to confirm margins, spacing, fonts (Concrete/Libertinus), and TikZ diagram positioning.
-3. **E2E Layout Diffing (Optional)**:
-   - For changes targeting the rendering engine (`src/mathpub/render.py`), a visual diff step can compare the generated preview PNGs against pre-rendered baselines to identify any pixel-level shifts in spacing or typography.
+### The `PDFVisualHelper` Python Engine
+
+The E2E tests use a helper class that encapsulates compiling, rasterizing, and pixel diffing:
+
+```python
+import shutil
+import subprocess
+from pathlib import Path
+from PIL import Image, ImageChops
+from mathpub.config import Project
+from mathpub.publish import build
+
+class PDFVisualHelper:
+    def __init__(self, project: Project, scenario_dir: Path, update_baselines: bool = False):
+        self.project = project
+        self.scenario_dir = scenario_dir
+        self.baseline_dir = scenario_dir / "baselines"
+        self.update_baselines = update_baselines
+        self.baseline_dir.mkdir(exist_ok=True)
+        self.steps = []
+
+    def verify_publication(self, publication_path: Path, seed: str, variant: str):
+        # 1. Compile the publication
+        result = build(self.project, publication_path, root_seed=seed, variant=variant, replace=True)
+        edition_dir = self.project.root / result["edition"]
+        
+        # 2. Iterate through each output PDF (projections: student, answers, solutions, validation)
+        manifest_path = edition_dir / "manifest.json"
+        import json
+        manifest = json.loads(manifest_path.read_text())
+        
+        for output in manifest["outputs"]:
+            projection = output["projection"]
+            pdf_path = edition_dir / output["path"]
+            
+            # 3. Convert PDF pages to 150 DPI PNGs using pdftoppm
+            tmp_png_prefix = edition_dir / f"temp-{projection}"
+            subprocess.run([
+                "pdftoppm", "-png", "-r", "150", 
+                str(pdf_path), str(tmp_png_prefix)
+            ], check=True)
+            
+            # Find generated pages (e.g. temp-student-1.png, temp-student-2.png)
+            generated_pages = sorted(edition_dir.glob(f"temp-{projection}-*.png"))
+            
+            for index, page_png in enumerate(generated_pages):
+                page_number = index + 1
+                baseline_name = f"{projection}-page-{page_number:03d}.png"
+                baseline_path = self.baseline_dir / baseline_name
+                
+                if self.update_baselines:
+                    # Regenerate mode: copy page to baselines directory
+                    shutil.copy(page_png, baseline_path)
+                else:
+                    # Strict validation mode
+                    if not baseline_path.exists():
+                        raise AssertionError(f"Missing visual baseline: {baseline_name}")
+                    
+                    self._assert_pixel_match(page_png, baseline_path, projection, page_number)
+                
+                self.steps.append({
+                    "projection": projection,
+                    "page": page_number,
+                    "image_path": f"./baselines/{baseline_name}"
+                })
+
+    def _assert_pixel_match(self, candidate_path: Path, baseline_path: Path, projection: str, page: int):
+        img_cand = Image.open(candidate_path).convert("RGB")
+        img_base = Image.open(baseline_path).convert("RGB")
+        
+        if img_cand.size != img_base.size:
+            raise AssertionError(f"Dimension mismatch for {projection} page {page}: {img_cand.size} vs {img_base.size}")
+            
+        # Perform visual diff
+        diff = ImageChops.difference(img_cand, img_base)
+        bbox = diff.getbbox()
+        
+        if bbox is not None:
+            # Diffs detected! Write a diff highlights file
+            diff_dir = self.scenario_dir / "diffs"
+            diff_dir.mkdir(exist_ok=True)
+            diff_path = diff_dir / f"diff-{projection}-page-{page:03d}.png"
+            
+            # Create high-contrast diff output (red overlay)
+            # Match baseline pixels against candidate and color changes red
+            diff_overlay = Image.blend(img_cand, img_base, alpha=0.5)
+            diff_overlay.save(diff_path)
+            
+            raise AssertionError(
+                f"Visual regression detected in {projection} page {page}!\n"
+                f"Candidate: {candidate_path}\n"
+                f"Baseline: {baseline_path}\n"
+                f"Diff overlay saved to: {diff_path}"
+            )
+
+    def generate_markdown(self, title: str):
+        readme_path = self.scenario_dir / "README.md"
+        content = f"# Visual Verification: {title}\n\n"
+        content += "Automated end-to-end visual validation pages (150 DPI baseline preview):\n\n"
+        
+        for step in self.steps:
+            content += f"## Projection: {step['projection']} (Page {step['page']})\n\n"
+            content += f"![{step['projection']} Page {step['page']}]({step['image_path']})\n\n"
+            content += "---\n\n"
+            
+        readme_path.write_text(content)
+```
+
+---
+
+## 4. The GUI Visual Regression Framework (Playwright)
+
+For the visual state of the interactive compiler workspace UI, we use TypeScript Playwright tests executing with software rendering options.
+
+### Playwright Configuration (`playwright.config.ts`)
+```typescript
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  timeout: 30000,
+  expect: {
+    timeout: 2000,
+    toHaveScreenshot: { maxDiffPixels: 0 }, // ZERO-pixel tolerance
+  },
+  use: {
+    browserName: 'chromium',
+    headless: true,
+    launchOptions: {
+      args: [
+        '--disable-gpu',
+        '--font-render-hinting=none',
+        '--disable-lcd-text',
+        '--window-size=1280,720'
+      ]
+    }
+  }
+});
+```
+
+### The `GUIStepHelper` (TypeScript)
+A custom step-helper recorder maps the verification steps, captures screenshots, and creates structured reports:
+
+```typescript
+import { type Page, type TestInfo, expect } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export interface Verification {
+  spec: string;
+  check: () => Promise<void>;
+}
+
+export class GUIStepHelper {
+  private stepCount = 0;
+  private steps: Array<{ title: string; image: string; specs: string[] }> = [];
+
+  constructor(private page: Page, private testInfo: TestInfo) {}
+
+  async step(id: string, description: string, verifications: Verification[]) {
+    // 1. Run all code assertions
+    for (const v of verifications) {
+      await v.check();
+    }
+
+    // 2. Generate standard filename
+    const paddedIndex = String(this.stepCount++).padStart(3, '0');
+    const filename = `${paddedIndex}-${id.replace(/_/g, '-')}.png`;
+
+    // 3. Assert zero-pixel screen matching
+    await expect(this.page).toHaveScreenshot(filename.replace(/\.png$/, ''));
+
+    // 4. Save metadata for Markdown generation
+    this.steps.push({
+      title: description,
+      image: `./screenshots/${filename}`,
+      specs: verifications.map(v => v.spec)
+    });
+  }
+
+  generateDocs() {
+    const docPath = path.join(path.dirname(this.testInfo.file), 'README.md');
+    let content = `# Test Scenario: ${this.testInfo.title}\n\n`;
+
+    for (const step of this.steps) {
+      content += `## Step: ${step.title}\n\n`;
+      content += `![${step.title}](${step.image})\n\n`;
+      content += `**Verifications:**\n`;
+      for (const spec of step.specs) {
+        content += `- [x] ${spec}\n`;
+      }
+      content += `\n---\n\n`;
+    }
+
+    fs.writeFileSync(docPath, content);
+  }
+}
+```
+
+---
+
+## 5. Visual Baseline Management (Regeneration)
+
+When layout modifications are intentional (e.g., modifying default line widths, tweaking fonts, changing warning box border radius), developers must regenerate baselines.
+
+### Pytest PDF Baseline Regeneration
+Adding a custom `--update-baselines` flag to `conftest.py` enables updating baselines:
+```bash
+nix develop -c pytest tests/e2e/ --update-baselines
+```
+This forces the `PDFVisualHelper` to save current candidate PNGs as baselines and rewrite the scenario `README.md` files. The updated PNG images and markdown files are committed as part of the visual layout pull request.
+
+### Playwright GUI Screenshot Update
+To update GUI snapshots when UI elements intentionally change:
+```bash
+nix develop -c playwright test --update-snapshots
+```
+
+---
+
+## 6. Pull Request Review Workflow
+
+With zero-pixel visual testing enforced, reviewers can perform rapid, accurate visual checks directly within the PR:
+
+1. **Reviewing Baseline Diffs**: 
+   - A pull request changing the renderer or GUI will contain modified PNG files in `tests/e2e/*/baselines/` or `tests/e2e/*/screenshots/`.
+   - Reviewers can view these diffs directly using GitHub's **rich diff image viewer** (2-up, swipe, or onion skin modes) to verify changes down to individual pixels.
+2. **Reviewing Layout Documents**:
+   - Every E2E scenario directory contains an auto-generated `README.md` containing the step-by-step walkthrough. Reviewers can read these markdown pages directly on the PR file tree to see the complete rendered output flow.
+3. **CI Regression Failures**:
+   - If a layout change was accidental, the CI pipeline fails. The reviewer and author can download the `visual-validation-proofs` artifact containing the generated candidate PNG, the original baseline, and the red overlay highlighted diff image.
