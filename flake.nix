@@ -65,6 +65,7 @@
               pythonPackages.jsonschema
               pythonPackages.numpy
               pythonPackages.pypdf
+              pythonPackages.pillow
             ];
             nativeCheckInputs = [
               pkgs.git
