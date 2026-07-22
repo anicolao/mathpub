@@ -136,7 +136,13 @@ def parser() -> argparse.ArgumentParser:
     variants.add_argument(
         "--font", choices=("concrete", "libertinus", "computer-modern"), default=None
     )
-    _json_flag(variants)
+    workspace = commands.add_parser("workspace", help="launch the interactive authoring workspace")
+    workspace.add_argument("--host", default="127.0.0.1", help="host IP to bind server to")
+    workspace.add_argument("--port", type=int, default=8765, help="port to run workspace server on")
+    workspace.add_argument(
+        "--no-browser", action="store_true", help="do not open browser automatically"
+    )
+    _json_flag(workspace)
 
     reproduce_parser = commands.add_parser("reproduce", help="rebuild from stored instances")
     reproduce_parser.add_argument("manifest", type=Path)
@@ -537,6 +543,15 @@ placement = {json.dumps(placement)}
             "publications": len(catalog.publications),
             "profiles": len(catalog.profiles),
         }
+    if args.command == "workspace":
+        from mathpub.gui.server import run_workspace_server
+
+        run_workspace_server(
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_browser,
+        )
+        return "workspace", {"host": args.host, "port": args.port}
     raise AssertionError(f"unhandled command: {args.command}")
 
 

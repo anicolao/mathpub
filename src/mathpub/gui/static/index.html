@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mathpub Interactive Workspace</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-brand">
+      <span class="logo">mathpub</span>
+      <span class="subtitle">Interactive Workspace</span>
+    </div>
+    <div class="header-status">
+      <span class="badge badge-success" id="status-terminal">PTY Connected</span>
+      <span class="badge badge-info" id="status-synctex">SyncTeX Ready</span>
+    </div>
+  </header>
+
+  <main class="app-workspace">
+    <!-- Left Pane: Terminal Emulator -->
+    <section class="pane pane-left" id="pane-left">
+      <div class="pane-header">
+        <h2>Terminal Shell / Agent</h2>
+        <span class="pane-tag">xterm.js PTY</span>
+      </div>
+      <div id="terminal-container"></div>
+    </section>
+
+    <!-- Resizer Divider -->
+    <div class="pane-resizer" id="pane-resizer"></div>
+
+    <!-- Right Pane: PDF Viewer & SyncTeX Overlay -->
+    <section class="pane pane-right" id="pane-right">
+      <div class="pane-header">
+        <h2>Document Preview</h2>
+        <span class="pane-tag">SyncTeX Quartz PDFKit</span>
+      </div>
+      <div class="pdf-viewer-wrapper" id="pdf-wrapper">
+        <div class="pdf-placeholder" id="pdf-placeholder">
+          <p>Compile a publication to view SyncTeX preview</p>
+          <code>mathpub build publications/physics-practice.toml</code>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
