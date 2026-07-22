@@ -1,5 +1,11 @@
 # Working with mathpub
 
+## Branching Policy
+
+**Always work on a feature branch.** NEVER commit directly to `main`. Create or check out a dedicated feature branch (e.g. `feature/gui-workspace`, `tooling/algebra-ready`) before making any code, test, or documentation edits. Keep `main` clean and synchronized with `origin/main`.
+
+## Authoring and Toolchain Guidelines
+
 This repository is both the mathpub implementation and a mathpub authoring project. Use only
 programs supplied by `flake.nix`. Enter the environment with `nix develop`, or run the packaged
 CLI as `nix run .#mathpub -- COMMAND`. Never invoke a host Python, Sage, TeX, formatter, or test
