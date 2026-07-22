@@ -78,10 +78,9 @@ def _encode_ws_frame(data: str | bytes, opcode: int = 0x1) -> bytes:
     return bytes(header) + payload
 
 
-async def _close_writer(writer: asyncio.StreamWriter) -> None:
+def _close_writer(writer: asyncio.StreamWriter) -> None:
     with contextlib.suppress(Exception):
         writer.close()
-        await writer.wait_closed()
 
 
 class WorkspaceServer:
@@ -97,22 +96,22 @@ class WorkspaceServer:
         try:
             header_bytes = await reader.read(8192)
             if not header_bytes:
-                await _close_writer(writer)
+                _close_writer(writer)
                 return
         except (asyncio.IncompleteReadError, ConnectionResetError, OSError):
-            await _close_writer(writer)
+            _close_writer(writer)
             return
 
         header_text = header_bytes.decode(errors="ignore")
         lines = header_text.split("\r\n")
         if not lines:
-            await _close_writer(writer)
+            _close_writer(writer)
             return
 
         request_line = lines[0]
         parts = request_line.split()
         if len(parts) < 2:
-            await _close_writer(writer)
+            _close_writer(writer)
             return
 
         path = parts[1]
@@ -143,7 +142,7 @@ class WorkspaceServer:
             ).encode() + body
             writer.write(response)
             await writer.drain()
-            await _close_writer(writer)
+            _close_writer(writer)
             return
 
         if path.startswith("/api/publications"):
@@ -161,7 +160,7 @@ class WorkspaceServer:
             ).encode() + body
             writer.write(response)
             await writer.drain()
-            await _close_writer(writer)
+            _close_writer(writer)
             return
 
         if path.startswith("/api/pdf"):
@@ -185,13 +184,13 @@ class WorkspaceServer:
                     ).encode() + content
                     writer.write(response)
                     await writer.drain()
-                    await _close_writer(writer)
+                    _close_writer(writer)
                     return
 
             response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
             writer.write(response)
             await writer.drain()
-            await _close_writer(writer)
+            _close_writer(writer)
             return
 
         # Serve Static Assets
@@ -214,7 +213,7 @@ class WorkspaceServer:
             writer.write(response)
             await writer.drain()
 
-        await _close_writer(writer)
+        _close_writer(writer)
 
     async def _run_terminal_websocket(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
