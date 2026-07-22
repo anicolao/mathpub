@@ -93,3 +93,4 @@ class PTYManager:
         if self.pid is not None and self.is_alive():
             with contextlib.suppress(OSError):
                 os.kill(self.pid, 15)  # SIGTERM
+                os.waitpid(self.pid, 0)

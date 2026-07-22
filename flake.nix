@@ -71,14 +71,21 @@
             nativeCheckInputs = [
               pkgs.git
               pkgs.poppler-utils
+              pkgs.playwright-driver.browsers
               pythonPackages.pytestCheckHook
               sage
               tex
             ];
+            preCheck = ''
+              export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
+              export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+            '';
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/mathpub \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git sage tex pkgs.poppler-utils ]}
+              makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
+                --add-flags "workspace"
             '';
             pythonImportsCheck = [ "mathpub" ];
             pytestFlags = [ "tests" ];
@@ -95,11 +102,11 @@
         };
         mathpub-workspace = {
           type = "app";
-          program = "${self.packages.${system}.mathpub}/bin/mathpub";
+          program = "${self.packages.${system}.mathpub}/bin/mathpub-workspace";
         };
         mathpub-gui = {
           type = "app";
-          program = "${self.packages.${system}.mathpub}/bin/mathpub";
+          program = "${self.packages.${system}.mathpub}/bin/mathpub-workspace";
         };
         default = self.apps.${system}.mathpub;
       });
