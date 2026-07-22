@@ -7,9 +7,10 @@ import threading
 from pathlib import Path
 
 import numpy as np
-from mathpub.gui.server import WorkspaceServer
 from PIL import Image, ImageChops
 from playwright.sync_api import sync_playwright
+
+from mathpub.gui.server import WorkspaceServer
 
 
 def test_gui_workspace_e2e(update_baselines: bool):
@@ -85,13 +86,14 @@ def test_gui_workspace_e2e(update_baselines: bool):
                     total_pixels = arr_cand.shape[0] * arr_cand.shape[1]
                     diff_ratio = diff_pixels / total_pixels
 
-                    # Subpixel font antialiasing between OS renderers (Quartz vs FreeType) allows up to 0.5% ratio
+                    # Subpixel font antialiasing (Quartz vs FreeType) allows up to 0.5% ratio
                     if diff_ratio > 0.005:
-                        raise AssertionError(
-                            f"Visual regression in GUI workspace layout (diff ratio {diff_ratio:.4f})!\n"
+                        msg = (
+                            f"Visual regression in GUI layout (diff ratio {diff_ratio:.4f})!\n"
                             f"Candidate: {candidate_path}\n"
                             f"Baseline: {baseline_path}"
                         )
+                        raise AssertionError(msg)
 
             # 5. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
