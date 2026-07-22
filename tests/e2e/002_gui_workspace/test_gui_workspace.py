@@ -18,40 +18,43 @@ def test_gui_workspace_e2e(update_baselines: bool):
     screenshots_dir = scenario_dir / "screenshots"
     screenshots_dir.mkdir(exist_ok=True)
 
-    bound_port = 0
-    server = WorkspaceServer(host="127.0.0.1", port=0)
-    server_ready = threading.Event()
-    stop_event = None
-    loop_ref = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-gpu", "--font-render-hinting=none"],
+        )
 
-    def thread_main():
-        nonlocal stop_event, bound_port
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop_ref.append(loop)
-        stop_event = asyncio.Event()
+        bound_port = 0
+        server = WorkspaceServer(host="127.0.0.1", port=0)
+        server_ready = threading.Event()
+        stop_event = None
+        loop_ref = []
 
-        async def run_server():
-            nonlocal bound_port
-            srv = await asyncio.start_server(server.handle_client, "127.0.0.1", 0)
-            bound_port = srv.sockets[0].getsockname()[1]
-            async with srv:
-                server_ready.set()
-                await stop_event.wait()
+        def thread_main():
+            nonlocal stop_event, bound_port
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop_ref.append(loop)
+            stop_event = asyncio.Event()
 
-        loop.run_until_complete(run_server())
+            async def run_server():
+                nonlocal bound_port
+                srv = await asyncio.start_server(server.handle_client, "127.0.0.1", 0)
+                for sock in srv.sockets:
+                    sock.set_inheritable(False)
+                bound_port = srv.sockets[0].getsockname()[1]
+                async with srv:
+                    server_ready.set()
+                    await stop_event.wait()
 
-    t = threading.Thread(target=thread_main, daemon=True)
-    t.start()
+            loop.run_until_complete(run_server())
 
-    assert server_ready.wait(timeout=5.0)
+        t = threading.Thread(target=thread_main, daemon=True)
+        t.start()
 
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--disable-gpu", "--font-render-hinting=none"],
-            )
+        assert server_ready.wait(timeout=5.0)
+
+        try:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
 
@@ -112,6 +115,6 @@ def test_gui_workspace_e2e(update_baselines: bool):
             readme_path.write_text(readme_content)
 
             browser.close()
-    finally:
-        if stop_event and loop_ref:
-            loop_ref[0].call_soon_threadsafe(stop_event.set)
+        finally:
+            if stop_event and loop_ref:
+                loop_ref[0].call_soon_threadsafe(stop_event.set)
