@@ -92,6 +92,14 @@
           type = "app";
           program = "${self.packages.${system}.mathpub}/bin/mathpub";
         };
+        mathpub-workspace = {
+          type = "app";
+          program = "${self.packages.${system}.mathpub}/bin/mathpub";
+        };
+        mathpub-gui = {
+          type = "app";
+          program = "${self.packages.${system}.mathpub}/bin/mathpub";
+        };
         default = self.apps.${system}.mathpub;
       });
 
