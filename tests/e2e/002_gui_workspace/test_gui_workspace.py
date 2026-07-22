@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 from pathlib import Path
 
@@ -41,7 +42,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 nonlocal bound_port
                 srv = await asyncio.start_server(server.handle_client, "127.0.0.1", 0)
                 for sock in srv.sockets:
-                    sock.set_inheritable(False)
+                    os.set_inheritable(sock.fileno(), False)
                 bound_port = srv.sockets[0].getsockname()[1]
                 async with srv:
                     server_ready.set()
