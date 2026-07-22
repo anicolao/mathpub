@@ -9,23 +9,6 @@
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgsFor = system: import nixpkgs {
         inherit system;
-        overlays = [
-          (_final: prev: if system == "aarch64-darwin" || system == "x86_64-darwin" then {
-            # Singular 4.4.1's randomized omalloc test is flaky on
-            # aarch64-darwin. Runtime behavior is covered by mathpub's Sage
-            # integration tests instead of this package-time allocator test.
-            singular = prev.singular.overrideAttrs (old: {
-              doCheck = false;
-              configureFlags = builtins.filter
-                (flag: flag != "--enable-doc-build")
-                (old.configureFlags or [ ]);
-              installPhase = builtins.replaceStrings
-                [ "cp doc/singular.info $out/share/info" ]
-                [ "test ! -f doc/singular.info || cp doc/singular.info $out/share/info" ]
-                old.installPhase;
-            });
-          } else { })
-        ];
       };
     in {
       packages = forAllSystems (system:
