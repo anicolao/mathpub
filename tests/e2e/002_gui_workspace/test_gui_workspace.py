@@ -19,11 +19,28 @@ def test_gui_workspace_e2e(update_baselines: bool):
     screenshots_dir = scenario_dir / "screenshots"
     screenshots_dir.mkdir(exist_ok=True)
 
+    # Strip ambient Nix sandbox proxy env vars for local loopback connections
+    for env_var in (
+        "http_proxy",
+        "https_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "all_proxy",
+        "ALL_PROXY",
+    ):
+        os.environ.pop(env_var, None)
+    os.environ["no_proxy"] = "*"
+    os.environ["NO_PROXY"] = "*"
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--disable-gpu", "--font-render-hinting=none", "--no-proxy-server"],
-            proxy={"server": "direct://"},
+            args=[
+                "--disable-gpu",
+                "--font-render-hinting=none",
+                "--no-proxy-server",
+                "--proxy-bypass-list=*",
+            ],
         )
 
         bound_port = 0
