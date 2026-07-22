@@ -95,8 +95,11 @@ class WorkspaceServer:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         try:
-            header_bytes = await reader.readuntil(b"\r\n\r\n")
-        except (asyncio.IncompleteReadError, ConnectionResetError):
+            header_bytes = await reader.read(8192)
+            if not header_bytes:
+                await _close_writer(writer)
+                return
+        except (asyncio.IncompleteReadError, ConnectionResetError, OSError):
             await _close_writer(writer)
             return
 
