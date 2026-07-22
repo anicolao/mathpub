@@ -23,7 +23,13 @@ def test_gui_workspace_e2e(update_baselines: bool):
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--disable-gpu", "--font-render-hinting=none"],
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--font-render-hinting=none",
+            ],
         )
 
         bound_port = 0
