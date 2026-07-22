@@ -9,6 +9,13 @@
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgsFor = system: import nixpkgs {
         inherit system;
+        overlays = [
+          (_final: prev: if system == "aarch64-darwin" || system == "x86_64-darwin" then {
+            singular = prev.singular.overrideAttrs (_old: {
+              doCheck = false;
+            });
+          } else { })
+        ];
       };
     in {
       packages = forAllSystems (system:
