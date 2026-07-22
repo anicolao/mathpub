@@ -51,7 +51,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 args=["--disable-gpu", "--font-render-hinting=none"],
             )
             page = browser.new_page(viewport={"width": 1280, "height": 720})
-            page.goto(f"http://127.0.0.1:{port}/")
+            page.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded")
 
             # 1. Verify Header Elements
             assert page.locator(".logo").text_content() == "mathpub"
