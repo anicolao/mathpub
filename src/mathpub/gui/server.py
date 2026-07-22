@@ -260,8 +260,14 @@ class WorkspaceServer:
 
 
 def run_workspace_server(
-    host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = True,
+    browser: str = "webkit",
 ) -> None:
+    import subprocess
+    import sys
+
     server_obj = WorkspaceServer(host, port)
 
     async def main() -> None:
@@ -269,7 +275,13 @@ def run_workspace_server(
         url = f"http://{host}:{port}/"
         print(f"mathpub workspace running at {url}")
         if open_browser:
-            webbrowser.open(url)
+            if sys.platform == "darwin" and browser in ("webkit", "safari"):
+                try:
+                    subprocess.run(["open", "-a", "Safari", url], check=False)
+                except Exception:
+                    webbrowser.open(url)
+            else:
+                webbrowser.open(url)
         async with server:
             await server.serve_forever()
 

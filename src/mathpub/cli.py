@@ -140,6 +140,12 @@ def parser() -> argparse.ArgumentParser:
     workspace.add_argument("--host", default="127.0.0.1", help="host IP to bind server to")
     workspace.add_argument("--port", type=int, default=8765, help="port to run workspace server on")
     workspace.add_argument(
+        "--browser",
+        choices=("webkit", "safari", "default"),
+        default="webkit",
+        help="browser renderer engine (webkit/safari or default)",
+    )
+    workspace.add_argument(
         "--no-browser", action="store_true", help="do not open browser automatically"
     )
     _json_flag(workspace)
@@ -550,6 +556,7 @@ placement = {json.dumps(placement)}
             host=args.host,
             port=args.port,
             open_browser=not args.no_browser,
+            browser=getattr(args, "browser", "webkit"),
         )
         return "workspace", {"host": args.host, "port": args.port}
     raise AssertionError(f"unhandled command: {args.command}")
