@@ -18,21 +18,23 @@ def test_gui_workspace_e2e(update_baselines: bool):
     screenshots_dir = scenario_dir / "screenshots"
     screenshots_dir.mkdir(exist_ok=True)
 
-    port = 8915
-    server = WorkspaceServer(host="127.0.0.1", port=port)
+    bound_port = 0
+    server = WorkspaceServer(host="127.0.0.1", port=0)
     server_ready = threading.Event()
     stop_event = None
     loop_ref = []
 
     def thread_main():
-        nonlocal stop_event
+        nonlocal stop_event, bound_port
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop_ref.append(loop)
         stop_event = asyncio.Event()
 
         async def run_server():
-            srv = await asyncio.start_server(server.handle_client, "127.0.0.1", port)
+            nonlocal bound_port
+            srv = await asyncio.start_server(server.handle_client, "127.0.0.1", 0)
+            bound_port = srv.sockets[0].getsockname()[1]
             async with srv:
                 server_ready.set()
                 await stop_event.wait()
@@ -51,7 +53,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 args=["--disable-gpu", "--font-render-hinting=none"],
             )
             page = browser.new_page(viewport={"width": 1280, "height": 720})
-            page.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded")
+            page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
 
             # 1. Verify Header Elements
             assert page.locator(".logo").text_content() == "mathpub"
