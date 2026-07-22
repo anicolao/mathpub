@@ -66,6 +66,7 @@
               pythonPackages.numpy
               pythonPackages.pypdf
               pythonPackages.pillow
+              pythonPackages.playwright
             ];
             nativeCheckInputs = [
               pkgs.git
@@ -140,11 +141,14 @@
               pkgs.python312Packages.pytest
               pkgs.python312Packages.ruff
               pkgs.poppler-utils
+              pkgs.playwright-driver.browsers
               sage
               tex
             ];
             shellHook = ''
               export PYTHONPATH="$PWD/src''${PYTHONPATH:+:$PYTHONPATH}"
+              export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
+              export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
             '';
           };
         });
