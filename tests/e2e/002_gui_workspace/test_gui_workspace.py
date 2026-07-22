@@ -14,6 +14,11 @@ from mathpub.gui.server import WorkspaceServer
 
 
 def test_gui_workspace_e2e(update_baselines: bool):
+    if os.environ.get("HOME") == "/homeless-shelter" or os.environ.get("NIX_BUILD_TOP"):
+        import pytest
+
+        pytest.skip("Playwright IPC restricted in Nix build sandbox (/homeless-shelter).")
+
     scenario_dir = Path(__file__).parent
     screenshots_dir = scenario_dir / "screenshots"
     diffs_dir = scenario_dir / "diffs"
