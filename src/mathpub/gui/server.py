@@ -136,6 +136,54 @@ class WorkspaceServer:
             writer.close()
             return
 
+        if path.startswith("/api/publications"):
+            build_dir = Path.cwd() / "build"
+            pdf_files = []
+            if build_dir.exists():
+                for pdf_path in sorted(build_dir.rglob("*.pdf")):
+                    rel_path = str(pdf_path.relative_to(Path.cwd()))
+                    pdf_files.append({"name": pdf_path.name, "path": rel_path})
+
+            body = json.dumps({"publications": pdf_files}).encode()
+            response = (
+                f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n\r\n"
+            ).encode() + body
+            writer.write(response)
+            await writer.drain()
+            writer.close()
+            return
+
+        if path.startswith("/api/pdf"):
+            from urllib.parse import parse_qs, urlparse
+
+            parsed = urlparse(path)
+            query = parse_qs(parsed.query)
+            pdf_rel_path = query.get("path", [""])[0]
+
+            if pdf_rel_path:
+                target_pdf = (Path.cwd() / pdf_rel_path).resolve()
+                if (
+                    target_pdf.exists()
+                    and target_pdf.is_file()
+                    and str(target_pdf).startswith(str(Path.cwd()))
+                ):
+                    content = target_pdf.read_bytes()
+                    response = (
+                        f"HTTP/1.1 200 OK\r\nContent-Type: application/pdf\r\n"
+                        f"Content-Length: {len(content)}\r\n\r\n"
+                    ).encode() + content
+                    writer.write(response)
+                    await writer.drain()
+                    writer.close()
+                    return
+
+            response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+            writer.write(response)
+            await writer.drain()
+            writer.close()
+            return
+
         # Serve Static Assets
         target_file = (STATIC_DIR / path.lstrip("/")).resolve()
         if (

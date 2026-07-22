@@ -38,12 +38,15 @@
     <section class="pane pane-right" id="pane-right">
       <div class="pane-header">
         <h2>Document Preview</h2>
-        <span class="pane-tag">SyncTeX Quartz PDFKit</span>
+        <select id="pdf-select" class="pdf-select">
+          <option value="">-- Select Built PDF --</option>
+        </select>
       </div>
       <div class="pdf-viewer-wrapper" id="pdf-wrapper">
+        <iframe id="pdf-frame" class="pdf-frame" src="about:blank"></iframe>
         <div class="pdf-placeholder" id="pdf-placeholder">
-          <p>Compile a publication to view SyncTeX preview</p>
-          <code>mathpub build publications/physics-practice.toml</code>
+          <p>No built PDF selected</p>
+          <code>mathpub build publications/physics-practice.toml --seed 2026 --variant A</code>
         </div>
       </div>
     </section>

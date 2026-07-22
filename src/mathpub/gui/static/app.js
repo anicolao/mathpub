@@ -37,6 +37,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const bytes = new Uint8Array(event.data);
       term.write(bytes);
     }
+    // Refresh publications list after terminal activity
+    schedulePubsRefresh();
   };
 
   ws.onclose = () => {
@@ -69,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const leftPane = document.getElementById("pane-left");
   let isResizing = false;
 
-  resizer.addEventListener("mousedown", (e) => {
+  resizer.addEventListener("mousedown", () => {
     isResizing = true;
     document.body.style.cursor = "col-resize";
   });
@@ -92,4 +94,69 @@ document.addEventListener("DOMContentLoaded", () => {
       sendResize();
     }
   });
+
+  // 4. PDF Discovery & Auto-Loading Logic
+  const pdfSelect = document.getElementById("pdf-select");
+  const pdfFrame = document.getElementById("pdf-frame");
+  const pdfPlaceholder = document.getElementById("pdf-placeholder");
+  let knownPdfs = new Set();
+  let refreshTimer = null;
+
+  async function refreshPublications() {
+    try {
+      const res = await fetch("/api/publications");
+      if (!res.ok) return;
+      const data = await res.json();
+      const pdfs = data.publications || [];
+
+      let currentSelection = pdfSelect.value;
+      let hasChanged = pdfs.length !== knownPdfs.size;
+
+      if (hasChanged) {
+        pdfSelect.innerHTML = '<option value="">-- Select Built PDF --</option>';
+        knownPdfs.clear();
+
+        pdfs.forEach((pdf) => {
+          knownPdfs.add(pdf.path);
+          const opt = document.createElement("option");
+          opt.value = pdf.path;
+          opt.textContent = `${pdf.path}`;
+          pdfSelect.appendChild(opt);
+        });
+
+        // Auto-select latest PDF if none selected or new build appeared
+        if (pdfs.length > 0) {
+          const latestPath = pdfs[pdfs.length - 1].path;
+          pdfSelect.value = latestPath;
+          loadPdf(latestPath);
+        }
+      }
+    } catch (e) {
+      // Ignore network errors during shutdown
+    }
+  }
+
+  function loadPdf(path) {
+    if (!path) {
+      pdfFrame.style.display = "none";
+      pdfPlaceholder.style.display = "block";
+      return;
+    }
+    pdfFrame.src = `/api/pdf?path=${encodeURIComponent(path)}`;
+    pdfFrame.style.display = "block";
+    pdfPlaceholder.style.display = "none";
+  }
+
+  pdfSelect.addEventListener("change", (e) => {
+    loadPdf(e.target.value);
+  });
+
+  function schedulePubsRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refreshPublications, 1500);
+  }
+
+  // Initial publication load and periodic polling
+  refreshPublications();
+  setInterval(refreshPublications, 5000);
 });
