@@ -47,3 +47,14 @@ nix flake check
 
 Preserve explicit seeds in reports and commits. Do not put answer or solution content in
 `prompt.tex`; projection isolation depends on those source boundaries.
+
+## Interactive Workspace
+
+Launch the interactive split-pane authoring workspace (PTY terminal + SyncTeX PDF preview):
+
+```console
+nix run .#mathpub-workspace
+# or
+nix run .#mathpub-gui
+```
+

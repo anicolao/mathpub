@@ -71,6 +71,29 @@ nix run .#mathpub -- variants publications/physics-practice.toml --seed 2026 --c
 nix run .#mathpub -- reproduce build/physics.practice/A/manifest.json --replace --json
 ```
 
+## Interactive GUI Workspace
+
+`mathpub` includes a split-pane interactive authoring workspace combining an embedded terminal emulator (`xterm.js` over a Unix PTY) with a SyncTeX-enabled document preview.
+
+Launch the workspace using Nix:
+
+```console
+nix run .#mathpub-workspace
+```
+
+Or via the `mathpub` CLI inside a development shell:
+
+```console
+mathpub workspace
+```
+
+Options:
+- `--port PORT`: Specify custom port (default: `8765`).
+- `--host HOST`: Specify custom host IP (default: `127.0.0.1`).
+- `--no-browser`: Launch the workspace server without opening a browser window automatically.
+
+For detailed interface design, SyncTeX source-map routing, and Tauri desktop integration, see [GUI_DESIGN.md](GUI_DESIGN.md) and [GUI_IMPLEMENTATION_PLAN.md](GUI_IMPLEMENTATION_PLAN.md).
+
 The repository’s [AGENTS.md](AGENTS.md) is the operational interface for Codex CLI and other LLM
 harnesses. `mathpub init` generates equivalent instructions. New source is scaffolded beneath the
 component root with singular persisted kinds and plural collection directories; `new component`
