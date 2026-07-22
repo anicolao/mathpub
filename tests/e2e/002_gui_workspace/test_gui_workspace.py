@@ -7,7 +7,6 @@ import os
 import threading
 from pathlib import Path
 
-import numpy as np
 from PIL import Image, ImageChops
 from playwright.sync_api import sync_playwright
 
@@ -15,39 +14,16 @@ from mathpub.gui.server import WorkspaceServer
 
 
 def test_gui_workspace_e2e(update_baselines: bool):
-    if os.environ.get("HOME") == "/homeless-shelter":
-        import pytest
-
-        pytest.skip("Playwright IPC restricted in Nix build sandbox (/homeless-shelter).")
-
     scenario_dir = Path(__file__).parent
     screenshots_dir = scenario_dir / "screenshots"
     diffs_dir = scenario_dir / "diffs"
     screenshots_dir.mkdir(exist_ok=True)
     diffs_dir.mkdir(exist_ok=True)
 
-    # Strip ambient Nix sandbox proxy env vars for local loopback connections
-    for env_var in (
-        "http_proxy",
-        "https_proxy",
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "all_proxy",
-        "ALL_PROXY",
-    ):
-        os.environ.pop(env_var, None)
-    os.environ["no_proxy"] = "*"
-    os.environ["NO_PROXY"] = "*"
-
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--disable-gpu",
-                "--font-render-hinting=none",
-                "--no-proxy-server",
-                "--proxy-bypass-list=*",
-            ],
+            args=["--disable-gpu", "--font-render-hinting=none"],
         )
 
         bound_port = 0
@@ -96,8 +72,9 @@ def test_gui_workspace_e2e(update_baselines: bool):
             # 3. Verify Right PDF Viewer Pane
             assert page.locator("#pane-right").is_visible()
             assert page.locator(".pdf-viewer-wrapper").is_visible()
+            page.wait_for_selector(".xterm-rows")
 
-            # 4. Capture & Verify Baseline Screenshot
+            # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance)
             baseline_path = screenshots_dir / "000-initial-workspace-load.png"
             candidate_path = scenario_dir / "temp-candidate.png"
             page.screenshot(path=str(candidate_path))
@@ -111,21 +88,12 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
                 diff = ImageChops.difference(img_cand, img_base)
                 if diff.getbbox() is not None:
-                    arr_cand = np.array(img_cand)
-                    arr_base = np.array(img_base)
-                    diff_pixels = np.count_nonzero(np.any(arr_cand != arr_base, axis=-1))
-                    total_pixels = arr_cand.shape[0] * arr_cand.shape[1]
-                    diff_ratio = diff_pixels / total_pixels
-
-                    # Font/scrollbar differences across OS engines allow up to 2.0% ratio
-                    if diff_ratio > 0.02:
-                        diff.save(diffs_dir / "000-initial-workspace-load-diff.png")
-                        msg = (
-                            f"Visual regression in GUI layout (diff ratio {diff_ratio:.4f})!\n"
-                            f"Candidate: {candidate_path}\n"
-                            f"Baseline: {baseline_path}"
-                        )
-                        raise AssertionError(msg)
+                    diff.save(diffs_dir / "000-initial-workspace-load-diff.png")
+                    raise AssertionError(
+                        "Visual regression in GUI workspace layout (0-pixel tolerance violated)!\n"
+                        f"Candidate: {candidate_path}\n"
+                        f"Baseline: {baseline_path}"
+                    )
 
             # 5. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"

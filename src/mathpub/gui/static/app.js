@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 1. Initialize Terminal
   const termContainer = document.getElementById("terminal-container");
   const term = new Terminal({
-    cursorBlink: true,
+    cursorBlink: false,
     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
     fontSize: 13,
     theme: {
