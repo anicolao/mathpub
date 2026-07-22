@@ -22,7 +22,8 @@ def test_gui_workspace_e2e(update_baselines: bool):
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--disable-gpu", "--font-render-hinting=none"],
+            args=["--disable-gpu", "--font-render-hinting=none", "--no-proxy-server"],
+            proxy={"server": "direct://"},
         )
 
         bound_port = 0
