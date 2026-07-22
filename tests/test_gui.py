@@ -66,6 +66,12 @@ def test_workspace_server_http():
         assert req_root.status == 200
         html = req_root.read().decode("utf-8")
         assert "mathpub Interactive Workspace" in html
+
+        # Test /api/publications endpoint
+        req_pubs = urllib.request.urlopen("http://127.0.0.1:8912/api/publications")
+        assert req_pubs.status == 200
+        pubs_data = json.loads(req_pubs.read().decode("utf-8"))
+        assert "publications" in pubs_data
     finally:
         if stop_event and loop_ref:
             loop_ref[0].call_soon_threadsafe(stop_event.set)

@@ -119,12 +119,15 @@ body {
   color: var(--text-muted);
 }
 
-.pane-tag {
-  font-size: 0.7rem;
-  color: var(--text-muted);
+.pdf-select {
   background: var(--bg-tertiary);
-  padding: 2px 6px;
+  color: var(--text-main);
+  border: 1px solid var(--border);
   border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  font-family: monospace;
+  max-width: 280px;
 }
 
 .pane-resizer {
@@ -154,6 +157,14 @@ body {
   justify-content: center;
   position: relative;
   background: #1e1e1e;
+}
+
+.pdf-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: none;
+  background: #ffffff;
 }
 
 .pdf-placeholder {
