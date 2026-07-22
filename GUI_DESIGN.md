@@ -55,14 +55,19 @@ sequenceDiagram
 4.  **Source Resolution**: The backend matches the generated line number against the `% BEGIN mathpub` JSON comments or the parsed `source-map.json` array.
 5.  **Agent Context**: The workspace feeds the user's review feedback, alongside the exact `component_id`, `fragment` (e.g., `prompt`), and absolute path to the `authored_source` file, into the terminal shell/agent.
 
-## 4. Sync-Aware PDF Componentry (macOS Native Integration)
+---
 
-To deliver a high-performance experience, the workspace avoids slow JavaScript-only PDF redraw loops by combining native platform capabilities with a transparent interaction layer:
+## 4. Native Desktop Packaging & Sync-Aware Componentry (Tauri & WebKit)
 
-*   **Native WebKit/Chromium Rendering**: The PDF file is embedded in a standard HTML `<iframe>` or `<embed>` element. On macOS, WebKit (Electron/Safari) automatically uses the native Quartz/PDFKit rendering backend, providing smooth scrolling, subpixel text anti-aliasing, and trackpad pinch-to-zoom.
-*   **Transparent Interactive Overlay**: A dynamically sized transparent HTML `div` overlay is positioned exactly on top of the PDF iframe.
+To deliver a high-performance, lightweight experience with exact native PDF rendering and zero subpixel font substitution, the workspace is packaged using **Tauri**:
+
+*   **Tauri Architecture**: The GUI application is packaged into a native desktop shell via Tauri, utilizing system-native webviews:
+    *   **macOS**: Uses native WKWebView (WebKit), leveraging macOS Quartz/PDFKit rendering for smooth scrolling, subpixel text anti-aliasing, and trackpad pinch-to-zoom.
+    *   **Linux**: Uses WebKitGTK with native Poppler/PDF.js fallback.
+*   **Transparent Interactive Overlay**: A dynamically sized transparent HTML `div` overlay is positioned exactly on top of the PDF container.
     *   The workspace backend reads the SyncTeX database to build a lightweight spatial index of coordinate bounding boxes for the current page.
-    *   Mouse hovers and clicks are intercepted by the HTML overlay. Hovering over a box outlines the textbook element (e.g. green SyncTeX outline), and clicking it sends the page-space $(X, Y)$ coordinate to the backend to locate the source code without disturbing the native PDF rendering underneath.
+    *   Mouse hovers and clicks are intercepted by the HTML overlay. Hovering over a box outlines the textbook element (e.g. green SyncTeX outline), and clicking it sends the page-space $(X, Y)$ coordinate to the backend to locate the source code without disturbing native PDF rendering underneath.
+*   **E2E Screenshot Capture via `tauri-driver`**: E2E tests launch the packaged app using `tauri-driver` (WebDriver server for Tauri) connected to Playwright. This enables capturing true native webview screenshots with **0-pixel tolerance** visual regression checking.
 
 ---
 
@@ -78,10 +83,10 @@ To achieve near-instantaneous page refreshes when a user edits individual compon
 
 ## 6. Nix Flake Integration
 
-The workspace tool is packaged directly into the public `mathpub` repository. It is executed via the Nix flake apps:
+The Tauri GUI workspace is packaged directly into the public `mathpub` repository. It can be built and launched via the Nix flake apps:
 
 ```bash
-nix run .#mathpub-workspace
+nix run .#mathpub-gui
 ```
 
-This launches the local Python backend, sets up WebSocket communication with the terminal socket, and opens the frontend in the browser.
+This compiles the Tauri desktop shell, launches the local Python backend service, connects the terminal PTY socket, and presents the native workspace application.

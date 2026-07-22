@@ -6,12 +6,13 @@ This document outlines the testing strategy for the `mathpub` publication engine
 
 ## 1. Visual Validation Philosophy: "Zero-Pixel Tolerance"
 
-Visual state is the primary output of the `mathpub` publication engine. Any unintended shift in margins, page breaks, fonts, TikZ diagram coordinates, or spacing is considered a regression bug. 
+Visual state is the primary output of the `mathpub` publication engine and GUI workspace. Any unintended shift in margins, page breaks, fonts, TikZ diagram coordinates, spacing, or interface overlays is considered a regression bug. 
 
 To enforce this, we apply the following guidelines:
 1. **Zero-Pixel Threshold**: For all PDF previews and GUI pages, comparison tests must assert exactly **0 differing pixels** between the generated output and the committed baseline.
-2. **Software-Consistent Rendering**: PDF rasterization and browser rendering are executed with software-only settings and fixed compiler paths (packaged via Nix) to ensure 100% consistent rendering across local environments (macOS/Linux) and CI runner environments (GitHub Actions).
-3. **Strict Determinism**: Every test scenario utilizes a hardcoded, reproducible random seed.
+2. **Software-Consistent Rendering**: PDF rasterization and browser rendering are executed with software-only settings and fixed compiler paths (packaged via Nix) to ensure 100% pixel-level reproducibility across local environments (macOS/Linux) and CI runner environments (GitHub Actions).
+3. **Tauri Desktop Packaging & Native Webview Consistency**: The GUI workspace is packaged using **Tauri**, utilizing native OS webviews (WKWebView on macOS, WebKitGTK on Linux). Automated screenshot captures are performed via `tauri-driver` connected to Playwright.
+4. **Strict Determinism**: Every test scenario utilizes a hardcoded, reproducible random seed and fixed viewport dimensions (`1280x720`).
 
 ---
 
@@ -23,19 +24,22 @@ All visual and end-to-end tests live under `tests/e2e/`. Scenarios are isolated 
 tests/e2e/
 ├── helpers/                           # Shared test utilities
 │   ├── pdf_visual_helper.py           # Python visual diff engine for TeX/PDF rendering
-│   └── gui_step_helper.ts             # Playwright step recorder for GUI tests
+│   └── gui_step_helper.ts             # Playwright/Tauri step recorder & doc generator
 ├── 001-physics-worksheet/             # Scenario folder
 │   ├── test_physics_worksheet.py      # E2E test file compiling and checking worksheet layout
 │   ├── README.md                      # Auto-generated verification walkthrough of the run
-│   └── baselines/                     # Committed 150 DPI baseline PNG images
+│   └── baselines/                     # Committed 150 DPI baseline PNGs
 │       ├── student-page-001.png
 │       ├── answers-page-001.png
 │       ├── solutions-page-001.png
 │       └── validation-page-001.png
-└── 002-gui-workspace/                 # Scenario folder for the GUI editor
-    ├── gui_workspace.spec.ts          # Playwright specification
-    ├── README.md                      # Auto-generated verification walkthough
+└── 002-gui-workspace/                 # Tauri GUI scenario folder
+    ├── gui_workspace.spec.ts          # Playwright + tauri-driver specification
+    ├── README.md                      # Auto-generated verification walkthrough of GUI run
     └── screenshots/                   # Committed GUI screenshots
+        ├── 000-initial-load.png
+        ├── 001-synctex-highlight.png
+        └── 002-comment-popup.png
 ```
 
 ---
@@ -127,10 +131,14 @@ class PDFVisualHelper:
             diff_dir.mkdir(exist_ok=True)
             diff_path = diff_dir / f"diff-{projection}-page-{page:03d}.png"
             
-            # Create high-contrast diff output (red overlay)
-            # Match baseline pixels against candidate and color changes red
-            diff_overlay = Image.blend(img_cand, img_base, alpha=0.5)
-            diff_overlay.save(diff_path)
+            import numpy as np
+            arr_cand = np.array(img_cand)
+            arr_base = np.array(img_base)
+            mask = np.any(arr_cand != arr_base, axis=-1)
+            out_arr = arr_cand.copy()
+            out_arr[mask] = [255, 0, 0] # Highlight differing pixels in red
+            
+            Image.fromarray(out_arr).save(diff_path)
             
             raise AssertionError(
                 f"Visual regression detected in {projection} page {page}!\n"
@@ -154,13 +162,13 @@ class PDFVisualHelper:
 
 ---
 
-## 4. The GUI Visual Regression Framework (Playwright)
+## 4. The Tauri GUI Visual Regression Framework (Playwright + `tauri-driver`)
 
-For the visual state of the interactive compiler workspace UI, we use TypeScript Playwright tests executing with software rendering options.
+For the visual state of the interactive compiler workspace UI, we use TypeScript Playwright tests connected to `tauri-driver`.
 
 ### Playwright Configuration (`playwright.config.ts`)
 ```typescript
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -170,13 +178,12 @@ export default defineConfig({
     toHaveScreenshot: { maxDiffPixels: 0 }, // ZERO-pixel tolerance
   },
   use: {
-    browserName: 'chromium',
+    browserName: 'webkit', // Native WKWebView engine on macOS
     headless: true,
     launchOptions: {
       args: [
         '--disable-gpu',
         '--font-render-hinting=none',
-        '--disable-lcd-text',
         '--window-size=1280,720'
       ]
     }
@@ -254,7 +261,6 @@ Adding a custom `--update-baselines` flag to `conftest.py` enables updating base
 ```bash
 nix develop -c pytest tests/e2e/ --update-baselines
 ```
-This forces the `PDFVisualHelper` to save current candidate PNGs as baselines and rewrite the scenario `README.md` files. The updated PNG images and markdown files are committed as part of the visual layout pull request.
 
 ### Playwright GUI Screenshot Update
 To update GUI snapshots when UI elements intentionally change:
@@ -274,4 +280,4 @@ With zero-pixel visual testing enforced, reviewers can perform rapid, accurate v
 2. **Reviewing Layout Documents**:
    - Every E2E scenario directory contains an auto-generated `README.md` containing the step-by-step walkthrough. Reviewers can read these markdown pages directly on the PR file tree to see the complete rendered output flow.
 3. **CI Regression Failures**:
-   - If a layout change was accidental, the CI pipeline fails. The reviewer and author can download the `visual-validation-proofs` artifact containing the generated candidate PNG, the original baseline, and the red overlay highlighted diff image.
+   - If a layout change was accidental, the CI pipeline fails. The reviewer and author can download the `visual-regression-diffs` artifact containing the generated candidate PNG, the original baseline, and the red overlay highlighted diff image.

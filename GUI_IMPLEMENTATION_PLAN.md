@@ -6,18 +6,18 @@ This document outlines the implementation plan for building the interactive `mat
 
 ## 1. Architectural Overview
 
-The interactive workspace is a lightweight, local web application packaged directly into `mathpub`. It comprises a Python backend server (`src/mathpub/gui/`) and a zero-dependency frontend (`src/mathpub/gui/static/`) serving a split-pane user interface:
+The interactive workspace is a local desktop application packaged using **Tauri** and backed by a Python server (`src/mathpub/gui/`). It presents a native OS split-pane user interface:
 
 ```
 +-----------------------------------------------------------------------+
-|  mathpub Workspace Header                                             |
+|  mathpub Tauri Workspace Window (macOS Quartz / WKWebView)            |
 +------------------------------------+----------------------------------+
 | Left Pane: Terminal Emulator       | Right Pane: SyncTeX PDF Viewer   |
-| (xterm.js via PTY WebSocket)       | (PDF iframe + SVG Overlay Layer) |
+| (xterm.js via PTY WebSocket)       | (PDF embed + SVG Bounding Box)   |
 |                                    |                                  |
 | $ nix run .#mathpub -- check ...   |  +----------------------------+  |
 | $ agy                              |  | Lesson 1: Quadratics      |  |
-| > Agent: Suggesting fix for q1...  |  | [Green Bounding Box]      |  |
+| > Agent: Suggesting fix for q1...  |  | [Green SyncTeX Box]       |  |
 |                                    |  +----------------------------+  |
 +------------------------------------+----------------------------------+
 ```
@@ -31,10 +31,10 @@ The interactive workspace is a lightweight, local web application packaged direc
 - **Protocol**: WebSocket connection (`/ws/terminal`) streaming raw ANSI terminal input/output bidirectional data.
 - **Frontend**: Integrates `xterm.js` with the `FitAddon` and `WebglAddon` for hardware-accelerated terminal rendering inside the left pane.
 
-### B. PDF Viewer & Transparent Overlay Subsystem
-- **PDF Embed**: Renders PDF pages using a standard HTML `<iframe>` / `<embed>` element, leveraging native macOS Quartz/PDFKit in Safari/WebKit for subpixel anti-aliased rendering and smooth gestures.
-- **Transparent SVG/HTML Overlay**: Positioned directly over the PDF container with `pointer-events: none` on the container and `pointer-events: auto` on rendered bounding boxes.
-- **Hover & Selection**: When hovering over an element (exercise, worked example, or lesson summary), the box highlights in translucent green. Clicking it triggers an annotation popup.
+### B. Tauri Native Desktop Shell & PDF Viewer Overlay
+- **Tauri Shell**: Wraps the frontend using system-native webviews (WKWebView on macOS, WebKitGTK on Linux). This provides native macOS Quartz/PDFKit subpixel rendering and smooth scrolling.
+- **Transparent SVG Overlay**: Positioned directly over the PDF container with `pointer-events: none` on the container and `pointer-events: auto` on rendered bounding boxes.
+- **Hover & Selection**: Hovering over an element highlights it in translucent green. Clicking it triggers an annotation popup.
 
 ### C. SyncTeX & Source Map Resolver
 - **SyncTeX Parser**: Parses the `.synctex.gz` file generated during TeX compilation or queries the `synctex` binary (`synctex view -i page:x:y:file.pdf`).
@@ -53,11 +53,11 @@ The interactive workspace is a lightweight, local web application packaged direc
 
 ## 3. Phased Implementation Milestones
 
-### Phase 1: Workspace Backend & PTY Terminal Bridge
+### Phase 1: Workspace Backend, Tauri Shell & PTY Bridge
 - [ ] Create Python package `src/mathpub/gui/` with static asset serving and WebSocket routes.
 - [ ] Implement `PTYManager` in `src/mathpub/gui/terminal.py` handling process spawning, terminal resizing (`TIOCSWINSZ`), and I/O buffer forwarding.
-- [ ] Set up `src/mathpub/gui/static/` with split-pane layout and `xterm.js` integration.
-- [ ] Add CLI subcommand `mathpub workspace` to launch the local web server.
+- [ ] Set up Tauri project scaffolding in `src-tauri/` configuring WKWebView/WebKitGTK integration.
+- [ ] Add CLI subcommand `mathpub workspace` and Nix app `nix run .#mathpub-gui`.
 
 ### Phase 2: SyncTeX Parser & Spatial Bounding Box API
 - [ ] Implement `src/mathpub/gui/synctex.py` to parse `.synctex.gz` or run `synctex view` coordinate lookups.
@@ -65,7 +65,7 @@ The interactive workspace is a lightweight, local web application packaged direc
 - [ ] Wire line resolution to `source-map.json` to map bounding boxes to `(component_id, fragment, authored_source)`.
 
 ### Phase 3: Interactive PDF Viewer & Annotation Overlay
-- [ ] Implement dual-layer PDF container in `static/index.html` (native PDF iframe + transparent SVG overlay).
+- [ ] Implement dual-layer PDF container (native PDF embed + transparent SVG overlay).
 - [ ] Draw bounding boxes on the SVG overlay dynamically fetched from `/api/synctex/boxes`.
 - [ ] Build interactive click modal for adding element feedback.
 - [ ] Implement feedback injection into the active terminal PTY session.
@@ -75,14 +75,15 @@ The interactive workspace is a lightweight, local web application packaged direc
 - [ ] Implement single-lesson compilation pipeline in `src/mathpub/publish.py`.
 - [ ] Add file watcher (`watchdog` / `fs.watch`) on `components/` to automatically trigger incremental builds and send PDF hot-swap events over WebSocket.
 
-### Phase 5: Nix Packaging & E2E Visual Verification
-- [ ] Add `packages.mathpub-workspace` and `apps.mathpub-workspace` to `flake.nix`.
-- [ ] Create E2E Playwright test scenario `tests/e2e/002_gui_workspace/` following our **Zero-Pixel Tolerance** framework.
-- [ ] Update `README.md` and `AGENTS.md` with GUI workspace instructions (`nix run .#mathpub-workspace`).
+### Phase 5: Nix Packaging, `tauri-driver` & E2E Screenshots
+- [ ] Add `packages.mathpub-gui` and `apps.mathpub-gui` to `flake.nix`.
+- [ ] Configure `tauri-driver` in `tests/e2e/002_gui_workspace/`.
+- [ ] Implement Playwright E2E screenshot testing suite using `GUIStepHelper` to capture 0-pixel visual baselines of the Tauri application.
+- [ ] Update `README.md` and `AGENTS.md` with GUI workspace instructions (`nix run .#mathpub-gui`).
 
 ---
 
 ## 4. Verification & Testing Strategy
 
 - **Unit Tests**: Test `PTYManager` process spawning, `synctex` coordinate parsing, and source-map resolution in `tests/test_gui.py`.
-- **E2E Visual Tests**: Playwright scenario (`tests/e2e/002_gui_workspace/`) captures split-pane visual snapshots, verifying terminal output and overlay bounding box positioning against committed 0-pixel tolerance baselines.
+- **Tauri E2E Visual Tests**: Playwright scenario (`tests/e2e/002_gui_workspace/`) launched via `tauri-driver` captures native webview visual snapshots, verifying terminal output and overlay bounding box positioning against committed 0-pixel tolerance baselines.
