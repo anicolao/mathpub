@@ -696,6 +696,7 @@ def compile_pdf(
     command = [
         "latexmk",
         engine,
+        "-synctex=1",
         "-interaction=nonstopmode",
         "-halt-on-error",
         "-file-line-error",
