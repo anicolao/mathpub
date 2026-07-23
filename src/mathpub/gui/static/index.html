@@ -34,7 +34,7 @@
     <!-- Resizer Divider -->
     <div class="pane-resizer" id="pane-resizer"></div>
 
-    <!-- Right Pane: PDF Viewer & SyncTeX Overlay -->
+    <!-- Right Pane: PDF Preview & SyncTeX Overlay -->
     <section class="pane pane-right" id="pane-right">
       <div class="pane-header">
         <h2>Document Preview</h2>
@@ -43,7 +43,7 @@
         </select>
       </div>
       <div class="pdf-viewer-wrapper" id="pdf-wrapper">
-        <iframe id="pdf-frame" class="pdf-frame" src="about:blank"></iframe>
+        <img id="pdf-preview" class="pdf-preview" alt="First page of the selected PDF">
         <div class="pdf-placeholder" id="pdf-placeholder">
           <p>No built PDF selected</p>
           <code>mathpub build publications/physics-practice.toml --seed 2026 --variant A</code>

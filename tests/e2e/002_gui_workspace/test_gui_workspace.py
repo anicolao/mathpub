@@ -28,7 +28,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
     screenshots_dir.mkdir(exist_ok=True)
     diffs_dir.mkdir(exist_ok=True)
 
-    # Pre-build physics practice PDF so right pane iframe renders the compiled PDF in WebKit
+    # Pre-build physics practice PDF so the right pane renders its first page.
     project = find_project()
     pub_path = project.root / "publications/physics-practice.toml"
     if pub_path.exists():
@@ -108,6 +108,8 @@ def test_gui_workspace_e2e(update_baselines: bool):
             expected_pdf = "build/physics.practice/A/physics.practice-A-student.pdf"
             assert page.locator(f'#pdf-select option[value="{expected_pdf}"]').count() == 1
             page.select_option("#pdf-select", expected_pdf)
+            page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
+            assert page.locator("#pdf-preview").is_visible()
 
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
             baseline_path = screenshots_dir / "000-initial-workspace-load.png"
@@ -140,7 +142,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
-                "- [x] PDF viewer dropdown populates and renders document in WebKit preview\n"
+                "- [x] PDF dropdown loads and displays the rendered first page\n"
             )
             readme_path.write_text(readme_content)
 

@@ -10,6 +10,7 @@ import json
 import mimetypes
 import re
 import struct
+import subprocess
 import webbrowser
 from pathlib import Path
 
@@ -163,6 +164,61 @@ class WorkspaceServer:
             _close_writer(writer)
             return
 
+        if path.startswith("/api/pdf-preview"):
+            from urllib.parse import parse_qs, urlparse
+
+            parsed = urlparse(path)
+            query = parse_qs(parsed.query)
+            pdf_rel_path = query.get("path", [""])[0]
+
+            if pdf_rel_path:
+                project_root = Path.cwd().resolve()
+                target_pdf = (project_root / pdf_rel_path).resolve()
+                if (
+                    target_pdf.exists()
+                    and target_pdf.is_file()
+                    and target_pdf.is_relative_to(project_root)
+                ):
+                    try:
+                        rendered = subprocess.run(
+                            [
+                                "pdftocairo",
+                                "-png",
+                                "-singlefile",
+                                "-f",
+                                "1",
+                                "-l",
+                                "1",
+                                "-r",
+                                "96",
+                                str(target_pdf),
+                                "-",
+                            ],
+                            check=True,
+                            capture_output=True,
+                            timeout=30,
+                        )
+                    except (OSError, subprocess.SubprocessError):
+                        response = (
+                            b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
+                        )
+                    else:
+                        content = rendered.stdout
+                        response = (
+                            f"HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n"
+                            f"Content-Length: {len(content)}\r\n\r\n"
+                        ).encode() + content
+                    writer.write(response)
+                    await writer.drain()
+                    _close_writer(writer)
+                    return
+
+            response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
         if path.startswith("/api/pdf"):
             from urllib.parse import parse_qs, urlparse
 
@@ -171,11 +227,12 @@ class WorkspaceServer:
             pdf_rel_path = query.get("path", [""])[0]
 
             if pdf_rel_path:
-                target_pdf = (Path.cwd() / pdf_rel_path).resolve()
+                project_root = Path.cwd().resolve()
+                target_pdf = (project_root / pdf_rel_path).resolve()
                 if (
                     target_pdf.exists()
                     and target_pdf.is_file()
-                    and str(target_pdf).startswith(str(Path.cwd()))
+                    and target_pdf.is_relative_to(project_root)
                 ):
                     content = target_pdf.read_bytes()
                     response = (

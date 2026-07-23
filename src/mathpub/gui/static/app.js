@@ -97,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 4. PDF Discovery & Auto-Loading Logic
   const pdfSelect = document.getElementById("pdf-select");
-  const pdfFrame = document.getElementById("pdf-frame");
+  const pdfPreview = document.getElementById("pdf-preview");
   const pdfPlaceholder = document.getElementById("pdf-placeholder");
   let knownPdfs = new Set();
   let refreshTimer = null;
@@ -138,12 +138,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function loadPdf(path) {
     if (!path) {
-      pdfFrame.style.display = "none";
+      pdfPreview.style.display = "none";
       pdfPlaceholder.style.display = "block";
       return;
     }
-    pdfFrame.src = `/api/pdf?path=${encodeURIComponent(path)}`;
-    pdfFrame.style.display = "block";
+    pdfPreview.src = `/api/pdf-preview?path=${encodeURIComponent(path)}`;
+    pdfPreview.style.display = "block";
     pdfPlaceholder.style.display = "none";
   }
 
