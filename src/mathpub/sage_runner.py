@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import traceback
 from pathlib import Path
 
 # The installed script lives inside a Python 3.12 package while Sage uses its
@@ -69,7 +70,12 @@ def main() -> int:
     try:
         result = execute(request)
     except Exception as error:  # runner boundary returns diagnostics to orchestrator
-        result = {"schema": 1, "status": "error", "error": f"{type(error).__name__}: {error}"}
+        result = {
+            "schema": 1,
+            "status": "error",
+            "error": f"{type(error).__name__}: {error}",
+            "traceback": traceback.format_exc(),
+        }
     output_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0 if result["status"] == "ok" else 1
 
