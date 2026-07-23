@@ -180,6 +180,7 @@ class WorkspaceServer:
                     content = target_pdf.read_bytes()
                     response = (
                         f"HTTP/1.1 200 OK\r\nContent-Type: application/pdf\r\n"
+                        f'Content-Disposition: inline; filename="{target_pdf.name}"\r\n'
                         f"Content-Length: {len(content)}\r\n\r\n"
                     ).encode() + content
                     writer.write(response)

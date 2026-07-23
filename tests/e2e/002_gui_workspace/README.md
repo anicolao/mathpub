@@ -2,11 +2,11 @@
 
 Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:
 
-## Initial Workspace Load
+## Initial Workspace Load (WebKit / Safari Engine)
 
 ![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)
 
 **Verifications:**
 - [x] Header brand and subtitle render correctly
-- [x] Terminal PTY pane loads xterm.js canvas
-- [x] PDF viewer pane renders with split-pane layout
+- [x] Isolated PTY terminal emulator loads with clean prompt
+- [x] PDF viewer dropdown populates and renders document in WebKit preview iframe

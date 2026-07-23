@@ -14,7 +14,17 @@ class PTYManager:
     """Manages a Unix pseudo-terminal (PTY) child process for embedded terminal emulation."""
 
     def __init__(self, command: list[str] | None = None, cwd: str | None = None) -> None:
-        self.command = command or [os.environ.get("SHELL", "/bin/bash")]
+        if command:
+            self.command = command
+        else:
+            shell_bin = os.environ.get("SHELL", "/bin/bash")
+            if "zsh" in shell_bin:
+                self.command = [shell_bin, "-f", "-i"]
+            elif "bash" in shell_bin:
+                self.command = [shell_bin, "--noprofile", "--norc", "-i"]
+            else:
+                self.command = [shell_bin]
+
         self.cwd = cwd or os.getcwd()
         self.master_fd: int | None = None
         self.pid: int | None = None
@@ -42,8 +52,15 @@ class PTYManager:
 
             os.chdir(self.cwd)
             env = dict(os.environ)
+            env.pop("PROMPT_COMMAND", None)
+            env.pop("ENV", None)
+            env.pop("BASH_ENV", None)
             env["TERM"] = "xterm-256color"
             env["COLORTERM"] = "truecolor"
+            env["PS1"] = "mathpub$ "
+            env["PROMPT"] = "mathpub$ "
+            env["ZDOTDIR"] = "/nonexistent"
+            env["HISTFILE"] = "/dev/null"
             os.execvpe(self.command[0], self.command, env)
         else:  # Parent process
             os.close(slave_fd)
