@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Mathpub Mono";
+  src: url("/assets/mathpub-mono.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: block;
+}
+
 :root {
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
@@ -17,7 +25,7 @@
 }
 
 body {
-  font-family: monospace, sans-serif;
+  font-family: "Mathpub Mono", monospace;
   background-color: var(--bg-primary);
   color: var(--text-main);
   height: 100vh;
@@ -132,7 +140,7 @@ body {
   border-radius: 4px;
   padding: 2px 23px 2px 6px;
   font-size: 0.75rem;
-  font-family: monospace;
+  font-family: "Mathpub Mono", monospace;
   max-width: 280px;
 }
 

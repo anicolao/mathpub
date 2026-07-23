@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const termContainer = document.getElementById("terminal-container");
   const term = new Terminal({
     cursorBlink: false,
-    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    fontFamily: '"Mathpub Mono", monospace',
     fontSize: 13,
     theme: {
       background: "#000000",
