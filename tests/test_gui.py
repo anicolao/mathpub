@@ -67,6 +67,11 @@ def test_workspace_server_http():
         html = req_root.read().decode("utf-8")
         assert "mathpub Interactive Workspace" in html
 
+        req_font = urllib.request.urlopen("http://127.0.0.1:8912/assets/mathpub-mono.ttf")
+        assert req_font.status == 200
+        assert req_font.headers.get_content_type() == "font/ttf"
+        assert len(req_font.read()) > 0
+
         # Test /api/publications endpoint
         req_pubs = urllib.request.urlopen("http://127.0.0.1:8912/api/publications")
         assert req_pubs.status == 200

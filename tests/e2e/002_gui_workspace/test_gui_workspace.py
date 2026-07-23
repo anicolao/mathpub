@@ -82,6 +82,8 @@ def test_gui_workspace_e2e(update_baselines: bool):
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
+            page.evaluate("document.fonts.ready")
+            assert page.evaluate("document.fonts.check('12px \"Mathpub Mono\"')")
 
             # 1. Verify Header Elements
             assert page.locator(".logo").text_content() == "mathpub"

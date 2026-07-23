@@ -8,6 +8,7 @@ import contextlib
 import hashlib
 import json
 import mimetypes
+import os
 import re
 import struct
 import webbrowser
@@ -89,6 +90,8 @@ class WorkspaceServer:
     def __init__(self, host: str = "127.0.0.1", port: int = 8765) -> None:
         self.host = host
         self.port = port
+        font_path = os.environ.get("MATHPUB_GUI_FONT")
+        self.gui_font = Path(font_path).resolve() if font_path else None
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -191,6 +194,21 @@ class WorkspaceServer:
             response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
             writer.write(response)
             await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path == "/assets/mathpub-mono.ttf":
+            if self.gui_font and self.gui_font.is_file():
+                content = self.gui_font.read_bytes()
+                response = (
+                    f"HTTP/1.1 200 OK\r\nContent-Type: font/ttf\r\n"
+                    f"Content-Length: {len(content)}\r\n\r\n"
+                ).encode() + content
+                writer.write(response)
+                await writer.drain()
+            else:
+                writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+                await writer.drain()
             _close_writer(writer)
             return
 
