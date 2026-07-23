@@ -60,9 +60,9 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [ ] Add CLI subcommand `mathpub workspace` and Nix app `nix run .#mathpub-gui`.
 
 ### Phase 2: SyncTeX Parser & Spatial Bounding Box API
-- [ ] Implement `src/mathpub/gui/synctex.py` to parse `.synctex.gz` or run `synctex view` coordinate lookups.
-- [ ] Create endpoint `GET /api/synctex/boxes` that takes a publication ID and page number, returning bounding box coordinates `[x, y, w, h]` associated with generated line numbers.
-- [ ] Wire line resolution to `source-map.json` to map bounding boxes to `(component_id, fragment, authored_source)`.
+- [x] Implement `src/mathpub/gui/synctex.py` to parse `.synctex.gz` or run `synctex view` coordinate lookups.
+- [x] Create endpoint `GET /api/synctex/boxes` that takes a publication ID and page number, returning bounding box coordinates `[x, y, w, h]` associated with generated line numbers.
+- [x] Wire line resolution to `source-map.json` to map bounding boxes to `(component_id, fragment, authored_source)`.
 
 ### Phase 3: Interactive PDF Viewer & Annotation Overlay
 - [ ] Implement dual-layer PDF container (native PDF embed + transparent SVG overlay).

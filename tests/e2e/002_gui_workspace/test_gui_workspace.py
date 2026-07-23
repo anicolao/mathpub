@@ -111,6 +111,34 @@ def test_gui_workspace_e2e(update_baselines: bool):
             page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
             assert page.locator("#pdf-preview").is_visible()
 
+            boxes_response = page.request.get(
+                f"http://127.0.0.1:{bound_port}/api/synctex/boxes"
+                "?publication_id=physics.practice"
+                "&variant=A"
+                "&projection=student"
+                "&page=1"
+            )
+            assert boxes_response.ok
+            boxes_payload = boxes_response.json()
+            assert boxes_payload["page_size"] == {
+                "width": 612.0,
+                "height": 792.0,
+                "unit": "pt",
+            }
+            assert {(box["component_id"], box["fragment"]) for box in boxes_payload["boxes"]} >= {
+                ("physics.energy.ramp-speed", "prompt"),
+                ("physics.forces.car-curve", "prompt"),
+            }
+            page_width = boxes_payload["page_size"]["width"]
+            page_height = boxes_payload["page_size"]["height"]
+            assert all(
+                box["w"] > 0
+                and box["h"] > 0
+                and 0 <= box["x"] < box["x"] + box["w"] <= page_width
+                and 0 <= box["y"] < box["y"] + box["h"] <= page_height
+                for box in boxes_payload["boxes"]
+            )
+
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
             baseline_path = screenshots_dir / "000-initial-workspace-load.png"
             candidate_path = scenario_dir / "temp-candidate.png"

@@ -630,11 +630,19 @@ def build(
             final_pdf = temporary / f"{stem}.pdf"
             if pdf_path != final_pdf:
                 pdf_path.replace(final_pdf)
+            synctex_path = temporary / f"{stem}.synctex.gz"
+            if not synctex_path.is_file():
+                raise MathpubError(
+                    "MP-TEX-012",
+                    f"TeX engine did not produce SyncTeX data for {projection}",
+                    exit_code=6,
+                )
             log_path.replace(log_dir / log_path.name)
             outputs.append(
                 {
                     "projection": projection,
                     "path": final_pdf.name,
+                    "synctex": synctex_path.name,
                     **_inspect_pdf(
                         final_pdf,
                         publication["component_chapters"][0]["lessons"][0]["title"]
