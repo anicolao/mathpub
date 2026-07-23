@@ -120,11 +120,16 @@ body {
 }
 
 .pdf-select {
+  appearance: none;
+  -webkit-appearance: none;
   background: var(--bg-tertiary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 7px center;
+  background-repeat: no-repeat;
   color: var(--text-main);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 2px 6px;
+  padding: 2px 23px 2px 6px;
   font-size: 0.75rem;
   font-family: monospace;
   max-width: 280px;

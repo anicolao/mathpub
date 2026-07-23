@@ -57,7 +57,10 @@ def instantiate(
         "overrides": overrides or {},
     }
     runner = Path(__file__).with_name("sage_runner.py")
-    with tempfile.TemporaryDirectory(prefix="mathpub-sage-") as temporary:
+    # Sage 10.9 asks GAP to print its root paths and assumes the answer occupies
+    # one line. GAP wraps that line when Nix's sandbox gives HOME a long path,
+    # so keep the isolated generator home short as well as writable.
+    with tempfile.TemporaryDirectory(prefix="mathpub-sage-", dir="/tmp") as temporary:
         request_path = Path(temporary) / "request.json"
         output_path = Path(temporary) / "instance.json"
         request_path.write_text(canonical_json(request), encoding="utf-8")
@@ -110,9 +113,10 @@ def instantiate(
             exit_code=5,
         )
     if result["status"] != "ok":
+        diagnostic = result.get("traceback") or result.get("error")
         raise MathpubError(
             "MP-GEN-001",
-            f"Sage runner failed for {entry.metadata['id']}: {result.get('error')}",
+            f"Sage runner failed for {entry.metadata['id']}: {diagnostic}",
             exit_code=1,
         )
     result["sha256"] = instance_hash(result)

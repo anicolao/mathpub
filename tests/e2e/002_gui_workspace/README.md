@@ -9,4 +9,4 @@ Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:
 **Verifications:**
 - [x] Header brand and subtitle render correctly
 - [x] Isolated PTY terminal emulator loads with clean prompt
-- [x] PDF viewer dropdown populates and renders document in WebKit preview iframe
+- [x] PDF viewer dropdown populates and renders document in WebKit preview
