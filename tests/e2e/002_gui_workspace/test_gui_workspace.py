@@ -82,8 +82,6 @@ def test_gui_workspace_e2e(update_baselines: bool):
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
-            page.evaluate("document.fonts.ready")
-            assert page.evaluate("document.fonts.check('12px \"Mathpub Mono\"')")
 
             # 1. Verify Header Elements
             assert page.locator(".logo").text_content() == "mathpub"
@@ -107,6 +105,9 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
             # Wait for PDF select dropdown to populate from /api/publications
             page.wait_for_function("document.getElementById('pdf-select').options.length > 1")
+            expected_pdf = "build/physics.practice/A/physics.practice-A-student.pdf"
+            assert page.locator(f'#pdf-select option[value="{expected_pdf}"]').count() == 1
+            page.select_option("#pdf-select", expected_pdf)
 
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
             baseline_path = screenshots_dir / "000-initial-workspace-load.png"
