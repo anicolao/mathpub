@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -34,7 +35,19 @@ def test_gui_workspace_e2e(update_baselines: bool):
         build(project, pub_path, root_seed="2026", variant="A", replace=True)
 
     with sync_playwright() as p:
-        browser = p.webkit.launch(headless=True)
+        if sys.platform == "darwin":
+            browser = p.webkit.launch(headless=True)
+        else:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--font-render-hinting=none",
+                ],
+            )
 
         bound_port = 0
         server = WorkspaceServer(host="127.0.0.1", port=0)
