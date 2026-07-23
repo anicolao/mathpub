@@ -14,7 +14,6 @@
           pkgs = pkgsFor system;
           python = pkgs.python312;
           pythonPackages = pkgs.python312Packages;
-          guiFont = "${pkgs.dejavu_fonts}/share/fonts/truetype/DejaVuSansMono.ttf";
           sage = pkgs.sage.override {
             inherit pkgs;
             requireSageTests = false;
@@ -59,14 +58,12 @@
               tex
             ];
             preCheck = ''
-              export MATHPUB_GUI_FONT="${guiFont}"
               export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
               export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
             '';
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/mathpub \
-                --set MATHPUB_GUI_FONT "${guiFont}" \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git sage tex pkgs.poppler-utils ]}
               makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
                 --add-flags "workspace"
@@ -99,7 +96,6 @@
         let
           pkgs = pkgsFor system;
           package = self.packages.${system}.mathpub;
-          guiFont = "${pkgs.dejavu_fonts}/share/fonts/truetype/DejaVuSansMono.ttf";
           sage = pkgs.sage.override {
             inherit pkgs;
             requireSageTests = false;
@@ -139,7 +135,6 @@
             ];
             shellHook = ''
               export PYTHONPATH="$PWD/src''${PYTHONPATH:+:$PYTHONPATH}"
-              export MATHPUB_GUI_FONT="${guiFont}"
               export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
               export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
             '';
