@@ -199,6 +199,10 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 and 0 <= box["y"] < box["y"] + box["h"] <= page_height
                 for box in boxes_payload["boxes"]
             )
+            page.wait_for_function(
+                f"document.querySelectorAll('.synctex-region').length === "
+                f"{len(boxes_payload['boxes'])}"
+            )
 
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
             _verify_screenshot(
@@ -210,16 +214,46 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 update_baselines,
             )
 
-            # 5. Display mapped regions and verify their rendered PDF geometry.
+            # 5. Hover and click a mapped region without first revealing every region.
             toggle = page.locator("#mapped-regions-toggle")
             assert toggle.is_enabled()
             assert toggle.get_attribute("aria-pressed") == "false"
-            assert page.locator(".synctex-region").count() == 0
-            toggle.click()
-            page.wait_for_function(
-                f"document.querySelectorAll('.synctex-region').length === "
-                f"{len(boxes_payload['boxes'])}"
+            assert page.locator(".synctex-region").count() == len(boxes_payload["boxes"])
+            assert all(
+                label.evaluate("element => getComputedStyle(element).opacity") == "0"
+                for label in page.locator(".synctex-region-label").all()
             )
+            ramp_region = page.locator(
+                '.synctex-region[data-component-id="physics.energy.ramp-speed"]'
+            )
+            ramp_region.hover()
+            assert (
+                ramp_region.locator(".synctex-region-label").evaluate(
+                    "element => getComputedStyle(element).opacity"
+                )
+                == "1"
+            )
+
+            _verify_screenshot(
+                page,
+                scenario_dir,
+                screenshots_dir,
+                diffs_dir,
+                "001-hovered-region-visible",
+                update_baselines,
+            )
+
+            ramp_region.click()
+            feedback_dialog = page.locator("#feedback-dialog")
+            assert feedback_dialog.is_visible()
+            assert page.locator("#feedback-component").text_content() == (
+                "physics.energy.ramp-speed"
+            )
+            page.locator("#feedback-close").click()
+            assert not feedback_dialog.is_visible()
+
+            # 6. Reveal every mapped region and verify its rendered PDF geometry.
+            toggle.click()
             assert toggle.get_attribute("aria-pressed") == "true"
             assert toggle.text_content() == "Hide mapped regions"
             assert page.locator("#status-synctex").text_content() == (
@@ -282,10 +316,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 update_baselines,
             )
 
-            # 6. Select a region and verify its source-aware feedback modal.
-            ramp_region = page.locator(
-                '.synctex-region[data-component-id="physics.energy.ramp-speed"]'
-            )
+            # 7. Verify the mapped region's source-aware feedback modal.
             assert ramp_region.get_attribute("role") == "button"
             assert ramp_region.get_attribute("tabindex") == "0"
             ramp_region.click()
@@ -316,7 +347,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 update_baselines,
             )
 
-            # 7. Insert structured feedback into the active terminal without executing it.
+            # 8. Insert structured feedback into the active terminal without executing it.
             feedback = "Make the ramp diagram labels larger and clarify why energy is conserved."
             page.locator("#feedback-text").fill(feedback)
             page.locator("#feedback-send").click()
@@ -340,13 +371,15 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 update_baselines,
             )
 
-            # 8. Generate Walkthrough README.md
+            # 9. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
                 "Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:\n\n"
                 "## Initial Workspace Load (WebKit / Safari Engine)\n\n"
                 "![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)\n\n"
+                "## Hovered SyncTeX Region\n\n"
+                "![Hovered Region](./screenshots/001-hovered-region-visible.png)\n\n"
                 "## SyncTeX Mapped Regions\n\n"
                 "![Mapped Regions](./screenshots/001-mapped-regions-visible.png)\n\n"
                 "## Element Feedback Dialog\n\n"
@@ -357,6 +390,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
                 "- [x] PDF dropdown loads and displays the rendered first page\n"
+                "- [x] Hovering reveals one clickable mapped region without a prior toggle\n"
                 "- [x] Mapped component regions align with their rendered PDF content\n"
                 "- [x] Clicking a mapped region opens source-aware feedback controls\n"
                 "- [x] Feedback is inserted into the PTY for review without being executed\n"

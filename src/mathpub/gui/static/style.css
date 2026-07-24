@@ -219,11 +219,16 @@ body {
 }
 
 .synctex-region-box {
-  fill: rgba(245, 158, 11, 0.16);
+  fill: transparent;
   shape-rendering: crispEdges;
-  stroke: #f59e0b;
+  stroke: transparent;
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
+}
+
+.synctex-overlay.show-all-regions .synctex-region-box {
+  fill: rgba(245, 158, 11, 0.16);
+  stroke: #f59e0b;
 }
 
 .synctex-region:hover .synctex-region-box,
@@ -235,6 +240,7 @@ body {
 
 .synctex-region-label-bg {
   fill: rgba(251, 191, 36, 0.95);
+  opacity: 0;
   shape-rendering: crispEdges;
 }
 
@@ -243,8 +249,18 @@ body {
   fill: #111827;
   font-family: monospace;
   font-size: 10px;
+  opacity: 0;
   pointer-events: none;
   user-select: none;
+}
+
+.synctex-overlay.show-all-regions .synctex-region-label-bg,
+.synctex-overlay.show-all-regions .synctex-region-label,
+.synctex-region:hover .synctex-region-label-bg,
+.synctex-region:hover .synctex-region-label,
+.synctex-region:focus .synctex-region-label-bg,
+.synctex-region:focus .synctex-region-label {
+  opacity: 1;
 }
 
 .feedback-dialog {

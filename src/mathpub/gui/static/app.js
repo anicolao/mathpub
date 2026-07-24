@@ -118,6 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let mappedRegionsVisible = false;
   let selectedFeedbackBox = null;
   let refreshTimer = null;
+  let mappingRequestId = 0;
 
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS(svgNamespace, name);
@@ -145,9 +146,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateMappingAvailability() {
-    mappedRegionsToggle.setAttribute("aria-pressed", "false");
     if (!currentPublication) {
       mappedRegionsToggle.disabled = true;
+      mappedRegionsToggle.setAttribute("aria-pressed", "false");
       mappedRegionsToggle.textContent = "Show mapped regions";
       mappedRegionsToggle.removeAttribute("title");
       synctexStatus.textContent = "No mappings selected";
@@ -156,10 +157,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (mappingAvailable(currentPublication)) {
-      mappedRegionsToggle.disabled = false;
-      mappedRegionsToggle.textContent = "Show mapped regions";
-      mappedRegionsToggle.title = "Show source regions mapped through SyncTeX";
-      synctexStatus.textContent = "SyncTeX Ready";
+      mappedRegionsToggle.disabled = !currentSpatialIndex;
+      mappedRegionsToggle.setAttribute(
+        "aria-pressed",
+        mappedRegionsVisible ? "true" : "false"
+      );
+      mappedRegionsToggle.textContent = mappedRegionsVisible
+        ? "Hide mapped regions"
+        : "Show mapped regions";
+      mappedRegionsToggle.title = mappedRegionsVisible
+        ? "Hide persistent outlines; regions remain available on hover"
+        : "Show all source regions; regions are already available on hover";
+      synctexStatus.textContent = currentSpatialIndex
+        ? mappedRegionsVisible
+          ? `${currentSpatialIndex.boxes.length} regions mapped`
+          : "SyncTeX Ready"
+        : "Mapping regions…";
       synctexStatus.removeAttribute("title");
       return;
     }
@@ -171,23 +184,26 @@ document.addEventListener("DOMContentLoaded", () => {
         : null
     ].filter(Boolean).join("\n");
     mappedRegionsToggle.disabled = true;
+    mappedRegionsToggle.setAttribute("aria-pressed", "false");
     mappedRegionsToggle.textContent = "Mappings need rebuild";
     mappedRegionsToggle.title = details;
     synctexStatus.textContent = "Rebuild PDF for mappings";
     synctexStatus.title = details;
   }
 
-  function hideMappedRegions() {
+  function clearMappedRegions() {
+    mappingRequestId += 1;
     mappedRegionsVisible = false;
     currentSpatialIndex = null;
     synctexOverlay.replaceChildren();
+    synctexOverlay.classList.remove("show-all-regions");
     synctexOverlay.setAttribute("aria-hidden", "true");
     updateMappingAvailability();
   }
 
   function renderMappedRegions() {
     synctexOverlay.replaceChildren();
-    if (!mappedRegionsVisible || !currentSpatialIndex || !pdfPreview.naturalWidth) return;
+    if (!currentSpatialIndex || !pdfPreview.naturalWidth) return;
 
     const pageWidth = currentSpatialIndex.page_size.width;
     const pageHeight = currentSpatialIndex.page_size.height;
@@ -260,37 +276,46 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  async function showMappedRegions() {
+  async function loadMappedRegions() {
     if (!mappingAvailable(currentPublication)) return;
+    const requestId = ++mappingRequestId;
+    const publication = currentPublication;
     const params = new URLSearchParams({
-      publication_id: currentPublication.publication_id,
-      variant: currentPublication.variant,
-      projection: currentPublication.projection,
+      publication_id: publication.publication_id,
+      variant: publication.variant,
+      projection: publication.projection,
       page: "1"
     });
-    mappedRegionsToggle.disabled = true;
-    synctexStatus.textContent = "Mapping regions…";
+    updateMappingAvailability();
     try {
       const response = await fetch(`/api/synctex/boxes?${params}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || `SyncTeX request failed: ${response.status}`);
       }
-      currentSpatialIndex = await response.json();
-      mappedRegionsVisible = true;
-      mappedRegionsToggle.setAttribute("aria-pressed", "true");
-      mappedRegionsToggle.textContent = "Hide mapped regions";
+      const spatialIndex = await response.json();
+      if (requestId !== mappingRequestId || publication !== currentPublication) return;
+      currentSpatialIndex = spatialIndex;
       synctexOverlay.setAttribute("aria-hidden", "false");
-      synctexStatus.textContent = `${currentSpatialIndex.boxes.length} regions mapped`;
       renderMappedRegions();
+      updateMappingAvailability();
     } catch (error) {
-      hideMappedRegions();
+      if (requestId !== mappingRequestId || publication !== currentPublication) return;
+      currentSpatialIndex = null;
+      synctexOverlay.replaceChildren();
+      synctexOverlay.setAttribute("aria-hidden", "true");
       synctexStatus.textContent = "SyncTeX error";
       synctexStatus.title = error.message;
       mappedRegionsToggle.title = error.message;
-    } finally {
-      mappedRegionsToggle.disabled = !mappingAvailable(currentPublication);
+      mappedRegionsToggle.disabled = true;
     }
+  }
+
+  function setMappedRegionsVisible(visible) {
+    if (!currentSpatialIndex) return;
+    mappedRegionsVisible = visible;
+    synctexOverlay.classList.toggle("show-all-regions", visible);
+    updateMappingAvailability();
   }
 
   async function refreshPublications() {
@@ -345,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function loadPdf(path) {
     currentPublication = publicationsByPath.get(path) || null;
-    hideMappedRegions();
+    clearMappedRegions();
     if (!path) {
       pdfPreview.style.display = "none";
       pdfPlaceholder.style.display = "block";
@@ -354,6 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
     pdfPreview.src = `/api/pdf-preview?path=${encodeURIComponent(path)}`;
     pdfPreview.style.display = "block";
     pdfPlaceholder.style.display = "none";
+    loadMappedRegions();
   }
 
   pdfSelect.addEventListener("change", (e) => {
@@ -361,11 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   mappedRegionsToggle.addEventListener("click", () => {
-    if (mappedRegionsVisible) {
-      hideMappedRegions();
-    } else {
-      showMappedRegions();
-    }
+    setMappedRegionsVisible(!mappedRegionsVisible);
   });
 
   feedbackClose.addEventListener("click", () => feedbackDialog.close());
