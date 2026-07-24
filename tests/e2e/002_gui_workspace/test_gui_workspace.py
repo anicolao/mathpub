@@ -187,7 +187,6 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
             preview_metrics = page.locator("#pdf-preview").evaluate(
                 """preview => {
-                  const rect = preview.getBoundingClientRect();
                   const scale = Math.min(
                     preview.clientWidth / preview.naturalWidth,
                     preview.clientHeight / preview.naturalHeight
@@ -195,16 +194,23 @@ def test_gui_workspace_e2e(update_baselines: bool):
                   const width = preview.naturalWidth * scale;
                   const height = preview.naturalHeight * scale;
                   return {
-                    left: rect.left + (preview.clientWidth - width) / 2,
-                    top: rect.top,
+                    left: (preview.clientWidth - width) / 2,
+                    top: 0,
                     width,
                     height
                   };
                 }"""
             )
             rendered_regions = {
-                region.get_attribute("data-component-id"): region.bounding_box()
-                for region in page.locator(".synctex-region").all()
+                region.get_attribute("data-component-id"): region.evaluate(
+                    """element => ({
+                      x: Number(element.getAttribute('x')),
+                      y: Number(element.getAttribute('y')),
+                      width: Number(element.getAttribute('width')),
+                      height: Number(element.getAttribute('height'))
+                    })"""
+                )
+                for region in page.locator(".synctex-region-box").all()
             }
             for box in boxes_payload["boxes"]:
                 region = rendered_regions[box["component_id"]]
@@ -226,7 +232,65 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 update_baselines,
             )
 
-            # 6. Generate Walkthrough README.md
+            # 6. Select a region and verify its source-aware feedback modal.
+            ramp_region = page.locator(
+                '.synctex-region[data-component-id="physics.energy.ramp-speed"]'
+            )
+            assert ramp_region.get_attribute("role") == "button"
+            assert ramp_region.get_attribute("tabindex") == "0"
+            ramp_region.click()
+            feedback_dialog = page.locator("#feedback-dialog")
+            assert feedback_dialog.is_visible()
+            assert page.locator("#feedback-component").text_content() == (
+                "physics.energy.ramp-speed"
+            )
+            assert page.locator("#feedback-fragment").text_content() == "prompt"
+            assert page.locator("#feedback-source").text_content() == (
+                "components/questions/physics/energy/ramp-speed/prompt.tex"
+            )
+            page.locator("#feedback-close").click()
+            assert not feedback_dialog.is_visible()
+            ramp_region.focus()
+            page.keyboard.press("Enter")
+            assert feedback_dialog.is_visible()
+            assert page.locator("#feedback-text").evaluate(
+                "element => element === document.activeElement"
+            )
+
+            _verify_screenshot(
+                page,
+                scenario_dir,
+                screenshots_dir,
+                diffs_dir,
+                "002-element-feedback-dialog",
+                update_baselines,
+            )
+
+            # 7. Insert structured feedback into the active terminal without executing it.
+            feedback = "Make the ramp diagram labels larger and clarify why energy is conserved."
+            page.locator("#feedback-text").fill(feedback)
+            page.locator("#feedback-send").click()
+            assert not feedback_dialog.is_visible()
+            injected_prefix = "Review mathpub component physics.energy.ramp-speed"
+            page.wait_for_function(
+                """prefix => document.querySelector('.xterm-rows').textContent.includes(prefix)""",
+                arg=injected_prefix,
+            )
+            terminal_text = page.locator(".xterm-rows").text_content()
+            assert injected_prefix in terminal_text
+            assert "command not found" not in terminal_text
+            assert page.locator("#status-synctex").text_content() == "Feedback inserted"
+
+            _verify_screenshot(
+                page,
+                scenario_dir,
+                screenshots_dir,
+                diffs_dir,
+                "003-feedback-inserted-in-terminal",
+                update_baselines,
+            )
+
+            # 8. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
@@ -235,11 +299,17 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)\n\n"
                 "## SyncTeX Mapped Regions\n\n"
                 "![Mapped Regions](./screenshots/001-mapped-regions-visible.png)\n\n"
+                "## Element Feedback Dialog\n\n"
+                "![Element Feedback Dialog](./screenshots/002-element-feedback-dialog.png)\n\n"
+                "## Feedback Inserted into the Active Terminal\n\n"
+                "![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
                 "- [x] PDF dropdown loads and displays the rendered first page\n"
                 "- [x] Mapped component regions align with their rendered PDF content\n"
+                "- [x] Clicking a mapped region opens source-aware feedback controls\n"
+                "- [x] Feedback is inserted into the PTY for review without being executed\n"
             )
             readme_path.write_text(readme_content)
 

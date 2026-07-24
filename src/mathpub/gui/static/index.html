@@ -53,7 +53,12 @@
       </div>
       <div class="pdf-viewer-wrapper" id="pdf-wrapper">
         <img id="pdf-preview" class="pdf-preview" alt="First page of the selected PDF">
-        <div id="synctex-overlay" class="synctex-overlay" aria-hidden="true"></div>
+        <svg
+          id="synctex-overlay"
+          class="synctex-overlay"
+          aria-label="Mapped document regions"
+          aria-hidden="true"
+        ></svg>
         <div class="pdf-placeholder" id="pdf-placeholder">
           <p>No built PDF selected</p>
           <code>mathpub build publications/physics-practice.toml --seed 2026 --variant A</code>
@@ -61,6 +66,58 @@
       </div>
     </section>
   </main>
+
+  <dialog id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-title">
+    <form id="feedback-form" method="dialog">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Element feedback</span>
+          <h2 id="feedback-title">Send guidance to the terminal</h2>
+        </div>
+        <button
+          id="feedback-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close feedback dialog"
+        >×</button>
+      </div>
+
+      <dl class="feedback-context">
+        <div>
+          <dt>Component</dt>
+          <dd id="feedback-component"></dd>
+        </div>
+        <div>
+          <dt>Fragment</dt>
+          <dd id="feedback-fragment"></dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd id="feedback-source"></dd>
+        </div>
+      </dl>
+
+      <label for="feedback-text">What should change?</label>
+      <textarea
+        id="feedback-text"
+        name="feedback"
+        rows="5"
+        maxlength="2000"
+        placeholder="Describe the revision you want the active terminal agent to make."
+        required
+      ></textarea>
+      <p class="feedback-help">
+        The request will be inserted at the active terminal prompt for review before you submit it.
+      </p>
+
+      <div class="feedback-actions">
+        <button id="feedback-cancel" class="button-secondary" type="button">Cancel</button>
+        <button id="feedback-send" class="button-primary" type="submit">
+          Insert into terminal
+        </button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="./app.js"></script>
 </body>

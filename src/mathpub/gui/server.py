@@ -22,7 +22,9 @@ from mathpub.gui.terminal import PTYManager
 STATIC_DIR = Path(__file__).parent / "static"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+SOURCE_PATH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 HTTP_REASONS = {200: "OK", 400: "Bad Request", 404: "Not Found"}
+FEEDBACK_LIMIT = 2000
 
 
 def _websocket_accept_key(sec_key: str) -> str:
@@ -97,6 +99,33 @@ def _json_response(status: int, payload: dict[str, object]) -> bytes:
         "Content-Type: application/json\r\n"
         f"Content-Length: {len(body)}\r\n\r\n"
     ).encode() + body
+
+
+def _feedback_prompt(message: dict[str, object]) -> str | None:
+    """Convert validated element feedback into one safe terminal input line."""
+    fields = ("component_id", "fragment", "authored_source", "feedback")
+    if not all(isinstance(message.get(field), str) for field in fields):
+        return None
+
+    component_id = str(message["component_id"])
+    fragment = str(message["fragment"])
+    authored_source = str(message["authored_source"])
+    printable_feedback = "".join(
+        character if character.isprintable() else " " for character in str(message["feedback"])
+    )
+    feedback = " ".join(printable_feedback.split())
+    if (
+        not IDENTIFIER_RE.fullmatch(component_id)
+        or not IDENTIFIER_RE.fullmatch(fragment)
+        or not SOURCE_PATH_RE.fullmatch(authored_source)
+        or ".." in Path(authored_source).parts
+        or len(authored_source) > 500
+        or not feedback
+        or len(feedback) > FEEDBACK_LIMIT
+    ):
+        return None
+
+    return f"Review mathpub component {component_id} ({fragment}, {authored_source}): {feedback}"
 
 
 class WorkspaceServer:
@@ -387,6 +416,11 @@ class WorkspaceServer:
                                     continue
                                 if msg.get("type") == "input":
                                     pty.write(msg["data"].encode())
+                                    continue
+                                if msg.get("type") == "feedback":
+                                    prompt = _feedback_prompt(msg)
+                                    if prompt is not None:
+                                        pty.write(prompt.encode())
                                     continue
                             except json.JSONDecodeError:
                                 pass
