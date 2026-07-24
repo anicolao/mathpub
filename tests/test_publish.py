@@ -56,6 +56,7 @@ placement = "review.fixed"
     }
     for output in manifest["outputs"]:
         assert len(PdfReader(edition / output["path"]).pages) >= 1
+        assert (edition / output["synctex"]).is_file()
     student_pdf = next(
         output for output in manifest["outputs"] if output["projection"] == "student"
     )

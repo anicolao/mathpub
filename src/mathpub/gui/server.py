@@ -13,11 +13,16 @@ import struct
 import subprocess
 import webbrowser
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
+from mathpub.config import find_project
+from mathpub.gui.synctex import SyncTeXError, spatial_index
 from mathpub.gui.terminal import PTYManager
 
 STATIC_DIR = Path(__file__).parent / "static"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+HTTP_REASONS = {200: "OK", 400: "Bad Request", 404: "Not Found"}
 
 
 def _websocket_accept_key(sec_key: str) -> str:
@@ -84,6 +89,16 @@ def _close_writer(writer: asyncio.StreamWriter) -> None:
         writer.close()
 
 
+def _json_response(status: int, payload: dict[str, object]) -> bytes:
+    body = json.dumps(payload, sort_keys=True).encode()
+    reason = HTTP_REASONS[status]
+    return (
+        f"HTTP/1.1 {status} {reason}\r\n"
+        "Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n\r\n"
+    ).encode() + body
+
+
 class WorkspaceServer:
     """Workspace HTTP & WebSocket server for mathpub GUI."""
 
@@ -147,12 +162,34 @@ class WorkspaceServer:
             return
 
         if path.startswith("/api/publications"):
-            build_dir = Path.cwd() / "build"
+            project = find_project()
+            build_dir = project.root / project.config.get("build_dir", "build")
+            metadata_by_path: dict[Path, dict[str, object]] = {}
+            if build_dir.exists():
+                for manifest_path in build_dir.glob("*/*/manifest.json"):
+                    try:
+                        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        continue
+                    for output in manifest.get("outputs", []):
+                        output_path = (manifest_path.parent / output.get("path", "")).resolve()
+                        metadata_by_path[output_path] = {
+                            "publication_id": manifest.get("publication_id"),
+                            "variant": manifest.get("variant"),
+                            "projection": output.get("projection"),
+                        }
+
             pdf_files = []
             if build_dir.exists():
                 for pdf_path in sorted(build_dir.rglob("*.pdf")):
-                    rel_path = str(pdf_path.relative_to(Path.cwd()))
-                    pdf_files.append({"name": pdf_path.name, "path": rel_path})
+                    rel_path = str(pdf_path.relative_to(project.root))
+                    pdf_files.append(
+                        {
+                            "name": pdf_path.name,
+                            "path": rel_path,
+                            **metadata_by_path.get(pdf_path.resolve(), {}),
+                        }
+                    )
 
             body = json.dumps({"publications": pdf_files}).encode()
             response = (
@@ -164,9 +201,51 @@ class WorkspaceServer:
             _close_writer(writer)
             return
 
-        if path.startswith("/api/pdf-preview"):
-            from urllib.parse import parse_qs, urlparse
+        if path.startswith("/api/synctex/boxes"):
+            query = parse_qs(urlparse(path).query)
+            publication_id = query.get("publication_id", [""])[0]
+            variant = query.get("variant", [""])[0]
+            projection = query.get("projection", [""])[0]
+            page_text = query.get("page", [""])[0]
+            identifiers = (publication_id, variant, projection)
+            try:
+                page_number = int(page_text)
+            except ValueError:
+                page_number = 0
+            if not all(IDENTIFIER_RE.fullmatch(value) for value in identifiers) or page_number < 1:
+                response = _json_response(
+                    400,
+                    {
+                        "error": "invalid SyncTeX query",
+                        "required": [
+                            "publication_id",
+                            "variant",
+                            "projection",
+                            "page",
+                        ],
+                    },
+                )
+            else:
+                try:
+                    project = find_project()
+                    payload = spatial_index(
+                        project.root,
+                        publication_id,
+                        variant,
+                        projection,
+                        page_number,
+                        build_dir=project.config.get("build_dir", "build"),
+                    )
+                except SyncTeXError as error:
+                    response = _json_response(404, {"error": str(error)})
+                else:
+                    response = _json_response(200, payload)
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
 
+        if path.startswith("/api/pdf-preview"):
             parsed = urlparse(path)
             query = parse_qs(parsed.query)
             pdf_rel_path = query.get("path", [""])[0]
@@ -220,8 +299,6 @@ class WorkspaceServer:
             return
 
         if path.startswith("/api/pdf"):
-            from urllib.parse import parse_qs, urlparse
-
             parsed = urlparse(path)
             query = parse_qs(parsed.query)
             pdf_rel_path = query.get("path", [""])[0]
