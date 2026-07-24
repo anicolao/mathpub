@@ -162,12 +162,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const imageLeft = (previewWidth - renderedWidth) / 2;
 
     currentSpatialIndex.boxes.forEach((box) => {
-      const left = imageLeft + (box.x / pageWidth) * renderedWidth;
-      const top = (box.y / pageHeight) * renderedHeight;
-      const width = (box.w / pageWidth) * renderedWidth;
-      const height = (box.h / pageHeight) * renderedHeight;
+      const left = Math.round(imageLeft + (box.x / pageWidth) * renderedWidth);
+      const top = Math.round((box.y / pageHeight) * renderedHeight);
+      const right = Math.round(
+        imageLeft + ((box.x + box.w) / pageWidth) * renderedWidth
+      );
+      const bottom = Math.round(((box.y + box.h) / pageHeight) * renderedHeight);
+      const width = right - left;
+      const height = bottom - top;
       const labelTop = Math.max(0, top - 16);
-      const labelWidth = Math.min(width, box.component_id.length * 6.1 + 8);
+      const labelWidth = Math.min(width, Math.round(box.component_id.length * 6.1 + 8));
 
       const region = svgElement("g", {
         class: "synctex-region",
