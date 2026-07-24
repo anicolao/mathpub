@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 from mathpub.config import find_project
 from mathpub.gui.synctex import SyncTeXError, spatial_index
 from mathpub.gui.terminal import PTYManager
+from mathpub.gui.watch import IncrementalPreviewWatcher
 
 STATIC_DIR = Path(__file__).parent / "static"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -172,6 +173,9 @@ def _publication_output_metadata(
         "publication_id": manifest.get("publication_id"),
         "variant": manifest.get("variant"),
         "projection": output.get("projection"),
+        "publication_path": manifest.get("publication_path"),
+        "root_seed": str(manifest.get("root_seed", "")),
+        "font_family": manifest.get("font_family"),
         "synctex_ready": not missing,
         "mapping_error": f"Missing {', '.join(missing)}" if missing else None,
         "mapping_rebuild_command": rebuild_command,
@@ -444,14 +448,23 @@ class WorkspaceServer:
         pty.start(rows=24, cols=80)
 
         loop = asyncio.get_running_loop()
+        write_lock = asyncio.Lock()
+
+        async def send_event(event: dict[str, object]) -> None:
+            async with write_lock:
+                writer.write(_encode_ws_frame(json.dumps(event), opcode=0x1))
+                await writer.drain()
+
+        watcher = IncrementalPreviewWatcher(find_project(), send_event)
 
         async def read_pty_to_ws() -> None:
             while pty.is_alive():
                 data = await loop.run_in_executor(None, pty.read, 4096)
                 if data:
                     frame = _encode_ws_frame(data, opcode=0x2)  # Binary frame
-                    writer.write(frame)
-                    await writer.drain()
+                    async with write_lock:
+                        writer.write(frame)
+                        await writer.drain()
                 else:
                     await asyncio.sleep(0.02)
 
@@ -480,6 +493,19 @@ class WorkspaceServer:
                                     if prompt is not None:
                                         pty.write(prompt.encode())
                                     continue
+                                if msg.get("type") == "watch-preview":
+                                    selection = watcher.select(msg)
+                                    await send_event(
+                                        {
+                                            "type": "preview-watch-ready"
+                                            if selection is not None
+                                            else "preview-watch-failed",
+                                            "error": None
+                                            if selection is not None
+                                            else "Invalid preview selection",
+                                        }
+                                    )
+                                    continue
                             except json.JSONDecodeError:
                                 pass
                             pty.write(payload.encode())
@@ -491,6 +517,7 @@ class WorkspaceServer:
         try:
             await asyncio.gather(read_pty_to_ws(), read_ws_to_pty())
         finally:
+            await watcher.close()
             pty.close()
             writer.close()
 

@@ -8,8 +8,126 @@ from pypdf import PdfReader
 
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
-from mathpub.publish import build, reproduce
+from mathpub.latex_format import dump_latex_format, find_latex_format
+from mathpub.publish import _select_publication_lessons, build, reproduce
 from mathpub.scaffold import init_project, new_question
+
+
+def test_lualatex_format_dump_is_reusable(tmp_path):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    result = dump_latex_format(
+        project,
+        style="worksheet",
+        font_family="libertinus",
+        paper="letter",
+    )
+    format_path = root / result["format"]
+    assert format_path.is_file()
+    publication = {"id": "demo", "kind": "worksheet", "paper": "letter"}
+    assert find_latex_format(project, publication, "libertinus") == format_path
+    reused = dump_latex_format(
+        project,
+        style="worksheet",
+        font_family="libertinus",
+        paper="letter",
+    )
+    assert reused["reused"] is True
+    metadata_path = root / result["metadata"]
+    metadata = json.loads(metadata_path.read_text())
+    metadata["source_sha256"] = "stale"
+    metadata_path.write_text(json.dumps(metadata))
+    assert find_latex_format(project, publication, "libertinus") is None
+
+
+def test_single_lesson_filter_preserves_only_requested_content():
+    publication = {
+        "id": "demo",
+        "kind": "textbook",
+        "component_chapters": [
+            {
+                "id": "chapter",
+                "title": "Chapter",
+                "lessons": [
+                    {"id": "one", "title": "One", "blocks": []},
+                    {"id": "two", "title": "Two", "blocks": []},
+                ],
+            }
+        ],
+    }
+    filtered = _select_publication_lessons(publication, ["two"])
+    assert [lesson["id"] for lesson in filtered["component_chapters"][0]["lessons"]] == ["two"]
+    assert len(publication["component_chapters"][0]["lessons"]) == 2
+
+
+def test_incremental_build_reuses_unchanged_question_instances(tmp_path, monkeypatch):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    new_question(project, "physics.fixed", "fixed", ["physics.review"])
+    publication = root / "publications/physics.toml"
+    publication.write_text(
+        """schema = 1
+id = "physics.cache"
+kind = "worksheet"
+title = "Physics Cache"
+profile = "mathpub.exam"
+projections = ["student", "answers"]
+[[sections]]
+title = "Review"
+[[sections.questions]]
+id = "physics.fixed"
+"""
+    )
+
+    def fake_compile(tex_path, output_dir, *args, **kwargs):
+        pdf_path = output_dir / f"{tex_path.stem}.pdf"
+        log_path = output_dir / f"{tex_path.stem}.build.log"
+        pdf_path.write_bytes(b"%PDF cache fixture")
+        (output_dir / f"{tex_path.stem}.synctex.gz").write_bytes(b"synctex")
+        log_path.write_text("compiled")
+        return pdf_path, log_path
+
+    monkeypatch.setattr("mathpub.publish.compile_pdf", fake_compile)
+    monkeypatch.setattr(
+        "mathpub.publish._inspect_pdf",
+        lambda *args, **kwargs: {"pages": 1, "sha256": "fixture"},
+    )
+    first = build(
+        project,
+        publication,
+        root_seed="42",
+        variant="A",
+        incremental=True,
+    )
+    assert first["instance_cache"]["questions_regenerated"] == 1
+    first_manifest = json.loads((root / first["manifest"]).read_text())
+    first_answers = next(
+        output for output in first_manifest["outputs"] if output["projection"] == "answers"
+    )
+    answers_bytes = (root / first["edition"] / first_answers["path"]).read_bytes()
+    second = build(
+        project,
+        publication,
+        root_seed="42",
+        variant="A",
+        projections=["student"],
+        replace=True,
+        incremental=True,
+    )
+    assert second["instance_cache"] == {
+        "questions_reused": 1,
+        "questions_regenerated": 0,
+        "components_reused": 0,
+        "components_regenerated": 0,
+    }
+    second_manifest = json.loads((root / second["manifest"]).read_text())
+    assert {output["projection"] for output in second_manifest["outputs"]} == {
+        "student",
+        "answers",
+    }
+    assert (root / second["edition"] / first_answers["path"]).read_bytes() == answers_bytes
 
 
 def test_builds_isolated_projections_and_reproduces(tmp_path):

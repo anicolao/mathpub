@@ -72,9 +72,9 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Implement validated feedback injection into the active terminal PTY session without automatic execution.
 
 ### Phase 4: Fast Incremental Regeneration & LaTeX `.fmt` Dumps
-- [ ] Add `mathpub dump-format` subcommand to pre-compile `mathpub.fmt` using `lualatex -ini`.
-- [ ] Implement single-lesson compilation pipeline in `src/mathpub/publish.py`.
-- [ ] Add file watcher (`watchdog` / `fs.watch`) on `components/` to automatically trigger incremental builds and send PDF hot-swap events over WebSocket.
+- [x] Add `mathpub dump-format` subcommand to pre-compile `mathpub.fmt` using `lualatex -ini`.
+- [x] Implement single-lesson compilation pipeline in `src/mathpub/publish.py`.
+- [x] Add a file watcher on authored component roots to automatically trigger incremental builds and send PDF hot-swap events over WebSocket.
 
 ### Phase 5: Nix Packaging, `tauri-driver` & E2E Screenshots
 - [ ] Add `packages.mathpub-gui` and `apps.mathpub-gui` to `flake.nix`.

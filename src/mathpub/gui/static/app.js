@@ -28,10 +28,17 @@ document.addEventListener("DOMContentLoaded", () => {
   ws.onopen = () => {
     document.getElementById("status-terminal").textContent = "PTY Connected";
     sendResize();
+    sendPreviewSelection();
   };
 
   ws.onmessage = (event) => {
     if (typeof event.data === "string") {
+      try {
+        const message = JSON.parse(event.data);
+        if (handleWorkspaceEvent(message)) return;
+      } catch (error) {
+        // Text that is not a workspace event belongs to the terminal.
+      }
       term.write(event.data);
     } else if (event.data instanceof ArrayBuffer) {
       const bytes = new Uint8Array(event.data);
@@ -102,6 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const mappedRegionsToggle = document.getElementById("mapped-regions-toggle");
   const synctexOverlay = document.getElementById("synctex-overlay");
   const synctexStatus = document.getElementById("status-synctex");
+  const buildStatus = document.getElementById("status-build");
   const feedbackDialog = document.getElementById("feedback-dialog");
   const feedbackForm = document.getElementById("feedback-form");
   const feedbackText = document.getElementById("feedback-text");
@@ -143,6 +151,68 @@ document.addEventListener("DOMContentLoaded", () => {
       publication?.projection &&
       publication?.synctex_ready === true
     );
+  }
+
+  function sendPreviewSelection() {
+    if (ws.readyState !== WebSocket.OPEN || !currentPublication) return;
+    if (
+      !currentPublication.publication_path ||
+      !currentPublication?.root_seed ||
+      !currentPublication?.variant ||
+      !currentPublication?.projection ||
+      !currentPublication?.font_family
+    ) {
+      buildStatus.textContent = "Preview watch unavailable";
+      buildStatus.title = "This PDF is missing reproducible build metadata";
+      return;
+    }
+    buildStatus.textContent = "Starting preview watch…";
+    ws.send(
+      JSON.stringify({
+        type: "watch-preview",
+        publication_path: currentPublication.publication_path,
+        root_seed: currentPublication.root_seed,
+        variant: currentPublication.variant,
+        projection: currentPublication.projection,
+        font_family: currentPublication.font_family
+      })
+    );
+  }
+
+  function handleWorkspaceEvent(message) {
+    if (!message || typeof message.type !== "string") return false;
+    if (message.type === "preview-watch-ready") {
+      buildStatus.textContent = "Preview watching";
+      buildStatus.title = "Authored component changes rebuild this PDF automatically";
+      return true;
+    }
+    if (message.type === "preview-watch-failed") {
+      buildStatus.textContent = "Preview watch unavailable";
+      buildStatus.title = message.error || "";
+      return true;
+    }
+    if (message.type === "preview-build-started") {
+      buildStatus.textContent = "Rebuilding preview…";
+      buildStatus.removeAttribute("title");
+      return true;
+    }
+    if (message.type === "preview-build-failed") {
+      buildStatus.textContent = "Preview build failed";
+      buildStatus.title = message.error || "";
+      return true;
+    }
+    if (message.type === "preview-built") {
+      const cache = message.instance_cache || {};
+      const reused =
+        (cache.questions_reused || 0) + (cache.components_reused || 0);
+      buildStatus.textContent = "Preview updated";
+      buildStatus.title =
+        `${message.duration_ms} ms; ${reused} instances reused; ` +
+        `format: ${message.format || "none"}`;
+      refreshPublications(message.path);
+      return true;
+    }
+    return false;
   }
 
   function updateMappingAvailability() {
@@ -318,7 +388,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateMappingAvailability();
   }
 
-  async function refreshPublications() {
+  async function refreshPublications(forcePath = null) {
     try {
       const res = await fetch("/api/publications");
       if (!res.ok) return;
@@ -329,8 +399,11 @@ document.addEventListener("DOMContentLoaded", () => {
         pdfs.map((pdf) => [
           pdf.path,
           pdf.publication_id,
+          pdf.publication_path,
+          pdf.root_seed,
           pdf.variant,
           pdf.projection,
+          pdf.font_family,
           pdf.synctex_ready,
           pdf.mapping_error,
           pdf.mapping_rebuild_command
@@ -358,17 +431,25 @@ document.addEventListener("DOMContentLoaded", () => {
           ) ||
           newestFirst.find((pdf) => mappingAvailable(pdf)) ||
           newestFirst[0];
-        const selectedPath = selectedStillExists ? currentSelection : preferred?.path || "";
+        const selectedPath =
+          forcePath && publicationsByPath.has(forcePath)
+            ? forcePath
+            : selectedStillExists
+              ? currentSelection
+              : preferred?.path || "";
         pdfSelect.value = selectedPath;
         publicationsFingerprint = nextFingerprint;
-        loadPdf(selectedPath);
+        loadPdf(selectedPath, forcePath ? Date.now() : null, !forcePath);
+      } else if (forcePath && publicationsByPath.has(forcePath)) {
+        pdfSelect.value = forcePath;
+        loadPdf(forcePath, Date.now(), false);
       }
     } catch (e) {
       // Ignore network errors during shutdown
     }
   }
 
-  function loadPdf(path) {
+  function loadPdf(path, cacheBust = null, notifyWatcher = true) {
     currentPublication = publicationsByPath.get(path) || null;
     clearMappedRegions();
     if (!path) {
@@ -376,10 +457,12 @@ document.addEventListener("DOMContentLoaded", () => {
       pdfPlaceholder.style.display = "block";
       return;
     }
-    pdfPreview.src = `/api/pdf-preview?path=${encodeURIComponent(path)}`;
+    const version = cacheBust ? `&version=${cacheBust}` : "";
+    pdfPreview.src = `/api/pdf-preview?path=${encodeURIComponent(path)}${version}`;
     pdfPreview.style.display = "block";
     pdfPlaceholder.style.display = "none";
     loadMappedRegions();
+    if (notifyWatcher) sendPreviewSelection();
   }
 
   pdfSelect.addEventListener("change", (e) => {

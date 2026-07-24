@@ -17,6 +17,12 @@ from mathpub.catalog import Catalog
 from mathpub.config import find_project, load_toml, relative, schema_enum
 from mathpub.errors import MathpubError
 from mathpub.instance import instantiate, instantiate_component
+from mathpub.latex_format import (
+    FORMAT_FONTS,
+    FORMAT_PAPERS,
+    FORMAT_STYLES,
+    dump_latex_format,
+)
 from mathpub.output import emit
 from mathpub.publish import build, reproduce
 from mathpub.render import validate_fragment_source
@@ -125,8 +131,29 @@ def parser() -> argparse.ArgumentParser:
         choices=("student", "answers", "solutions", "validation", "parent"),
     )
     build_parser.add_argument("--replace", action="store_true")
+    build_parser.add_argument(
+        "--lesson",
+        action="append",
+        dest="lesson_ids",
+        help="compile only this textbook lesson; may be repeated",
+    )
+    build_parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="reuse unchanged instances from the existing edition",
+    )
     build_parser.add_argument("--require-clean", action="store_true")
     _json_flag(build_parser)
+
+    dump_format = commands.add_parser(
+        "dump-format",
+        help="precompile a reusable LaTeX format for interactive builds",
+    )
+    dump_format.add_argument("--style", choices=FORMAT_STYLES, default="textbook")
+    dump_format.add_argument("--font", choices=FORMAT_FONTS, default="libertinus")
+    dump_format.add_argument("--paper", choices=FORMAT_PAPERS, default="letter")
+    dump_format.add_argument("--replace", action="store_true")
+    _json_flag(dump_format)
 
     variants = commands.add_parser("variants", help="build named variants")
     variants.add_argument("publication", type=Path)
@@ -242,6 +269,15 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
         )
 
     project = find_project()
+    if args.command == "dump-format":
+        return "dump-format", dump_latex_format(
+            project,
+            style=args.style,
+            font_family=args.font,
+            paper=args.paper,
+            replace=args.replace,
+        )
+
     if args.command == "new":
         if args.new_type == "question":
             return "new question", new_question(
@@ -337,6 +373,8 @@ placement = {json.dumps(placement)}
             projections=args.projection,
             font_family=args.font,
             replace=args.replace,
+            lesson_ids=args.lesson_ids,
+            incremental=args.incremental,
         )
     if args.command == "variants":
         if args.count < 1:

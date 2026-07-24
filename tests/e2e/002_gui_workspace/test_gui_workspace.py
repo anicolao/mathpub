@@ -53,6 +53,8 @@ def test_gui_workspace_e2e(update_baselines: bool):
     # Pre-build physics practice PDF so the right pane renders its first page.
     project = find_project()
     pub_path = project.root / "publications/physics-practice.toml"
+    watched_source = project.root / "components/questions/physics/energy/ramp-speed/prompt.tex"
+    original_source_times = None
     if pub_path.exists():
         build(project, pub_path, root_seed="2026", variant="A", replace=True)
 
@@ -103,11 +105,17 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
+            expected_pdf = "build/physics.practice/A/physics.practice-A-student.pdf"
             stale_pdf = "build/stale/B/stale-B-student.pdf"
 
             def add_stale_publication(route):
                 response = route.fetch()
                 payload = response.json()
+                payload["publications"] = [
+                    publication
+                    for publication in payload["publications"]
+                    if publication["path"].startswith("build/physics.practice/A/")
+                ]
                 payload["publications"].append(
                     {
                         "name": "stale-B-student.pdf",
@@ -154,12 +162,12 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
             # Wait for PDF select dropdown to populate from /api/publications
             page.wait_for_function("document.getElementById('pdf-select').options.length > 1")
-            expected_pdf = "build/physics.practice/A/physics.practice-A-student.pdf"
             assert page.locator(f'#pdf-select option[value="{expected_pdf}"]').count() == 1
             assert page.locator("#pdf-select").input_value() == expected_pdf
             stale_option = page.locator(f'#pdf-select option[value="{stale_pdf}"]')
             assert stale_option.text_content().endswith("(rebuild for mappings)")
             page.select_option("#pdf-select", stale_pdf)
+            assert page.locator("#status-build").text_content() == ("Preview watch unavailable")
             assert page.locator("#mapped-regions-toggle").is_disabled()
             assert page.locator("#mapped-regions-toggle").text_content() == (
                 "Mappings need rebuild"
@@ -170,6 +178,9 @@ def test_gui_workspace_e2e(update_baselines: bool):
             )
             page.select_option("#pdf-select", expected_pdf)
             page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Preview watching'"
+            )
             assert page.locator("#pdf-preview").is_visible()
 
             boxes_response = page.request.get(
@@ -371,7 +382,40 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 update_baselines,
             )
 
-            # 9. Generate Walkthrough README.md
+            # 9. Touch an authored component and verify incremental PDF hot-swap.
+            source_stat = watched_source.stat()
+            original_source_times = (source_stat.st_atime_ns, source_stat.st_mtime_ns)
+            os.utime(
+                watched_source,
+                ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns + 1_000_000_000),
+            )
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Rebuilding preview…'",
+                timeout=30_000,
+            )
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Preview updated'",
+                timeout=90_000,
+            )
+            build_details = page.locator("#status-build").get_attribute("title")
+            assert "3 instances reused" in build_details
+            assert "mathpub.fmt" in build_details
+            page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
+            page.wait_for_function(
+                "document.getElementById('status-synctex').textContent === 'SyncTeX Ready'"
+            )
+            assert page.locator("#pdf-select").input_value() == expected_pdf
+
+            _verify_screenshot(
+                page,
+                scenario_dir,
+                screenshots_dir,
+                diffs_dir,
+                "004-incremental-preview-updated",
+                update_baselines,
+            )
+
+            # 10. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
@@ -386,6 +430,8 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "![Element Feedback Dialog](./screenshots/002-element-feedback-dialog.png)\n\n"
                 "## Feedback Inserted into the Active Terminal\n\n"
                 "![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)\n\n"
+                "## Incremental Preview Updated\n\n"
+                "![Incremental Preview](./screenshots/004-incremental-preview-updated.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
@@ -394,10 +440,14 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "- [x] Mapped component regions align with their rendered PDF content\n"
                 "- [x] Clicking a mapped region opens source-aware feedback controls\n"
                 "- [x] Feedback is inserted into the PTY for review without being executed\n"
+                "- [x] Authored changes reuse instances and hot-swap the active PDF\n"
             )
             readme_path.write_text(readme_content)
 
-            browser.close()
         finally:
+            if browser.is_connected():
+                browser.close()
+            if original_source_times is not None:
+                os.utime(watched_source, ns=original_source_times)
             if stop_event and loop_ref:
                 loop_ref[0].call_soon_threadsafe(stop_event.set)

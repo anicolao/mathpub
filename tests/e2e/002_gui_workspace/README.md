@@ -22,6 +22,10 @@ Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:
 
 ![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)
 
+## Incremental Preview Updated
+
+![Incremental Preview](./screenshots/004-incremental-preview-updated.png)
+
 **Verifications:**
 - [x] Header brand and subtitle render correctly
 - [x] Isolated PTY terminal emulator loads with clean prompt
@@ -30,3 +34,4 @@ Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:
 - [x] Mapped component regions align with their rendered PDF content
 - [x] Clicking a mapped region opens source-aware feedback controls
 - [x] Feedback is inserted into the PTY for review without being executed
+- [x] Authored changes reuse instances and hot-swap the active PDF
