@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import sys
 import threading
@@ -221,7 +222,16 @@ def test_gui_workspace_e2e(update_baselines: bool):
                     "width": box["w"] / page_width * preview_metrics["width"],
                     "height": box["h"] / page_height * preview_metrics["height"],
                 }
-                assert all(abs(region[key] - value) < 0.75 for key, value in expected.items())
+                expected_left = math.floor(expected["x"] + 0.5)
+                expected_top = math.floor(expected["y"] + 0.5)
+                expected_right = math.floor(expected["x"] + expected["width"] + 0.5)
+                expected_bottom = math.floor(expected["y"] + expected["height"] + 0.5)
+                assert region == {
+                    "x": expected_left,
+                    "y": expected_top,
+                    "width": expected_right - expected_left,
+                    "height": expected_bottom - expected_top,
+                }
 
             _verify_screenshot(
                 page,

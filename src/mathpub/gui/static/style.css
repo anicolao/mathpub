@@ -220,6 +220,7 @@ body {
 
 .synctex-region-box {
   fill: rgba(245, 158, 11, 0.16);
+  shape-rendering: crispEdges;
   stroke: #f59e0b;
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
@@ -234,6 +235,7 @@ body {
 
 .synctex-region-label-bg {
   fill: rgba(251, 191, 36, 0.95);
+  shape-rendering: crispEdges;
 }
 
 .synctex-region-label {
