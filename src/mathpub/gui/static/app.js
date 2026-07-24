@@ -102,12 +102,38 @@ document.addEventListener("DOMContentLoaded", () => {
   const mappedRegionsToggle = document.getElementById("mapped-regions-toggle");
   const synctexOverlay = document.getElementById("synctex-overlay");
   const synctexStatus = document.getElementById("status-synctex");
+  const feedbackDialog = document.getElementById("feedback-dialog");
+  const feedbackForm = document.getElementById("feedback-form");
+  const feedbackText = document.getElementById("feedback-text");
+  const feedbackComponent = document.getElementById("feedback-component");
+  const feedbackFragment = document.getElementById("feedback-fragment");
+  const feedbackSource = document.getElementById("feedback-source");
+  const feedbackClose = document.getElementById("feedback-close");
+  const feedbackCancel = document.getElementById("feedback-cancel");
+  const svgNamespace = "http://www.w3.org/2000/svg";
   let knownPdfs = new Set();
   let publicationsByPath = new Map();
   let currentPublication = null;
   let currentSpatialIndex = null;
   let mappedRegionsVisible = false;
+  let selectedFeedbackBox = null;
   let refreshTimer = null;
+
+  function svgElement(name, attributes = {}) {
+    const element = document.createElementNS(svgNamespace, name);
+    Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+    return element;
+  }
+
+  function openFeedbackDialog(box) {
+    selectedFeedbackBox = box;
+    feedbackComponent.textContent = box.component_id;
+    feedbackFragment.textContent = box.fragment;
+    feedbackSource.textContent = box.authored_source;
+    feedbackText.value = "";
+    feedbackDialog.showModal();
+    feedbackText.focus();
+  }
 
   function hideMappedRegions() {
     mappedRegionsVisible = false;
@@ -136,20 +162,56 @@ document.addEventListener("DOMContentLoaded", () => {
     const imageLeft = (previewWidth - renderedWidth) / 2;
 
     currentSpatialIndex.boxes.forEach((box) => {
-      const region = document.createElement("div");
-      region.className = "synctex-region";
+      const left = imageLeft + (box.x / pageWidth) * renderedWidth;
+      const top = (box.y / pageHeight) * renderedHeight;
+      const width = (box.w / pageWidth) * renderedWidth;
+      const height = (box.h / pageHeight) * renderedHeight;
+      const labelTop = Math.max(0, top - 16);
+      const labelWidth = Math.min(width, box.component_id.length * 6.1 + 8);
+
+      const region = svgElement("g", {
+        class: "synctex-region",
+        role: "button",
+        tabindex: "0",
+        "aria-label": `Add feedback for ${box.component_id} ${box.fragment}`
+      });
       region.dataset.componentId = box.component_id;
       region.dataset.fragment = box.fragment;
-      region.title = `${box.component_id} · ${box.fragment}`;
-      region.style.left = `${imageLeft + (box.x / pageWidth) * renderedWidth}px`;
-      region.style.top = `${(box.y / pageHeight) * renderedHeight}px`;
-      region.style.width = `${(box.w / pageWidth) * renderedWidth}px`;
-      region.style.height = `${(box.h / pageHeight) * renderedHeight}px`;
 
-      const label = document.createElement("span");
-      label.className = "synctex-region-label";
+      const regionBox = svgElement("rect", {
+        class: "synctex-region-box",
+        x: left,
+        y: top,
+        width,
+        height
+      });
+      regionBox.dataset.componentId = box.component_id;
+      regionBox.dataset.fragment = box.fragment;
+      region.appendChild(regionBox);
+
+      region.appendChild(
+        svgElement("rect", {
+          class: "synctex-region-label-bg",
+          x: left,
+          y: labelTop,
+          width: labelWidth,
+          height: 16
+        })
+      );
+      const label = svgElement("text", {
+        class: "synctex-region-label",
+        x: left + 4,
+        y: labelTop + 11
+      });
       label.textContent = box.component_id;
       region.appendChild(label);
+      region.addEventListener("click", () => openFeedbackDialog(box));
+      region.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openFeedbackDialog(box);
+        }
+      });
       synctexOverlay.appendChild(region);
     });
   }
@@ -244,6 +306,31 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       showMappedRegions();
     }
+  });
+
+  feedbackClose.addEventListener("click", () => feedbackDialog.close());
+  feedbackCancel.addEventListener("click", () => feedbackDialog.close());
+  feedbackForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const feedback = feedbackText.value.trim();
+    if (!selectedFeedbackBox || !feedback || ws.readyState !== WebSocket.OPEN) return;
+
+    ws.send(
+      JSON.stringify({
+        type: "feedback",
+        component_id: selectedFeedbackBox.component_id,
+        fragment: selectedFeedbackBox.fragment,
+        authored_source: selectedFeedbackBox.authored_source,
+        feedback
+      })
+    );
+    feedbackDialog.close();
+    selectedFeedbackBox = null;
+    synctexStatus.textContent = "Feedback inserted";
+    term.focus();
+  });
+  feedbackDialog.addEventListener("close", () => {
+    feedbackText.value = "";
   });
 
   pdfPreview.addEventListener("load", renderMappedRegions);

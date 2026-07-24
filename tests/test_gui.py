@@ -8,7 +8,7 @@ import threading
 import time
 import urllib.request
 
-from mathpub.gui.server import WorkspaceServer
+from mathpub.gui.server import WorkspaceServer, _feedback_prompt
 from mathpub.gui.terminal import PTYManager
 
 
@@ -25,6 +25,33 @@ def test_pty_manager_lifecycle():
     pty.set_size(rows=40, cols=120)
     pty.close()
     assert not pty.is_alive()
+
+
+def test_feedback_prompt_is_single_line_and_validated():
+    prompt = _feedback_prompt(
+        {
+            "component_id": "physics.energy.ramp-speed",
+            "fragment": "prompt",
+            "authored_source": "components/questions/physics/energy/ramp-speed/prompt.tex",
+            "feedback": "Clarify the energy argument.\nEnlarge the \x1bdiagram.",
+        }
+    )
+    assert prompt == (
+        "Review mathpub component physics.energy.ramp-speed "
+        "(prompt, components/questions/physics/energy/ramp-speed/prompt.tex): "
+        "Clarify the energy argument. Enlarge the diagram."
+    )
+    assert (
+        _feedback_prompt(
+            {
+                "component_id": "physics.energy.ramp-speed; rm",
+                "fragment": "prompt",
+                "authored_source": "prompt.tex",
+                "feedback": "No",
+            }
+        )
+        is None
+    )
 
 
 def test_workspace_server_http():

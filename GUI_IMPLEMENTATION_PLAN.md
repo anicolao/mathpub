@@ -66,10 +66,10 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Add a user-visible “Show mapped regions” toggle and strict E2E coverage proving that overlays align with rendered PDF content.
 
 ### Phase 3: Interactive PDF Viewer & Annotation Overlay
-- [ ] Implement dual-layer PDF container (native PDF embed + transparent SVG overlay).
-- [ ] Draw bounding boxes on the SVG overlay dynamically fetched from `/api/synctex/boxes`.
-- [ ] Build interactive click modal for adding element feedback.
-- [ ] Implement feedback injection into the active terminal PTY session.
+- [x] Implement a dual-layer container using the WebKit-tested raster PDF preview and a transparent SVG interaction overlay.
+- [x] Draw bounding boxes on the SVG overlay dynamically fetched from `/api/synctex/boxes`.
+- [x] Build an accessible click and keyboard modal for adding element feedback.
+- [x] Implement validated feedback injection into the active terminal PTY session without automatic execution.
 
 ### Phase 4: Fast Incremental Regeneration & LaTeX `.fmt` Dumps
 - [ ] Add `mathpub dump-format` subcommand to pre-compile `mathpub.fmt` using `lualatex -ini`.
