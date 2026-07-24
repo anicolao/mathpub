@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import os
 import sys
@@ -102,6 +103,33 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
+            stale_pdf = "build/stale/B/stale-B-student.pdf"
+
+            def add_stale_publication(route):
+                response = route.fetch()
+                payload = response.json()
+                payload["publications"].append(
+                    {
+                        "name": "stale-B-student.pdf",
+                        "path": stale_pdf,
+                        "publication_id": "stale",
+                        "variant": "B",
+                        "projection": "student",
+                        "synctex_ready": False,
+                        "mapping_error": "Missing SyncTeX data",
+                        "mapping_rebuild_command": (
+                            "nix run '.#mathpub' -- build publications/stale.toml "
+                            "--seed 2026 --variant B --replace --json"
+                        ),
+                    }
+                )
+                route.fulfill(
+                    response=response,
+                    body=json.dumps(payload),
+                    headers={**response.headers, "content-type": "application/json"},
+                )
+
+            page.route("**/api/publications", add_stale_publication)
             page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
 
             # 1. Verify Header Elements
@@ -128,6 +156,18 @@ def test_gui_workspace_e2e(update_baselines: bool):
             page.wait_for_function("document.getElementById('pdf-select').options.length > 1")
             expected_pdf = "build/physics.practice/A/physics.practice-A-student.pdf"
             assert page.locator(f'#pdf-select option[value="{expected_pdf}"]').count() == 1
+            assert page.locator("#pdf-select").input_value() == expected_pdf
+            stale_option = page.locator(f'#pdf-select option[value="{stale_pdf}"]')
+            assert stale_option.text_content().endswith("(rebuild for mappings)")
+            page.select_option("#pdf-select", stale_pdf)
+            assert page.locator("#mapped-regions-toggle").is_disabled()
+            assert page.locator("#mapped-regions-toggle").text_content() == (
+                "Mappings need rebuild"
+            )
+            assert page.locator("#status-synctex").text_content() == ("Rebuild PDF for mappings")
+            assert "nix run '.#mathpub'" in page.locator("#mapped-regions-toggle").get_attribute(
+                "title"
+            )
             page.select_option("#pdf-select", expected_pdf)
             page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
             assert page.locator("#pdf-preview").is_visible()

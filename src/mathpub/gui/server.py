@@ -9,6 +9,7 @@ import hashlib
 import json
 import mimetypes
 import re
+import shlex
 import struct
 import subprocess
 import webbrowser
@@ -128,6 +129,56 @@ def _feedback_prompt(message: dict[str, object]) -> str | None:
     return f"Review mathpub component {component_id} ({fragment}, {authored_source}): {feedback}"
 
 
+def _publication_output_metadata(
+    manifest_path: Path,
+    manifest: dict[str, object],
+    output: dict[str, object],
+) -> tuple[Path, dict[str, object]]:
+    """Describe one built PDF and whether its SyncTeX mapping artifacts are usable."""
+    edition = manifest_path.parent
+    output_name = str(output.get("path", ""))
+    output_path = (edition / output_name).resolve()
+    stem = Path(output_name).stem
+    synctex_name = str(output.get("synctex", f"{stem}.synctex.gz"))
+    required = {
+        "SyncTeX data": edition / synctex_name,
+        "generated TeX": edition / "generated-tex" / f"{stem}.tex",
+        "source map": edition / "generated-tex" / "source-map.json",
+    }
+    missing = [label for label, artifact in required.items() if not artifact.is_file()]
+    publication_path = str(manifest.get("publication_path", ""))
+    root_seed = str(manifest.get("root_seed", ""))
+    variant = str(manifest.get("variant", ""))
+    rebuild_command = None
+    if publication_path and root_seed and variant:
+        rebuild_command = shlex.join(
+            [
+                "nix",
+                "run",
+                ".#mathpub",
+                "--",
+                "build",
+                publication_path,
+                "--seed",
+                root_seed,
+                "--variant",
+                variant,
+                "--replace",
+                "--json",
+            ]
+        )
+
+    metadata: dict[str, object] = {
+        "publication_id": manifest.get("publication_id"),
+        "variant": manifest.get("variant"),
+        "projection": output.get("projection"),
+        "synctex_ready": not missing,
+        "mapping_error": f"Missing {', '.join(missing)}" if missing else None,
+        "mapping_rebuild_command": rebuild_command,
+    }
+    return output_path, metadata
+
+
 class WorkspaceServer:
     """Workspace HTTP & WebSocket server for mathpub GUI."""
 
@@ -201,12 +252,12 @@ class WorkspaceServer:
                     except (OSError, json.JSONDecodeError):
                         continue
                     for output in manifest.get("outputs", []):
-                        output_path = (manifest_path.parent / output.get("path", "")).resolve()
-                        metadata_by_path[output_path] = {
-                            "publication_id": manifest.get("publication_id"),
-                            "variant": manifest.get("variant"),
-                            "projection": output.get("projection"),
-                        }
+                        output_path, metadata = _publication_output_metadata(
+                            manifest_path,
+                            manifest,
+                            output,
+                        )
+                        metadata_by_path[output_path] = metadata
 
             pdf_files = []
             if build_dir.exists():
@@ -216,7 +267,14 @@ class WorkspaceServer:
                         {
                             "name": pdf_path.name,
                             "path": rel_path,
-                            **metadata_by_path.get(pdf_path.resolve(), {}),
+                            **metadata_by_path.get(
+                                pdf_path.resolve(),
+                                {
+                                    "synctex_ready": False,
+                                    "mapping_error": "No edition manifest describes this PDF",
+                                    "mapping_rebuild_command": None,
+                                },
+                            ),
                         }
                     )
 
