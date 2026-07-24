@@ -162,12 +162,34 @@ class WorkspaceServer:
             return
 
         if path.startswith("/api/publications"):
-            build_dir = Path.cwd() / "build"
+            project = find_project()
+            build_dir = project.root / project.config.get("build_dir", "build")
+            metadata_by_path: dict[Path, dict[str, object]] = {}
+            if build_dir.exists():
+                for manifest_path in build_dir.glob("*/*/manifest.json"):
+                    try:
+                        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        continue
+                    for output in manifest.get("outputs", []):
+                        output_path = (manifest_path.parent / output.get("path", "")).resolve()
+                        metadata_by_path[output_path] = {
+                            "publication_id": manifest.get("publication_id"),
+                            "variant": manifest.get("variant"),
+                            "projection": output.get("projection"),
+                        }
+
             pdf_files = []
             if build_dir.exists():
                 for pdf_path in sorted(build_dir.rglob("*.pdf")):
-                    rel_path = str(pdf_path.relative_to(Path.cwd()))
-                    pdf_files.append({"name": pdf_path.name, "path": rel_path})
+                    rel_path = str(pdf_path.relative_to(project.root))
+                    pdf_files.append(
+                        {
+                            "name": pdf_path.name,
+                            "path": rel_path,
+                            **metadata_by_path.get(pdf_path.resolve(), {}),
+                        }
+                    )
 
             body = json.dumps({"publications": pdf_files}).encode()
             response = (

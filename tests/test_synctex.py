@@ -18,7 +18,9 @@ def test_parses_exact_source_records_and_resolves_component_boxes(tmp_path):
     project_root = tmp_path / "project"
     generated_source = project_root / "build/demo/A/generated-tex/demo-A-student.tex"
     generated_source.parent.mkdir(parents=True)
-    generated_source.write_text("generated")
+    generated_lines = [f"generated line {line}" for line in range(1, 25)]
+    generated_lines[21] = r"\end{center}"
+    generated_source.write_text("\n".join(generated_lines))
     synctex_path = project_root / "build/demo/A/demo-A-student.synctex.gz"
     synctex_path.parent.mkdir(parents=True, exist_ok=True)
     fixture = "\n".join(
