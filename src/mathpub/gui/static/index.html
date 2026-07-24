@@ -38,12 +38,22 @@
     <section class="pane pane-right" id="pane-right">
       <div class="pane-header">
         <h2>Document Preview</h2>
-        <select id="pdf-select" class="pdf-select">
-          <option value="">-- Select Built PDF --</option>
-        </select>
+        <div class="preview-controls">
+          <button
+            id="mapped-regions-toggle"
+            class="mapped-regions-toggle"
+            type="button"
+            aria-pressed="false"
+            disabled
+          >Show mapped regions</button>
+          <select id="pdf-select" class="pdf-select">
+            <option value="">-- Select Built PDF --</option>
+          </select>
+        </div>
       </div>
       <div class="pdf-viewer-wrapper" id="pdf-wrapper">
         <img id="pdf-preview" class="pdf-preview" alt="First page of the selected PDF">
+        <div id="synctex-overlay" class="synctex-overlay" aria-hidden="true"></div>
         <div class="pdf-placeholder" id="pdf-placeholder">
           <p>No built PDF selected</p>
           <code>mathpub build publications/physics-practice.toml --seed 2026 --variant A</code>

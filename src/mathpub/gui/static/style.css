@@ -119,6 +119,37 @@ body {
   color: var(--text-muted);
 }
 
+.preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mapped-regions-toggle {
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-family: monospace;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mapped-regions-toggle:hover:not(:disabled),
+.mapped-regions-toggle[aria-pressed="true"] {
+  background: rgba(56, 189, 248, 0.28);
+}
+
+.mapped-regions-toggle:disabled {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: transparent;
+  cursor: not-allowed;
+}
+
 .pdf-select {
   background: var(--bg-tertiary);
   color: var(--text-main);
@@ -152,6 +183,7 @@ body {
 
 .pdf-viewer-wrapper {
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -160,6 +192,8 @@ body {
 }
 
 .pdf-preview {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   border: none;
@@ -167,6 +201,35 @@ body {
   object-fit: contain;
   object-position: center top;
   background: #525659;
+}
+
+.synctex-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.synctex-region {
+  position: absolute;
+  border: 2px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.75);
+}
+
+.synctex-region-label {
+  position: absolute;
+  top: -16px;
+  left: 0;
+  max-width: 100%;
+  padding: 2px 4px;
+  overflow: hidden;
+  color: #111827;
+  background: rgba(251, 191, 36, 0.95);
+  font-size: 10px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pdf-placeholder {

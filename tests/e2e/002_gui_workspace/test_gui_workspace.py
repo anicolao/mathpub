@@ -16,6 +16,26 @@ from mathpub.gui.server import WorkspaceServer
 from mathpub.publish import build
 
 
+def _verify_screenshot(page, scenario_dir, screenshots_dir, diffs_dir, name, update):
+    baseline_path = screenshots_dir / f"{name}.png"
+    candidate_path = scenario_dir / f"temp-{name}.png"
+    page.screenshot(path=str(candidate_path))
+
+    if update or not baseline_path.exists():
+        candidate_path.replace(baseline_path)
+        return
+
+    img_cand = Image.open(candidate_path).convert("RGB")
+    img_base = Image.open(baseline_path).convert("RGB")
+    diff = ImageChops.difference(img_cand, img_base)
+    candidate_path.unlink()
+    if diff.getbbox() is not None:
+        diff.save(diffs_dir / f"{name}-diff.png")
+        raise AssertionError(
+            f"Visual regression in WebKit GUI workspace layout!\nBaseline: {baseline_path}"
+        )
+
+
 def test_gui_workspace_e2e(update_baselines: bool):
     if os.environ.get("HOME") == "/homeless-shelter":
         import pytest
@@ -140,37 +160,86 @@ def test_gui_workspace_e2e(update_baselines: bool):
             )
 
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
-            baseline_path = screenshots_dir / "000-initial-workspace-load.png"
-            candidate_path = scenario_dir / "temp-candidate.png"
-            page.screenshot(path=str(candidate_path))
+            _verify_screenshot(
+                page,
+                scenario_dir,
+                screenshots_dir,
+                diffs_dir,
+                "000-initial-workspace-load",
+                update_baselines,
+            )
 
-            if update_baselines or not baseline_path.exists():
-                candidate_path.replace(baseline_path)
-            else:
-                img_cand = Image.open(candidate_path).convert("RGB")
-                img_base = Image.open(baseline_path).convert("RGB")
-                candidate_path.unlink()
+            # 5. Display mapped regions and verify their rendered PDF geometry.
+            toggle = page.locator("#mapped-regions-toggle")
+            assert toggle.is_enabled()
+            assert toggle.get_attribute("aria-pressed") == "false"
+            assert page.locator(".synctex-region").count() == 0
+            toggle.click()
+            page.wait_for_function(
+                f"document.querySelectorAll('.synctex-region').length === "
+                f"{len(boxes_payload['boxes'])}"
+            )
+            assert toggle.get_attribute("aria-pressed") == "true"
+            assert toggle.text_content() == "Hide mapped regions"
+            assert page.locator("#status-synctex").text_content() == (
+                f"{len(boxes_payload['boxes'])} regions mapped"
+            )
 
-                diff = ImageChops.difference(img_cand, img_base)
-                if diff.getbbox() is not None:
-                    diff.save(diffs_dir / "000-initial-workspace-load-diff.png")
-                    raise AssertionError(
-                        "Visual regression in WebKit GUI workspace layout!\n"
-                        f"Candidate: {candidate_path}\n"
-                        f"Baseline: {baseline_path}"
-                    )
+            preview_metrics = page.locator("#pdf-preview").evaluate(
+                """preview => {
+                  const rect = preview.getBoundingClientRect();
+                  const scale = Math.min(
+                    preview.clientWidth / preview.naturalWidth,
+                    preview.clientHeight / preview.naturalHeight
+                  );
+                  const width = preview.naturalWidth * scale;
+                  const height = preview.naturalHeight * scale;
+                  return {
+                    left: rect.left + (preview.clientWidth - width) / 2,
+                    top: rect.top,
+                    width,
+                    height
+                  };
+                }"""
+            )
+            rendered_regions = {
+                region.get_attribute("data-component-id"): region.bounding_box()
+                for region in page.locator(".synctex-region").all()
+            }
+            for box in boxes_payload["boxes"]:
+                region = rendered_regions[box["component_id"]]
+                expected = {
+                    "x": preview_metrics["left"] + box["x"] / page_width * preview_metrics["width"],
+                    "y": preview_metrics["top"]
+                    + box["y"] / page_height * preview_metrics["height"],
+                    "width": box["w"] / page_width * preview_metrics["width"],
+                    "height": box["h"] / page_height * preview_metrics["height"],
+                }
+                assert all(abs(region[key] - value) < 0.75 for key, value in expected.items())
 
-            # 5. Generate Walkthrough README.md
+            _verify_screenshot(
+                page,
+                scenario_dir,
+                screenshots_dir,
+                diffs_dir,
+                "001-mapped-regions-visible",
+                update_baselines,
+            )
+
+            # 6. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
                 "Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:\n\n"
                 "## Initial Workspace Load (WebKit / Safari Engine)\n\n"
                 "![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)\n\n"
+                "## SyncTeX Mapped Regions\n\n"
+                "![Mapped Regions](./screenshots/001-mapped-regions-visible.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
                 "- [x] PDF dropdown loads and displays the rendered first page\n"
+                "- [x] Mapped component regions align with their rendered PDF content\n"
             )
             readme_path.write_text(readme_content)
 

@@ -143,17 +143,28 @@ def resolve_boxes(
     page: int,
 ) -> list[dict[str, Any]]:
     """Union SyncTeX records within each mapped component fragment."""
+    try:
+        generated_lines = generated_source.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError as error:
+        raise SyncTeXError(f"generated source not found: {generated_source}") from error
+
     boxes: list[dict[str, Any]] = []
     for entry in source_map:
         start = int(entry["generated_start_line"])
         end = int(entry["generated_end_line"])
         matching = [record for record in records if start <= record.line <= end]
-        substantive = [record for record in matching if record.line < end - 2]
+        structural_lines = {
+            line_number
+            for line_number in range(start, min(end, len(generated_lines)) + 1)
+            if generated_lines[line_number - 1].strip().startswith(r"\end{")
+        }
+        substantive = [record for record in matching if record.line not in structural_lines]
         if substantive:
             matching = [
                 record
                 for record in matching
-                if record.line < end - 2 or any(_overlaps(record, other) for other in substantive)
+                if record.line not in structural_lines
+                or any(_overlaps(record, other) for other in substantive)
             ]
         if not matching:
             continue
