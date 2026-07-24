@@ -8,7 +8,11 @@ import threading
 import time
 import urllib.request
 
-from mathpub.gui.server import WorkspaceServer, _feedback_prompt
+from mathpub.gui.server import (
+    WorkspaceServer,
+    _feedback_prompt,
+    _publication_output_metadata,
+)
 from mathpub.gui.terminal import PTYManager
 
 
@@ -51,6 +55,44 @@ def test_feedback_prompt_is_single_line_and_validated():
             }
         )
         is None
+    )
+
+
+def test_publication_metadata_reports_stale_synctex_build(tmp_path):
+    project_root = tmp_path / "project"
+    edition = project_root / "build/demo/A"
+    generated = edition / "generated-tex"
+    generated.mkdir(parents=True)
+    manifest_path = edition / "manifest.json"
+    pdf_path = edition / "demo-A-student.pdf"
+    pdf_path.write_bytes(b"%PDF fixture")
+    (generated / "demo-A-student.tex").write_text("generated")
+    (generated / "source-map.json").write_text("{}")
+    synctex_path = edition / "demo-A-student.synctex.gz"
+    synctex_path.write_bytes(b"synctex fixture")
+    manifest = {
+        "publication_id": "demo",
+        "publication_path": "publications/demo.toml",
+        "root_seed": "2026",
+        "variant": "A",
+    }
+    output = {
+        "path": pdf_path.name,
+        "projection": "student",
+        "synctex": synctex_path.name,
+    }
+
+    resolved_path, metadata = _publication_output_metadata(manifest_path, manifest, output)
+    assert resolved_path == pdf_path
+    assert metadata["synctex_ready"] is True
+
+    synctex_path.unlink()
+    _, stale_metadata = _publication_output_metadata(manifest_path, manifest, output)
+    assert stale_metadata["synctex_ready"] is False
+    assert stale_metadata["mapping_error"] == "Missing SyncTeX data"
+    assert stale_metadata["mapping_rebuild_command"] == (
+        "nix run '.#mathpub' -- build publications/demo.toml "
+        "--seed 2026 --variant A --replace --json"
     )
 
 
