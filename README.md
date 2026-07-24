@@ -92,6 +92,19 @@ Options:
 - `--host HOST`: Specify custom host IP (default: `127.0.0.1`).
 - `--no-browser`: Launch the workspace server without opening a browser window automatically.
 
+The selected preview is watched automatically. Editing a component rebuilds only the active
+projection, reuses unchanged question instances, preserves the edition's other projections, and
+hot-swaps the rendered PDF. The header reports `Preview watching`, `Rebuilding preview…`, or
+`Preview updated`.
+
+Precompile a reusable format explicitly, or request an incremental single-lesson build:
+
+```console
+nix run .#mathpub -- dump-format --style textbook --font libertinus --paper letter --json
+nix run .#mathpub -- build publications/book.toml --seed 2026 --variant A \
+  --projection student --lesson linear-equations --incremental --replace --json
+```
+
 For detailed interface design, SyncTeX source-map routing, and Tauri desktop integration, see [GUI_DESIGN.md](GUI_DESIGN.md) and [GUI_IMPLEMENTATION_PLAN.md](GUI_IMPLEMENTATION_PLAN.md).
 
 The repository’s [AGENTS.md](AGENTS.md) is the operational interface for Codex CLI and other LLM

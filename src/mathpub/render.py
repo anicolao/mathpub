@@ -476,16 +476,17 @@ def document_tex(
 \usepackage[margin=0.8in]{{geometry}}
 \usepackage{{amsmath,mathtools}}
 {NUMBER_SET_PREAMBLE}
+\csname endofdump\endcsname
 {font_preamble(font_family)}
 \usepackage[per-mode=symbol]{{siunitx}}
 \usepackage{{tikz,microtype}}
 \setlength\parindent{{0pt}}
+\begin{{document}}
 {answers}
 \framedsolutions
 \pagestyle{{headandfoot}}
 \firstpageheader{{{course}}}{{\textbf{{{display_title}}}}}{{{author}}}
 \runningheader{{{course}}}{{{display_title}}}{{Page \thepage\ of \numpages}}
-\begin{{document}}
 \begin{{center}}
   {{\Large\bfseries {display_title}}}\\[3pt]
   {publication.get("subtitle", "")}
@@ -534,6 +535,7 @@ def textbook_tex(
 \usepackage[margin=0.85in]{{geometry}}
 \usepackage{{amsmath,amssymb,mathtools}}
 {NUMBER_SET_PREAMBLE}
+\csname endofdump\endcsname
 {font_preamble(font_family)}
 \usepackage[per-mode=symbol]{{siunitx}}
 \usepackage{{tikz,microtype,xcolor,enumitem,fancyhdr}}
@@ -690,34 +692,52 @@ def compile_pdf(
     source_map: list[dict[str, Any]] | None = None,
     generated_source: str | None = None,
     source_map_file: str | None = None,
+    latex_format: Path | None = None,
 ) -> tuple[Path, Path]:
-    engine = f"-{tex_engine}"
     log_path = output_dir / f"{tex_path.stem}.build.log"
-    command = [
-        "latexmk",
-        engine,
-        "-synctex=1",
-        "-interaction=nonstopmode",
-        "-halt-on-error",
-        "-file-line-error",
-        f"-outdir={output_dir}",
-        str(tex_path),
-    ]
+    if latex_format is not None:
+        command = [
+            tex_engine,
+            f"-fmt={latex_format}",
+            "-synctex=1",
+            "-interaction=nonstopmode",
+            "-halt-on-error",
+            "-file-line-error",
+            f"-output-directory={output_dir}",
+            str(tex_path),
+        ]
+        commands = [command, command]
+    else:
+        command = [
+            "latexmk",
+            f"-{tex_engine}",
+            "-synctex=1",
+            "-interaction=nonstopmode",
+            "-halt-on-error",
+            "-file-line-error",
+            f"-outdir={output_dir}",
+            str(tex_path),
+        ]
+        commands = [command]
+    environment = {
+        **os.environ,
+        "HOME": str(output_dir),
+        "SOURCE_DATE_EPOCH": "0",
+        "XDG_CACHE_HOME": str(output_dir / ".cache"),
+    }
     try:
-        process = subprocess.run(
-            command,
-            cwd=tex_path.parent,
-            capture_output=True,
-            text=True,
-            timeout=180,
-            check=False,
-            env={
-                **os.environ,
-                "HOME": str(output_dir),
-                "SOURCE_DATE_EPOCH": "0",
-                "XDG_CACHE_HOME": str(output_dir / ".cache"),
-            },
-        )
+        processes = [
+            subprocess.run(
+                item,
+                cwd=tex_path.parent,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                check=False,
+                env=environment,
+            )
+            for item in commands
+        ]
     except subprocess.TimeoutExpired as error:
         transcript = timeout_transcript(error)
         log_path.write_text(transcript, encoding="utf-8")
@@ -739,10 +759,11 @@ def compile_pdf(
             exit_code=6,
             details=details,
         ) from error
-    log_path.write_text(process.stdout + "\n" + process.stderr, encoding="utf-8")
+    transcript = "\n".join(process.stdout + "\n" + process.stderr for process in processes)
+    process = processes[-1]
+    log_path.write_text(transcript, encoding="utf-8")
     pdf_path = output_dir / f"{tex_path.stem}.pdf"
-    if process.returncode or not pdf_path.is_file():
-        transcript = process.stdout + "\n" + process.stderr
+    if any(item.returncode for item in processes) or not pdf_path.is_file():
         file_error = re.search(r"(?m)^.*?\.tex:(\d+):\s*(.+)$", transcript)
         bang_error = re.search(r"(?m)^!\s*(.+)$", transcript)
         line_hint = re.search(r"(?m)^l\.(\d+)\s", transcript)

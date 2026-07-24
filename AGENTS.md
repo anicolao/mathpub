@@ -58,3 +58,6 @@ nix run .#mathpub-workspace
 nix run .#mathpub-gui
 ```
 
+The workspace watches authored component roots and incrementally rebuilds the active PDF
+projection. Prepare formats manually with `nix run .#mathpub -- dump-format ...`; use
+`mathpub build --lesson LESSON_ID --incremental` for an explicit single-lesson preview build.

@@ -32,6 +32,7 @@
             lualatex-math
             mathtools
             microtype
+            mylatexformat
             siunitx
             standalone
             unicode-math
@@ -114,6 +115,7 @@
             lualatex-math
             mathtools
             microtype
+            mylatexformat
             siunitx
             standalone
             unicode-math

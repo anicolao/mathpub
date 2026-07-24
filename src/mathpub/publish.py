@@ -8,6 +8,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,7 @@ from mathpub.instance import (
     instantiate,
     instantiate_component,
 )
+from mathpub.latex_format import find_latex_format
 from mathpub.render import (
     SOURCE_BEGIN,
     SOURCE_END,
@@ -502,6 +505,150 @@ def _component_book_chapters(
     return rendered_chapters
 
 
+def _select_publication_lessons(
+    publication: dict[str, Any],
+    lesson_ids: list[str] | None,
+) -> dict[str, Any]:
+    """Restrict a textbook publication to explicitly selected lesson IDs."""
+    if not lesson_ids:
+        return publication
+    if publication.get("kind") != "textbook":
+        raise MathpubError(
+            "MP-BUILD-004",
+            "--lesson is only available for textbook publications",
+            exit_code=3,
+        )
+
+    selected_ids = set(lesson_ids)
+    filtered = deepcopy(publication)
+    found: set[str] = set()
+    if filtered.get("component_chapters"):
+        chapters = []
+        for chapter in filtered["component_chapters"]:
+            lessons = [lesson for lesson in chapter["lessons"] if lesson["id"] in selected_ids]
+            found.update(lesson["id"] for lesson in lessons)
+            if lessons:
+                chapter["lessons"] = lessons
+                chapters.append(chapter)
+        filtered["component_chapters"] = chapters
+    else:
+        chapters = []
+        for chapter in filtered.get("chapters", []):
+            lessons = [lesson for lesson in chapter["lessons"] if lesson["id"] in selected_ids]
+            found.update(lesson["id"] for lesson in lessons)
+            practice = chapter.get("practice")
+            if practice and practice["id"] in selected_ids:
+                found.add(practice["id"])
+            elif practice:
+                chapter.pop("practice")
+            if lessons or chapter.get("practice"):
+                chapter["lessons"] = lessons
+                chapters.append(chapter)
+        filtered["chapters"] = chapters
+
+    missing = sorted(selected_ids - found)
+    if missing:
+        raise MathpubError(
+            "MP-BUILD-005",
+            f"publication does not contain lesson(s): {', '.join(missing)}",
+            exit_code=3,
+        )
+    return filtered
+
+
+def _incremental_instance_cache(
+    project: Project,
+    destination: Path,
+    catalog: Catalog,
+    publication_path: Path,
+    publication: dict[str, Any],
+    root_seed: str,
+    variant: str,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Load prior instances whose authored generator inputs are unchanged."""
+    try:
+        manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}, {}
+    if (
+        manifest.get("publication_id") != publication.get("id")
+        or str(manifest.get("root_seed")) != str(root_seed)
+        or manifest.get("variant") != variant
+    ):
+        return {}, {}
+
+    question_sources = manifest.get("source", {}).get("question_sources", {})
+    questions: dict[str, dict[str, Any]] = {}
+    for item in manifest.get("questions", []):
+        identifier = item.get("id")
+        try:
+            entry = catalog.get("question", identifier)
+            if question_sources.get(identifier) != _source_hash(entry):
+                continue
+            instance = json.loads((destination / item["instance"]).read_text(encoding="utf-8"))
+        except (KeyError, OSError, json.JSONDecodeError, MathpubError):
+            continue
+        questions[identifier] = instance
+
+    components: dict[str, dict[str, Any]] = {}
+    publication_unchanged = manifest.get("source", {}).get("publication_sha256") == _file_hash(
+        publication_path
+    )
+    component_sources = manifest.get("source", {}).get("component_sources", {})
+    if publication_unchanged:
+        for item in manifest.get("components", []):
+            identifier = item.get("id")
+            placement = item.get("placement")
+            try:
+                entry = catalog.get("component", identifier)
+                if component_sources.get(identifier) != _component_source_hash(entry):
+                    continue
+                instance = json.loads((destination / item["instance"]).read_text(encoding="utf-8"))
+            except (KeyError, OSError, json.JSONDecodeError, MathpubError):
+                continue
+            components[placement] = instance
+    return questions, components
+
+
+def _preserve_unbuilt_projections(
+    destination: Path,
+    temporary: Path,
+    selected: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """Copy unchanged projection artifacts into an incremental replacement edition."""
+    try:
+        manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+        source_maps = json.loads(
+            (destination / "generated-tex/source-map.json").read_text(encoding="utf-8")
+        ).get("projections", {})
+    except (OSError, json.JSONDecodeError):
+        return [], {}
+
+    preserved_outputs = []
+    preserved_maps = {
+        projection: entries
+        for projection, entries in source_maps.items()
+        if projection not in selected
+    }
+    for output in manifest.get("outputs", []):
+        if output.get("projection") in selected:
+            continue
+        names = (output.get("path"), output.get("synctex"))
+        if not all(isinstance(name, str) and (destination / name).is_file() for name in names):
+            continue
+        for name in names:
+            shutil.copy2(destination / name, temporary / name)
+        stem = Path(output["path"]).stem
+        generated_source = destination / "generated-tex" / f"{stem}.tex"
+        if generated_source.is_file():
+            shutil.copy2(generated_source, temporary / "generated-tex" / generated_source.name)
+        log_path = destination / "logs" / f"{stem}.build.log"
+        if log_path.is_file():
+            shutil.copy2(log_path, temporary / "logs" / log_path.name)
+        preserved_outputs.append(output)
+    return preserved_outputs, preserved_maps
+
+
 def build(
     project: Project,
     publication_source: str | Path,
@@ -514,9 +661,15 @@ def build(
     stored_instances: dict[str, dict[str, Any]] | None = None,
     stored_component_instances: dict[str, dict[str, Any]] | None = None,
     reproduction_override: dict[str, Any] | None = None,
+    lesson_ids: list[str] | None = None,
+    incremental: bool = False,
 ) -> dict[str, Any]:
+    started = time.monotonic()
     publication_path = _publication_path(project, publication_source)
-    publication = load_toml(publication_path, "publication")
+    publication = _select_publication_lessons(
+        load_toml(publication_path, "publication"),
+        lesson_ids,
+    )
     anna_style = publication.get("style") == "anna"
     selected_font = font_family or (
         "computer-modern" if anna_style else publication.get("font", "libertinus")
@@ -528,12 +681,28 @@ def build(
     selected = projections or publication.get("projections", ["student", "solutions"])
     build_root = project.root / project.config.get("build_dir", "build")
     destination = build_root / publication["id"] / variant
-    if destination.exists():
-        if not replace:
-            raise MathpubError("MP-BUILD-001", f"edition already exists: {destination}")
-        shutil.rmtree(destination)
+    cached_questions: dict[str, dict[str, Any]] = {}
+    cached_components: dict[str, dict[str, Any]] = {}
+    if incremental and destination.exists():
+        cached_questions, cached_components = _incremental_instance_cache(
+            project,
+            destination,
+            catalog,
+            publication_path,
+            publication,
+            root_seed,
+            variant,
+        )
+    if destination.exists() and not replace:
+        raise MathpubError("MP-BUILD-001", f"edition already exists: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=".tmp-", dir=destination.parent))
+    cache_report = {
+        "questions_reused": 0,
+        "questions_regenerated": 0,
+        "components_reused": 0,
+        "components_regenerated": 0,
+    }
     try:
         instance_dir = temporary / "instances"
         tex_dir = temporary / "generated-tex"
@@ -546,7 +715,12 @@ def build(
                 entry = catalog.get("question", selection["id"])
                 instance = (stored_instances or {}).get(entry.metadata["id"])
                 if instance is None:
+                    instance = cached_questions.get(entry.metadata["id"])
+                    if instance is not None:
+                        cache_report["questions_reused"] += 1
+                if instance is None:
                     instance = instantiate(entry, root_seed, variant)
+                    cache_report["questions_regenerated"] += 1
                 expected = instance.get("sha256")
                 unhashed = {key: value for key, value in instance.items() if key != "sha256"}
                 if expected != instance_hash(unhashed):
@@ -566,6 +740,10 @@ def build(
             placement = spec["placement"]
             instance = (stored_component_instances or {}).get(placement)
             if instance is None:
+                instance = cached_components.get(placement)
+                if instance is not None:
+                    cache_report["components_reused"] += 1
+            if instance is None:
                 instance = instantiate_component(
                     entry,
                     root_seed,
@@ -573,6 +751,7 @@ def build(
                     placement,
                     overrides=spec["overrides"],
                 )
+                cache_report["components_regenerated"] += 1
             expected = instance.get("sha256")
             unhashed = {key: value for key, value in instance.items() if key != "sha256"}
             if expected != instance_hash(unhashed):
@@ -586,8 +765,12 @@ def build(
             )
             component_instances[placement] = instance
             component_ordered.append((entry, instance, spec))
-        outputs = []
-        generated_source_maps: dict[str, list[dict[str, Any]]] = {}
+        outputs, generated_source_maps = (
+            _preserve_unbuilt_projections(destination, temporary, selected)
+            if incremental and destination.exists() and not lesson_ids
+            else ([], {})
+        )
+        latex_format = find_latex_format(project, publication, selected_font)
         for projection in selected:
             rendered = [
                 question_tex(entry, instance, projection, selection.get("points"))
@@ -626,6 +809,7 @@ def build(
                 source_map=source_map,
                 generated_source=relative(project, tex_path),
                 source_map_file=relative(project, source_map_path),
+                latex_format=latex_format,
             )
             final_pdf = temporary / f"{stem}.pdf"
             if pdf_path != final_pdf:
@@ -651,6 +835,11 @@ def build(
                     ),
                 }
             )
+        projection_order = {
+            projection: index
+            for index, projection in enumerate(publication.get("projections", selected))
+        }
+        outputs.sort(key=lambda output: projection_order.get(output["projection"], len(outputs)))
         manifest = {
             "schema": 1,
             "mathpub_version": __version__,
@@ -664,6 +853,10 @@ def build(
             "tex_engine": tex_engine,
             "rng_algorithm": "pcg64-v1",
             "toolchain": _toolchain(),
+            "incremental": incremental,
+            "lesson_ids": lesson_ids or [],
+            "instance_cache": cache_report,
+            "latex_format": relative(project, latex_format) if latex_format else None,
             "source": {
                 **_git_source(project),
                 "publication_sha256": _file_hash(publication_path),
@@ -734,7 +927,17 @@ def build(
         if reproduction_override is not None:
             manifest["reproduction_override"] = reproduction_override
         (temporary / "manifest.json").write_text(canonical_json(manifest), encoding="utf-8")
-        os.replace(temporary, destination)
+        previous = destination.parent / f".previous-{temporary.name.removeprefix('.tmp-')}"
+        if destination.exists():
+            os.replace(destination, previous)
+        try:
+            os.replace(temporary, destination)
+        except Exception:
+            if previous.exists() and not destination.exists():
+                os.replace(previous, destination)
+            raise
+        if previous.exists():
+            shutil.rmtree(previous)
     except Exception as error:
         failure = destination.parent / f"failed-{temporary.name.removeprefix('.tmp-')}"
         if temporary.exists():
@@ -761,6 +964,11 @@ def build(
         "edition": relative(project, destination),
         "manifest": relative(project, destination / "manifest.json"),
         "outputs": outputs,
+        "incremental": incremental,
+        "lesson_ids": lesson_ids or [],
+        "instance_cache": cache_report,
+        "latex_format": relative(project, latex_format) if latex_format else None,
+        "duration_ms": round((time.monotonic() - started) * 1000),
     }
 
 
@@ -774,7 +982,10 @@ def reproduce(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     base = manifest_path.parent
     publication_path = _publication_path(project, manifest["publication_path"])
-    publication = load_toml(publication_path, "publication")
+    publication = _select_publication_lessons(
+        load_toml(publication_path, "publication"),
+        manifest.get("lesson_ids"),
+    )
     catalog = Catalog(project)
     current_source = {
         "publication_sha256": _file_hash(publication_path),
@@ -859,4 +1070,5 @@ def reproduce(
         stored_instances=instances,
         stored_component_instances=component_instances,
         reproduction_override={"allowed": True, "mismatches": mismatches} if mismatches else None,
+        lesson_ids=manifest.get("lesson_ids"),
     )
