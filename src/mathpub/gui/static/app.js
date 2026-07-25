@@ -123,6 +123,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const feedbackCancel = document.getElementById("feedback-cancel");
   const svgNamespace = "http://www.w3.org/2000/svg";
   let publicationsFingerprint = "";
+  let publicationsRequestId = 0;
+  let latestForcedPublicationsRequestId = 0;
   let publicationsByPath = new Map();
   let currentPublication = null;
   let currentSpatialIndex = null;
@@ -400,10 +402,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function refreshPublications(forcePath = null) {
+    const requestId = ++publicationsRequestId;
+    if (forcePath) latestForcedPublicationsRequestId = requestId;
     try {
       const res = await fetch("/api/publications");
       if (!res.ok) return;
       const data = await res.json();
+      if (!forcePath && requestId < latestForcedPublicationsRequestId) return;
       const pdfs = data.publications || [];
       publicationsByPath = new Map(pdfs.map((pdf) => [pdf.path, pdf]));
       const nextFingerprint = JSON.stringify(
@@ -450,9 +455,17 @@ document.addEventListener("DOMContentLoaded", () => {
             : selectedStillExists
               ? currentSelection
               : preferred?.path || "";
+        const shouldLoad =
+          Boolean(forcePath) || selectedPath !== currentPublication?.path;
         pdfSelect.value = selectedPath;
         publicationsFingerprint = nextFingerprint;
-        loadPdf(selectedPath, forcePath ? Date.now() : null, !forcePath);
+        if (shouldLoad) {
+          loadPdf(selectedPath, forcePath ? Date.now() : null, !forcePath);
+        } else {
+          currentPublication = publicationsByPath.get(selectedPath) || null;
+          updatePageControls();
+          updateMappingAvailability();
+        }
       } else if (forcePath && publicationsByPath.has(forcePath)) {
         pdfSelect.value = forcePath;
         loadPdf(forcePath, Date.now(), false);
