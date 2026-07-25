@@ -158,6 +158,7 @@
                   name = "mathpub-gui-e2e";
                   runtimeInputs = [
                     guiTestPython
+                    pkgs.mesa
                     pkgs.webkitgtk_4_1
                     pkgs.xvfb-run
                     tauri-driver
@@ -170,9 +171,9 @@
                     export NO_AT_BRIDGE=1
                     export GDK_BACKEND=x11
                     export LIBGL_ALWAYS_SOFTWARE=1
-                    export WEBKIT_DISABLE_COMPOSITING_MODE=1
+                    export LIBGL_DRIVERS_PATH=${pkgs.mesa}/lib/dri
+                    export __EGL_VENDOR_LIBRARY_FILENAMES=${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json
                     export WEBKIT_DISABLE_DMABUF_RENDERER=1
-                    export WEBKIT_SKIA_ENABLE_CPU_RENDERING=1
                     ${mathpub}/bin/mathpub build publications/physics-practice.toml \
                       --seed 2026 --variant A --projection student --replace --json
                     exec xvfb-run -a pytest \
