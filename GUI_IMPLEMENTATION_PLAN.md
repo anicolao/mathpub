@@ -29,10 +29,10 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 ### A. Terminal Subsystem (PTY & WebSocket)
 - **Backend**: Uses Python's native `pty` and `termios` modules (`os.openpty()`) on Unix/macOS to spawn a shell session (`$SHELL` or user agent command).
 - **Protocol**: WebSocket connection (`/ws/terminal`) streaming raw ANSI terminal input/output bidirectional data.
-- **Frontend**: Integrates `xterm.js` with the `FitAddon` and `WebglAddon` for hardware-accelerated terminal rendering inside the left pane.
+- **Frontend**: Integrates `xterm.js` with the `FitAddon` and the webview's deterministic canvas renderer inside the left pane.
 
 ### B. Tauri Native Desktop Shell & PDF Viewer Overlay
-- **Tauri Shell**: Wraps the frontend using system-native webviews (WKWebView on macOS, WebKitGTK on Linux). This provides native macOS Quartz/PDFKit subpixel rendering and smooth scrolling.
+- **Tauri Shell**: Wraps the frontend using system-native webviews (WKWebView on macOS, WebKitGTK on Linux) and displays deterministic page-specific raster previews.
 - **Transparent SVG Overlay**: Positioned directly over the PDF container with `pointer-events: none` on the container and `pointer-events: auto` on rendered bounding boxes.
 - **Hover & Selection**: Hovering over an element highlights it in translucent green. Clicking it triggers an annotation popup.
 
@@ -45,7 +45,7 @@ The interactive workspace is a local desktop application packaged using **Tauri*
   ```
 
 ### D. Incremental Build & LaTeX Pre-compilation
-- **LaTeX Format Dumps (`.fmt`)**: A dedicated pre-compilation routine generates `mathpub.fmt` containing pre-parsed heavy TeX packages (`tikz`, `amsmath`, `siunitx`, `fontspec`, `geometry`), cutting LaTeX compile overhead to under 500ms.
+- **LaTeX Format Dumps (`.fmt`)**: A dedicated pre-compilation routine generates `mathpub.fmt`, while the warm preview path reuses TeX auxiliary and font-cache state. Phase 6 enforces a 3.5-second end-to-end rebuild budget under the complete macOS WebKit workload instead of an engine-independent 500ms claim.
 - **Component Hashing**: Computes SHA-256 hashes of `component.toml`, seeds, and `generate.sage`. Skips Sage execution when inputs are unchanged.
 - **Partial Builds**: Compiles single-lesson or single-chapter target TeX fragments when editing, hot-swapping PDF pages via WebSocket events.
 
@@ -81,6 +81,13 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Configure a Linux `tauri-driver` native-package test in `tests/e2e/002_gui_workspace/`.
 - [x] Use `GUIStepHelper` for 0-pixel Playwright WebKit baselines and native-driver screenshot validation. Direct `tauri-driver` does not support macOS WKWebView.
 - [x] Update `README.md` and `AGENTS.md` with GUI workspace instructions (`nix run .#mathpub-gui`).
+
+### Phase 6: Multipage Preview & Measured Fast Regeneration
+- [x] Add accessible previous/next-page controls, page-count metadata, and page-specific raster preview rendering.
+- [x] Keep SyncTeX overlays and feedback routing synchronized with the visible page.
+- [x] Preserve the visible page and any explicit single-lesson target across watched rebuilds.
+- [x] Reuse compatible TeX auxiliary and font-cache state, skip Sage for fragment-only edits, and avoid unconditional second compilation passes.
+- [x] Add E2E coverage for page navigation, page-specific mappings, page-preserving hot swaps, and a 3.5-second incremental-turnaround budget.
 
 ---
 

@@ -28,13 +28,24 @@ class PreviewSelection:
     variant: str
     projection: str
     font_family: str
+    page: int
+    lesson_ids: tuple[str, ...]
 
 
 def _selection(project: Project, message: dict[str, object]) -> PreviewSelection | None:
     publication_value = message.get("publication_path")
     fields = ("root_seed", "variant", "projection", "font_family")
-    if not isinstance(publication_value, str) or not all(
-        isinstance(message.get(field), str) for field in fields
+    page = message.get("page", 1)
+    lesson_ids = message.get("lesson_ids", [])
+    if (
+        not isinstance(publication_value, str)
+        or not all(isinstance(message.get(field), str) for field in fields)
+        or not isinstance(page, int)
+        or not isinstance(lesson_ids, list)
+        or not all(
+            isinstance(lesson_id, str) and SAFE_VALUE.fullmatch(lesson_id)
+            for lesson_id in lesson_ids
+        )
     ):
         return None
     publication_path = (project.root / publication_value).resolve()
@@ -45,6 +56,8 @@ def _selection(project: Project, message: dict[str, object]) -> PreviewSelection
         or str(message["projection"]) not in PROJECTIONS
         or str(message["font_family"]) not in FONT_FAMILIES
         or not SAFE_VALUE.fullmatch(str(message["variant"]))
+        or page < 1
+        or page > 10_000
     ):
         return None
     return PreviewSelection(
@@ -53,6 +66,8 @@ def _selection(project: Project, message: dict[str, object]) -> PreviewSelection
         variant=str(message["variant"]),
         projection=str(message["projection"]),
         font_family=str(message["font_family"]),
+        page=page,
+        lesson_ids=tuple(lesson_ids),
     )
 
 
@@ -127,6 +142,10 @@ class IncrementalPreviewWatcher:
             replace=False,
         )
 
+    def prepare(self, selection: PreviewSelection) -> dict[str, Any]:
+        """Warm the selected preview's reusable format before reporting readiness."""
+        return self._prepare_format(selection)
+
     def _build(self, selection: PreviewSelection) -> dict[str, Any]:
         self._prepare_format(selection)
         return self.builder(
@@ -138,6 +157,7 @@ class IncrementalPreviewWatcher:
             font_family=selection.font_family,
             replace=True,
             incremental=True,
+            lesson_ids=list(selection.lesson_ids) or None,
         )
 
     async def _run(self) -> None:
@@ -169,6 +189,7 @@ class IncrementalPreviewWatcher:
                 {
                     "type": "preview-built",
                     "path": f"{result['edition']}/{output['path']}",
+                    "page": selection.page,
                     "duration_ms": round((time.monotonic() - started) * 1000),
                     "instance_cache": result["instance_cache"],
                     "format": result["latex_format"],

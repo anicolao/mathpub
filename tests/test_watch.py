@@ -21,10 +21,18 @@ def test_preview_selection_rejects_unsafe_values(tmp_path):
         "variant": "A",
         "projection": "student",
         "font_family": "libertinus",
+        "page": 2,
+        "lesson_ids": ["lesson-one"],
     }
-    assert _selection(project, valid) is not None
+    selected = _selection(project, valid)
+    assert selected is not None
+    assert selected.page == 2
+    assert selected.lesson_ids == ("lesson-one",)
     assert _selection(project, {**valid, "variant": "../outside"}) is None
     assert _selection(project, {**valid, "publication_path": "../outside.toml"}) is None
+    assert _selection(project, {**valid, "page": 0}) is None
+    assert _selection(project, {**valid, "page": "2"}) is None
+    assert _selection(project, {**valid, "lesson_ids": ["../outside"]}) is None
 
 
 def test_preview_watcher_rebuilds_after_authored_change(tmp_path):
@@ -82,6 +90,8 @@ id = "demo.question"
                 "variant": "A",
                 "projection": "student",
                 "font_family": "libertinus",
+                "page": 2,
+                "lesson_ids": ["lesson-one"],
             }
         )
         assert selected is not None
@@ -98,6 +108,8 @@ id = "demo.question"
         "preview-built",
     ]
     assert [name for name, _ in calls] == ["format", "build"]
+    assert events[-1]["page"] == 2
     build_call = calls[1][1]
     assert build_call["incremental"] is True
     assert build_call["projections"] == ["student"]
+    assert build_call["lesson_ids"] == ["lesson-one"]

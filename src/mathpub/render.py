@@ -706,7 +706,8 @@ def compile_pdf(
             f"-output-directory={output_dir}",
             str(tex_path),
         ]
-        commands = [command, command]
+        had_auxiliary = (output_dir / f"{tex_path.stem}.aux").is_file()
+        commands = [command] if had_auxiliary else [command, command]
     else:
         command = [
             "latexmk",
@@ -719,25 +720,49 @@ def compile_pdf(
             str(tex_path),
         ]
         commands = [command]
+    cache_home = latex_format.parent if latex_format is not None else output_dir
     environment = {
         **os.environ,
-        "HOME": str(output_dir),
+        "HOME": str(cache_home),
         "SOURCE_DATE_EPOCH": "0",
-        "XDG_CACHE_HOME": str(output_dir / ".cache"),
+        "XDG_CACHE_HOME": str(cache_home / ".cache"),
     }
     try:
-        processes = [
-            subprocess.run(
-                item,
-                cwd=tex_path.parent,
-                capture_output=True,
-                text=True,
-                timeout=180,
-                check=False,
-                env=environment,
+        processes = []
+        for item in commands:
+            processes.append(
+                subprocess.run(
+                    item,
+                    cwd=tex_path.parent,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                    check=False,
+                    env=environment,
+                )
             )
-            for item in commands
-        ]
+        if latex_format is not None and had_auxiliary:
+            first_transcript = processes[0].stdout + "\n" + processes[0].stderr
+            rerun_requested = any(
+                marker in first_transcript
+                for marker in (
+                    "Rerun to get cross-references right",
+                    "Label(s) may have changed",
+                    "Rerun LaTeX",
+                )
+            )
+            if rerun_requested and processes[0].returncode == 0:
+                processes.append(
+                    subprocess.run(
+                        command,
+                        cwd=tex_path.parent,
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                        check=False,
+                        env=environment,
+                    )
+                )
     except subprocess.TimeoutExpired as error:
         transcript = timeout_transcript(error)
         log_path.write_text(transcript, encoding="utf-8")
