@@ -95,10 +95,12 @@ Options:
 - `--host HOST`: Specify custom host IP (default: `127.0.0.1`).
 - `--no-browser`: Launch the workspace server without opening a browser window automatically.
 
-The selected preview is watched automatically. Editing a component rebuilds only the active
-projection, reuses unchanged question instances, preserves the edition's other projections, and
-hot-swaps the rendered PDF. The header reports `Preview watching`, `Rebuilding preview…`, or
-`Preview updated`.
+The selected preview is watched automatically. Previous/next controls navigate every rendered
+page while keeping its SyncTeX regions aligned. Editing a component rebuilds only the active
+projection, preserves explicit single-lesson targets, reuses unchanged question instances and TeX
+auxiliary state, preserves the edition's other projections, and hot-swaps the visible page. The
+header reports `Preview watching`, `Rebuilding preview…`, or `Preview updated`, including the
+measured rebuild duration.
 
 The native Linux application can be exercised through `tauri-driver`:
 

@@ -106,6 +106,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const pdfSelect = document.getElementById("pdf-select");
   const pdfPreview = document.getElementById("pdf-preview");
   const pdfPlaceholder = document.getElementById("pdf-placeholder");
+  const previousPage = document.getElementById("page-previous");
+  const nextPage = document.getElementById("page-next");
+  const pagePosition = document.getElementById("page-position");
   const mappedRegionsToggle = document.getElementById("mapped-regions-toggle");
   const synctexOverlay = document.getElementById("synctex-overlay");
   const synctexStatus = document.getElementById("status-synctex");
@@ -127,6 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedFeedbackBox = null;
   let refreshTimer = null;
   let mappingRequestId = 0;
+  let currentPage = 1;
 
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS(svgNamespace, name);
@@ -174,7 +178,9 @@ document.addEventListener("DOMContentLoaded", () => {
         root_seed: currentPublication.root_seed,
         variant: currentPublication.variant,
         projection: currentPublication.projection,
-        font_family: currentPublication.font_family
+        font_family: currentPublication.font_family,
+        page: currentPage,
+        lesson_ids: currentPublication.lesson_ids || []
       })
     );
   }
@@ -350,11 +356,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!mappingAvailable(currentPublication)) return;
     const requestId = ++mappingRequestId;
     const publication = currentPublication;
+    const page = currentPage;
     const params = new URLSearchParams({
       publication_id: publication.publication_id,
       variant: publication.variant,
       projection: publication.projection,
-      page: "1"
+      page: String(page)
     });
     updateMappingAvailability();
     try {
@@ -364,7 +371,11 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(payload.error || `SyncTeX request failed: ${response.status}`);
       }
       const spatialIndex = await response.json();
-      if (requestId !== mappingRequestId || publication !== currentPublication) return;
+      if (
+        requestId !== mappingRequestId ||
+        publication !== currentPublication ||
+        page !== currentPage
+      ) return;
       currentSpatialIndex = spatialIndex;
       synctexOverlay.setAttribute("aria-hidden", "false");
       renderMappedRegions();
@@ -404,6 +415,8 @@ document.addEventListener("DOMContentLoaded", () => {
           pdf.variant,
           pdf.projection,
           pdf.font_family,
+          pdf.pages,
+          pdf.lesson_ids,
           pdf.synctex_ready,
           pdf.mapping_error,
           pdf.mapping_rebuild_command
@@ -449,25 +462,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function loadPdf(path, cacheBust = null, notifyWatcher = true) {
-    currentPublication = publicationsByPath.get(path) || null;
+  function pageCount() {
+    const pages = Number(currentPublication?.pages || 1);
+    return Number.isInteger(pages) && pages > 0 ? pages : 1;
+  }
+
+  function updatePageControls() {
+    if (!currentPublication) {
+      pagePosition.textContent = "Page 0 of 0";
+      previousPage.disabled = true;
+      nextPage.disabled = true;
+      return;
+    }
+    const pages = pageCount();
+    pagePosition.textContent = `Page ${currentPage} of ${pages}`;
+    previousPage.disabled = currentPage <= 1;
+    nextPage.disabled = currentPage >= pages;
+  }
+
+  function loadPreviewPage(cacheBust = null, notifyWatcher = true) {
     clearMappedRegions();
-    if (!path) {
+    updatePageControls();
+    if (!currentPublication) {
       pdfPreview.style.display = "none";
       pdfPlaceholder.style.display = "block";
       return;
     }
     const version = cacheBust ? `&version=${cacheBust}` : "";
-    pdfPreview.src = `/api/pdf-preview?path=${encodeURIComponent(path)}${version}`;
+    pdfPreview.src =
+      `/api/pdf-preview?path=${encodeURIComponent(pdfSelect.value)}` +
+      `&page=${currentPage}${version}`;
     pdfPreview.style.display = "block";
     pdfPlaceholder.style.display = "none";
     loadMappedRegions();
     if (notifyWatcher) sendPreviewSelection();
   }
 
+  function loadPdf(path, cacheBust = null, notifyWatcher = true) {
+    const selectionChanged = path !== pdfSelect.value || currentPublication?.path !== path;
+    currentPublication = publicationsByPath.get(path) || null;
+    if (selectionChanged) currentPage = 1;
+    loadPreviewPage(cacheBust, notifyWatcher);
+  }
+
+  function showPage(page) {
+    if (!currentPublication) return;
+    const next = Math.max(1, Math.min(pageCount(), page));
+    if (next === currentPage) return;
+    currentPage = next;
+    loadPreviewPage(null, true);
+  }
+
   pdfSelect.addEventListener("change", (e) => {
     loadPdf(e.target.value);
   });
+
+  previousPage.addEventListener("click", () => showPage(currentPage - 1));
+  nextPage.addEventListener("click", () => showPage(currentPage + 1));
 
   mappedRegionsToggle.addEventListener("click", () => {
     setMappedRegionsVisible(!mappedRegionsVisible);

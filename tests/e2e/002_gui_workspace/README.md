@@ -27,6 +27,10 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 
 ![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)
 
+## Page Two with Page-Specific SyncTeX Mappings
+
+![Page Two](./screenshots/003-page-two.png)
+
 ## Incremental Preview Updated
 
 ![Incremental Preview](./screenshots/004-incremental-preview-updated.png)
@@ -39,4 +43,5 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 - [x] Mapped component regions align with their rendered PDF content
 - [x] Clicking a mapped region opens source-aware feedback controls
 - [x] Feedback is inserted into the PTY for review without being executed
-- [x] Authored changes reuse instances and hot-swap the active PDF
+- [x] Multipage navigation loads page-specific PDF content and mappings
+- [x] Authored changes reuse instances and hot-swap the active page within budget

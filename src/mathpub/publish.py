@@ -104,6 +104,19 @@ def _component_source_hash(entry: Entry) -> str:
     return digest.hexdigest()
 
 
+def _generator_source_hash(entry: Entry) -> str:
+    """Hash only authored inputs that can change a generated instance."""
+    metadata_name = "question.toml" if entry.kind == "question" else "component.toml"
+    paths = [entry.path / metadata_name]
+    if generator := entry.metadata.get("generator"):
+        paths.append(entry.path / generator)
+    digest = hashlib.sha256()
+    for path in sorted(paths):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
 def _git_source(project: Project) -> dict[str, Any]:
     def git(*arguments: str) -> str:
         process = subprocess.run(
@@ -577,13 +590,20 @@ def _incremental_instance_cache(
     ):
         return {}, {}
 
-    question_sources = manifest.get("source", {}).get("question_sources", {})
+    source_manifest = manifest.get("source", {})
+    question_sources = source_manifest.get("question_generator_sources")
+    legacy_question_sources = question_sources is None
+    if legacy_question_sources:
+        question_sources = source_manifest.get("question_sources", {})
     questions: dict[str, dict[str, Any]] = {}
     for item in manifest.get("questions", []):
         identifier = item.get("id")
         try:
             entry = catalog.get("question", identifier)
-            if question_sources.get(identifier) != _source_hash(entry):
+            expected_hash = (
+                _source_hash(entry) if legacy_question_sources else _generator_source_hash(entry)
+            )
+            if question_sources.get(identifier) != expected_hash:
                 continue
             instance = json.loads((destination / item["instance"]).read_text(encoding="utf-8"))
         except (KeyError, OSError, json.JSONDecodeError, MathpubError):
@@ -594,14 +614,22 @@ def _incremental_instance_cache(
     publication_unchanged = manifest.get("source", {}).get("publication_sha256") == _file_hash(
         publication_path
     )
-    component_sources = manifest.get("source", {}).get("component_sources", {})
+    component_sources = source_manifest.get("component_generator_sources")
+    legacy_component_sources = component_sources is None
+    if legacy_component_sources:
+        component_sources = source_manifest.get("component_sources", {})
     if publication_unchanged:
         for item in manifest.get("components", []):
             identifier = item.get("id")
             placement = item.get("placement")
             try:
                 entry = catalog.get("component", identifier)
-                if component_sources.get(identifier) != _component_source_hash(entry):
+                expected_hash = (
+                    _component_source_hash(entry)
+                    if legacy_component_sources
+                    else _generator_source_hash(entry)
+                )
+                if component_sources.get(identifier) != expected_hash:
                     continue
                 instance = json.loads((destination / item["instance"]).read_text(encoding="utf-8"))
             except (KeyError, OSError, json.JSONDecodeError, MathpubError):
@@ -800,6 +828,9 @@ def build(
                 canonical_json({"schema": 1, "projections": generated_source_maps}),
                 encoding="utf-8",
             )
+            previous_auxiliary = destination / f"{stem}.aux"
+            if incremental and previous_auxiliary.is_file():
+                shutil.copy2(previous_auxiliary, temporary / previous_auxiliary.name)
             pdf_path, log_path = compile_pdf(
                 tex_path,
                 temporary,
@@ -863,8 +894,15 @@ def build(
                 "question_sources": {
                     entry.metadata["id"]: _source_hash(entry) for entry, _, _ in ordered
                 },
+                "question_generator_sources": {
+                    entry.metadata["id"]: _generator_source_hash(entry) for entry, _, _ in ordered
+                },
                 "component_sources": {
                     entry.metadata["id"]: _component_source_hash(entry)
+                    for entry, _, _ in component_ordered
+                },
+                "component_generator_sources": {
+                    entry.metadata["id"]: _generator_source_hash(entry)
                     for entry, _, _ in component_ordered
                 },
                 "lesson_sources": {

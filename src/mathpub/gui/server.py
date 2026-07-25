@@ -173,6 +173,8 @@ def _publication_output_metadata(
         "publication_id": manifest.get("publication_id"),
         "variant": manifest.get("variant"),
         "projection": output.get("projection"),
+        "pages": output.get("pages", 1),
+        "lesson_ids": manifest.get("lesson_ids", []),
         "publication_path": manifest.get("publication_path"),
         "root_seed": str(manifest.get("root_seed", "")),
         "font_family": manifest.get("font_family"),
@@ -340,8 +342,12 @@ class WorkspaceServer:
             parsed = urlparse(path)
             query = parse_qs(parsed.query)
             pdf_rel_path = query.get("path", [""])[0]
+            try:
+                page_number = int(query.get("page", ["1"])[0])
+            except ValueError:
+                page_number = 0
 
-            if pdf_rel_path:
+            if pdf_rel_path and page_number >= 1:
                 project_root = Path.cwd().resolve()
                 target_pdf = (project_root / pdf_rel_path).resolve()
                 if (
@@ -356,9 +362,9 @@ class WorkspaceServer:
                                 "-png",
                                 "-singlefile",
                                 "-f",
-                                "1",
+                                str(page_number),
                                 "-l",
-                                "1",
+                                str(page_number),
                                 "-r",
                                 "96",
                                 str(target_pdf),
@@ -495,14 +501,26 @@ class WorkspaceServer:
                                     continue
                                 if msg.get("type") == "watch-preview":
                                     selection = watcher.select(msg)
+                                    preparation_error = None
+                                    if selection is not None:
+                                        try:
+                                            await asyncio.to_thread(
+                                                watcher.prepare,
+                                                selection,
+                                            )
+                                        except Exception as error:
+                                            preparation_error = str(error)
                                     await send_event(
                                         {
                                             "type": "preview-watch-ready"
-                                            if selection is not None
+                                            if selection is not None and preparation_error is None
                                             else "preview-watch-failed",
-                                            "error": None
-                                            if selection is not None
-                                            else "Invalid preview selection",
+                                            "error": preparation_error
+                                            or (
+                                                None
+                                                if selection is not None
+                                                else "Invalid preview selection"
+                                            ),
                                         }
                                     )
                                     continue

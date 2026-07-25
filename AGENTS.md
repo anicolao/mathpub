@@ -58,9 +58,11 @@ nix run .#mathpub-gui
 nix run .#mathpub-workspace
 ```
 
-The workspace watches authored component roots and incrementally rebuilds the active PDF
-projection. Prepare formats manually with `nix run .#mathpub -- dump-format ...`; use
-`mathpub build --lesson LESSON_ID --incremental` for an explicit single-lesson preview build.
+The workspace navigates multipage PDFs with page-specific SyncTeX overlays and watches authored
+component roots to incrementally rebuild the active PDF projection without changing the visible
+page. Prepare formats manually with `nix run .#mathpub -- dump-format ...`; use `mathpub build
+--lesson LESSON_ID --incremental` for an explicit single-lesson preview build, which the watcher
+preserves.
 On Linux, validate the packaged native application with `nix run .#mathpub-gui-e2e`. The macOS
 zero-pixel renderer baseline remains the Playwright WebKit test because direct `tauri-driver`
 does not support WKWebView.

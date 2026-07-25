@@ -107,6 +107,8 @@ id = "physics.fixed"
         output for output in first_manifest["outputs"] if output["projection"] == "answers"
     )
     answers_bytes = (root / first["edition"] / first_answers["path"]).read_bytes()
+    prompt_path = next((root / "components").rglob("prompt.tex"))
+    prompt_path.write_text(prompt_path.read_text() + "\nClarify the wording.\n")
     second = build(
         project,
         publication,

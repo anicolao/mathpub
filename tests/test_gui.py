@@ -75,16 +75,20 @@ def test_publication_metadata_reports_stale_synctex_build(tmp_path):
         "publication_path": "publications/demo.toml",
         "root_seed": "2026",
         "variant": "A",
+        "lesson_ids": ["lesson-one"],
     }
     output = {
         "path": pdf_path.name,
         "projection": "student",
         "synctex": synctex_path.name,
+        "pages": 3,
     }
 
     resolved_path, metadata = _publication_output_metadata(manifest_path, manifest, output)
     assert resolved_path == pdf_path
     assert metadata["synctex_ready"] is True
+    assert metadata["pages"] == 3
+    assert metadata["lesson_ids"] == ["lesson-one"]
 
     synctex_path.unlink()
     _, stale_metadata = _publication_output_metadata(manifest_path, manifest, output)

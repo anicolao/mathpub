@@ -6,6 +6,7 @@ import asyncio
 import json
 import math
 import os
+import re
 import sys
 import threading
 from pathlib import Path
@@ -163,6 +164,9 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "document.getElementById('status-build').textContent === 'Preview watching'"
             )
             assert page.locator("#pdf-preview").is_visible()
+            assert page.locator("#page-position").text_content() == "Page 1 of 2"
+            assert page.locator("#page-previous").is_disabled()
+            assert page.locator("#page-next").is_enabled()
 
             boxes_response = page.request.get(
                 f"http://127.0.0.1:{bound_port}/api/synctex/boxes"
@@ -328,7 +332,36 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
             steps.verify(page, "003-feedback-inserted-in-terminal")
 
-            # 9. Touch an authored component and verify incremental PDF hot-swap.
+            # 9. Navigate to page two and verify page-specific content and mappings.
+            page.locator("#page-next").click()
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 2 of 2'"
+            )
+            page.wait_for_function(
+                "document.getElementById('status-synctex').textContent === 'SyncTeX Ready'"
+            )
+            assert page.locator("#page-previous").is_enabled()
+            assert page.locator("#page-next").is_disabled()
+            assert "page=2" in page.locator("#pdf-preview").get_attribute("src")
+            second_page_response = page.request.get(
+                f"http://127.0.0.1:{bound_port}/api/synctex/boxes"
+                "?publication_id=physics.practice"
+                "&variant=A"
+                "&projection=student"
+                "&page=2"
+            )
+            assert second_page_response.ok
+            second_page_boxes = second_page_response.json()["boxes"]
+            assert {(box["component_id"], box["fragment"]) for box in second_page_boxes} >= {
+                ("physics.projectiles.snowball", "prompt")
+            }
+            page.wait_for_function(
+                f"document.querySelectorAll('.synctex-region').length === {len(second_page_boxes)}"
+            )
+
+            steps.verify(page, "003-page-two")
+
+            # 10. Touch an authored component and verify a bounded, page-preserving hot-swap.
             source_stat = watched_source.stat()
             original_source_times = (source_stat.st_atime_ns, source_stat.st_mtime_ns)
             os.utime(
@@ -346,11 +379,16 @@ def test_gui_workspace_e2e(update_baselines: bool):
             build_details = page.locator("#status-build").get_attribute("title")
             assert "3 instances reused" in build_details
             assert "mathpub.fmt" in build_details
+            duration_match = re.match(r"(?P<duration>\d+) ms;", build_details)
+            assert duration_match is not None
+            assert int(duration_match.group("duration")) <= 3500
             page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
             page.wait_for_function(
                 "document.getElementById('status-synctex').textContent === 'SyncTeX Ready'"
             )
             assert page.locator("#pdf-select").input_value() == expected_pdf
+            assert page.locator("#page-position").text_content() == "Page 2 of 2"
+            assert "page=2" in page.locator("#pdf-preview").get_attribute("src")
 
             steps.verify(page, "004-incremental-preview-updated")
 
@@ -376,6 +414,8 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "![Element Feedback Dialog](./screenshots/002-element-feedback-dialog.png)\n\n"
                 "## Feedback Inserted into the Active Terminal\n\n"
                 "![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)\n\n"
+                "## Page Two with Page-Specific SyncTeX Mappings\n\n"
+                "![Page Two](./screenshots/003-page-two.png)\n\n"
                 "## Incremental Preview Updated\n\n"
                 "![Incremental Preview](./screenshots/004-incremental-preview-updated.png)\n\n"
                 "**Verifications:**\n"
@@ -386,7 +426,9 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "- [x] Mapped component regions align with their rendered PDF content\n"
                 "- [x] Clicking a mapped region opens source-aware feedback controls\n"
                 "- [x] Feedback is inserted into the PTY for review without being executed\n"
-                "- [x] Authored changes reuse instances and hot-swap the active PDF\n"
+                "- [x] Multipage navigation loads page-specific PDF content and mappings\n"
+                "- [x] Authored changes reuse instances and hot-swap the active page "
+                "within budget\n"
             )
             readme_path.write_text(readme_content)
 
