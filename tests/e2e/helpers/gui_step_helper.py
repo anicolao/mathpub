@@ -31,12 +31,14 @@ class GUIStepHelper:
         candidate = Image.open(candidate_path).convert("RGB")
         baseline = Image.open(baseline_path).convert("RGB")
         diff = ImageChops.difference(candidate, baseline)
-        candidate_path.unlink()
-        if diff.getbbox() is not None:
-            diff.save(self.diffs_dir / f"{name}-diff.png")
-            raise AssertionError(
-                f"Visual regression in WebKit GUI workspace layout!\nBaseline: {baseline_path}"
-            )
+        if diff.getbbox() is None:
+            candidate_path.unlink()
+            return
+        diff.save(self.diffs_dir / f"{name}-diff.png")
+        raise AssertionError(
+            "Visual regression in WebKit GUI workspace layout!\n"
+            f"Candidate: {candidate_path}\nBaseline: {baseline_path}"
+        )
 
     @staticmethod
     def verify_native_capture(png: bytes, artifact_path: Path) -> tuple[int, int]:
