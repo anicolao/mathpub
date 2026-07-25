@@ -45,7 +45,7 @@ The interactive workspace is a local desktop application packaged using **Tauri*
   ```
 
 ### D. Incremental Build & LaTeX Pre-compilation
-- **LaTeX Format Dumps (`.fmt`)**: A dedicated pre-compilation routine generates `mathpub.fmt`, while the warm preview path reuses TeX auxiliary and font-cache state. Phase 6 enforces a 3.5-second end-to-end rebuild budget under the complete macOS WebKit workload instead of an engine-independent 500ms claim.
+- **LaTeX Format Dumps (`.fmt`)**: A dedicated pre-compilation routine generates `mathpub.fmt`, while the warm preview path reuses TeX auxiliary and font-cache state. Phase 6 enforces a 5-second end-to-end CI rebuild budget under the complete macOS WebKit workload instead of an engine-independent 500ms claim. The test also verifies instance reuse and a prepared format, while a focused unit test proves that the warm TeX path uses one compilation pass.
 - **Component Hashing**: Computes SHA-256 hashes of `component.toml`, seeds, and `generate.sage`. Skips Sage execution when inputs are unchanged.
 - **Partial Builds**: Compiles single-lesson or single-chapter target TeX fragments when editing, hot-swapping PDF pages via WebSocket events.
 
@@ -87,7 +87,7 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Keep SyncTeX overlays and feedback routing synchronized with the visible page.
 - [x] Preserve the visible page and any explicit single-lesson target across watched rebuilds.
 - [x] Reuse compatible TeX auxiliary and font-cache state, skip Sage for fragment-only edits, and avoid unconditional second compilation passes.
-- [x] Add E2E coverage for page navigation, page-specific mappings, page-preserving hot swaps, and a 3.5-second incremental-turnaround budget.
+- [x] Add E2E coverage for page navigation, page-specific mappings, page-preserving hot swaps, and a 5-second incremental-turnaround CI budget.
 
 ---
 
