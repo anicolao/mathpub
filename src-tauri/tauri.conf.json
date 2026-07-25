@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "mathpub",
+  "version": "0.1.0",
+  "identifier": "org.mathpub.workspace",
+  "build": {
+    "frontendDist": "../src/mathpub/gui/static"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": []
+  }
+}

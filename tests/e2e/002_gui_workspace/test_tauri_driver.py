@@ -1,0 +1,164 @@
+"""Native Tauri workspace smoke test driven through tauri-driver on Linux."""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+import socket
+import subprocess
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from tests.e2e.helpers.gui_step_helper import GUIStepHelper
+
+DRIVER_URL = "http://127.0.0.1:4444"
+ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf"
+
+
+class WebDriverClient:
+    def __init__(self, application: Path) -> None:
+        response = self._request(
+            "POST",
+            "/session",
+            {
+                "capabilities": {
+                    "alwaysMatch": {
+                        "browserName": "wry",
+                        "tauri:options": {"application": str(application)},
+                    }
+                }
+            },
+        )
+        value = response.get("value", response)
+        self.session_id = response.get("sessionId") or value.get("sessionId")
+        if not self.session_id:
+            raise AssertionError(f"tauri-driver did not return a session ID: {response}")
+
+    @staticmethod
+    def _request(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        body = None if payload is None else json.dumps(payload).encode()
+        request = urllib.request.Request(
+            f"{DRIVER_URL}{path}",
+            data=body,
+            method=method,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors="replace")
+            raise AssertionError(f"WebDriver {method} {path} failed: {detail}") from error
+        return json.loads(raw) if raw else {}
+
+    def find_text(self, selector: str) -> str:
+        response = self._request(
+            "POST",
+            f"/session/{self.session_id}/element",
+            {"using": "css selector", "value": selector},
+        )
+        element = response["value"][ELEMENT_KEY]
+        text = self._request(
+            "GET",
+            f"/session/{self.session_id}/element/{element}/text",
+        )
+        return str(text["value"])
+
+    def execute(self, script: str) -> Any:
+        response = self._request(
+            "POST",
+            f"/session/{self.session_id}/execute/sync",
+            {"script": script, "args": []},
+        )
+        return response["value"]
+
+    def screenshot(self) -> bytes:
+        response = self._request("GET", f"/session/{self.session_id}/screenshot")
+        return base64.b64decode(response["value"])
+
+    def close(self) -> None:
+        self._request("DELETE", f"/session/{self.session_id}")
+
+
+def _wait_for_driver(process: subprocess.Popen[bytes]) -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise AssertionError(f"tauri-driver exited during startup with {process.returncode}")
+        try:
+            with socket.create_connection(("127.0.0.1", 4444), timeout=0.2):
+                return
+        except OSError:
+            time.sleep(0.1)
+    raise AssertionError("timed out waiting for tauri-driver")
+
+
+def test_packaged_tauri_workspace_launches_and_renders():
+    application_value = os.environ.get("MATHPUB_GUI_BINARY")
+    driver_value = os.environ.get("TAURI_DRIVER_BINARY")
+    if not application_value or not driver_value:
+        pytest.skip("run with nix run .#mathpub-gui-e2e on Linux")
+
+    application = Path(application_value)
+    driver_binary = Path(driver_value)
+    assert application.is_file()
+    assert driver_binary.is_file()
+
+    driver_process = subprocess.Popen([str(driver_binary)])
+    client = None
+    try:
+        _wait_for_driver(driver_process)
+        client = WebDriverClient(application)
+
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                if client.find_text(".logo") == "mathpub":
+                    break
+            except (AssertionError, KeyError):
+                pass
+            if time.monotonic() >= deadline:
+                raise AssertionError("native workspace never rendered its header")
+            time.sleep(0.1)
+
+        assert "Interactive Workspace" in client.find_text(".subtitle")
+        assert client.find_text("#status-connection") == "PTY Connected"
+        dimensions = client.execute(
+            """
+            return {
+              width: window.innerWidth,
+              height: window.innerHeight,
+              previewWidth: document.getElementById('pdf-preview').naturalWidth
+            };
+            """
+        )
+        assert dimensions["width"] >= 960
+        assert dimensions["height"] >= 600
+        assert dimensions["previewWidth"] > 0
+
+        artifact = Path(
+            os.environ.get(
+                "MATHPUB_GUI_NATIVE_SCREENSHOT",
+                "build/e2e/tauri-driver.png",
+            )
+        )
+        screenshot_size = GUIStepHelper.verify_native_capture(client.screenshot(), artifact)
+        assert screenshot_size[0] >= dimensions["width"]
+        assert screenshot_size[1] >= dimensions["height"]
+    finally:
+        try:
+            if client is not None:
+                client.close()
+        finally:
+            driver_process.terminate()
+            try:
+                driver_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                driver_process.kill()
+                driver_process.wait(timeout=10)

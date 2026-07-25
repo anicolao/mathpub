@@ -54,10 +54,10 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 ## 3. Phased Implementation Milestones
 
 ### Phase 1: Workspace Backend, Tauri Shell & PTY Bridge
-- [ ] Create Python package `src/mathpub/gui/` with static asset serving and WebSocket routes.
-- [ ] Implement `PTYManager` in `src/mathpub/gui/terminal.py` handling process spawning, terminal resizing (`TIOCSWINSZ`), and I/O buffer forwarding.
-- [ ] Set up Tauri project scaffolding in `src-tauri/` configuring WKWebView/WebKitGTK integration.
-- [ ] Add CLI subcommand `mathpub workspace` and Nix app `nix run .#mathpub-gui`.
+- [x] Create Python package `src/mathpub/gui/` with static asset serving and WebSocket routes.
+- [x] Implement `PTYManager` in `src/mathpub/gui/terminal.py` handling process spawning, terminal resizing (`TIOCSWINSZ`), and I/O buffer forwarding.
+- [x] Set up Tauri project scaffolding in `src-tauri/` configuring WKWebView/WebKitGTK integration.
+- [x] Add CLI subcommand `mathpub workspace` and Nix app `nix run .#mathpub-gui`.
 
 ### Phase 2: SyncTeX Parser & Spatial Bounding Box API
 - [x] Implement `src/mathpub/gui/synctex.py` to parse `.synctex.gz` or run `synctex view` coordinate lookups.
@@ -77,14 +77,14 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Add a file watcher on authored component roots to automatically trigger incremental builds and send PDF hot-swap events over WebSocket.
 
 ### Phase 5: Nix Packaging, `tauri-driver` & E2E Screenshots
-- [ ] Add `packages.mathpub-gui` and `apps.mathpub-gui` to `flake.nix`.
-- [ ] Configure `tauri-driver` in `tests/e2e/002_gui_workspace/`.
-- [ ] Implement Playwright E2E screenshot testing suite using `GUIStepHelper` to capture 0-pixel visual baselines of the Tauri application.
-- [ ] Update `README.md` and `AGENTS.md` with GUI workspace instructions (`nix run .#mathpub-gui`).
+- [x] Add `packages.mathpub-gui` and `apps.mathpub-gui` to `flake.nix`.
+- [x] Configure a Linux `tauri-driver` native-package test in `tests/e2e/002_gui_workspace/`.
+- [x] Use `GUIStepHelper` for 0-pixel Playwright WebKit baselines and native-driver screenshot validation. Direct `tauri-driver` does not support macOS WKWebView.
+- [x] Update `README.md` and `AGENTS.md` with GUI workspace instructions (`nix run .#mathpub-gui`).
 
 ---
 
 ## 4. Verification & Testing Strategy
 
 - **Unit Tests**: Test `PTYManager` process spawning, `synctex` coordinate parsing, and source-map resolution in `tests/test_gui.py`.
-- **Tauri E2E Visual Tests**: Playwright scenario (`tests/e2e/002_gui_workspace/`) launched via `tauri-driver` captures native webview visual snapshots, verifying terminal output and overlay bounding box positioning against committed 0-pixel tolerance baselines.
+- **Tauri E2E Visual Tests**: The Linux native smoke scenario launches the packaged application through `tauri-driver` and preserves a native WebKitGTK screenshot artifact. The Playwright WebKit scenario uses `GUIStepHelper` to verify terminal output, rendered PDF content, and overlay positioning against committed 0-pixel tolerance baselines on macOS, where direct `tauri-driver` cannot automate WKWebView.

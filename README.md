@@ -78,12 +78,15 @@ nix run .#mathpub -- reproduce build/physics.practice/A/manifest.json --replace 
 Launch the workspace using Nix:
 
 ```console
-nix run .#mathpub-workspace
+nix run .#mathpub-gui
 ```
 
-Or via the `mathpub` CLI inside a development shell:
+This starts the packaged Tauri desktop application, which launches and owns the Python workspace
+backend on an ephemeral localhost port. To use the same workspace in an ordinary browser instead:
 
 ```console
+nix run .#mathpub-workspace
+# or, inside nix develop
 mathpub workspace
 ```
 
@@ -96,6 +99,17 @@ The selected preview is watched automatically. Editing a component rebuilds only
 projection, reuses unchanged question instances, preserves the edition's other projections, and
 hot-swaps the rendered PDF. The header reports `Preview watching`, `Rebuilding preview…`, or
 `Preview updated`.
+
+The native Linux application can be exercised through `tauri-driver`:
+
+```console
+nix run .#mathpub-gui-e2e
+```
+
+That test launches the packaged binary under WebKitGTK, verifies the PTY and rendered PDF, and
+writes its native screenshot to `build/e2e/tauri-driver.png`. Direct `tauri-driver` automation is
+not available for macOS WKWebView, so the Playwright WebKit scenario remains the deterministic
+zero-pixel screenshot test on macOS.
 
 Precompile a reusable format explicitly, or request an incremental single-lesson build:
 
