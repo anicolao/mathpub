@@ -102,6 +102,50 @@ def _wait_for_driver(process: subprocess.Popen[bytes]) -> None:
     raise AssertionError("timed out waiting for tauri-driver")
 
 
+def _wait_for_text(
+    client: WebDriverClient,
+    selector: str,
+    expected: str,
+    *,
+    contains: bool = False,
+) -> None:
+    deadline = time.monotonic() + 30
+    last_text = None
+    while time.monotonic() < deadline:
+        try:
+            last_text = client.find_text(selector)
+            matches = expected in last_text if contains else last_text == expected
+            if matches:
+                return
+        except (AssertionError, KeyError):
+            pass
+        time.sleep(0.1)
+    raise AssertionError(f"{selector} did not render {expected!r}; last text was {last_text!r}")
+
+
+def _wait_for_preview(client: WebDriverClient) -> dict[str, int]:
+    deadline = time.monotonic() + 30
+    dimensions = None
+    while time.monotonic() < deadline:
+        dimensions = client.execute(
+            """
+            return {
+              width: window.innerWidth,
+              height: window.innerHeight,
+              previewWidth: document.getElementById('pdf-preview')?.naturalWidth || 0
+            };
+            """
+        )
+        if (
+            dimensions["width"] >= 960
+            and dimensions["height"] >= 600
+            and dimensions["previewWidth"] > 0
+        ):
+            return dimensions
+        time.sleep(0.1)
+    raise AssertionError(f"native workspace preview did not render: {dimensions!r}")
+
+
 def test_packaged_tauri_workspace_launches_and_renders():
     application_value = os.environ.get("MATHPUB_GUI_BINARY")
     driver_value = os.environ.get("TAURI_DRIVER_BINARY")
@@ -120,31 +164,10 @@ def test_packaged_tauri_workspace_launches_and_renders():
         _wait_for_driver(driver_process)
         client = WebDriverClient(application)
 
-        deadline = time.monotonic() + 30
-        while True:
-            try:
-                if client.find_text(".logo") == "mathpub":
-                    break
-            except (AssertionError, KeyError):
-                pass
-            if time.monotonic() >= deadline:
-                raise AssertionError("native workspace never rendered its header")
-            time.sleep(0.1)
-
-        assert "Interactive Workspace" in client.find_text(".subtitle")
-        assert client.find_text("#status-connection") == "PTY Connected"
-        dimensions = client.execute(
-            """
-            return {
-              width: window.innerWidth,
-              height: window.innerHeight,
-              previewWidth: document.getElementById('pdf-preview').naturalWidth
-            };
-            """
-        )
-        assert dimensions["width"] >= 960
-        assert dimensions["height"] >= 600
-        assert dimensions["previewWidth"] > 0
+        _wait_for_text(client, ".logo", "mathpub")
+        _wait_for_text(client, ".subtitle", "Interactive Workspace", contains=True)
+        _wait_for_text(client, "#status-terminal", "PTY Connected")
+        dimensions = _wait_for_preview(client)
 
         artifact = Path(
             os.environ.get(
