@@ -2,6 +2,11 @@
 
 Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:
 
+The committed images below are exact Playwright WebKit renderer baselines. On Linux,
+`nix run .#mathpub-gui-e2e` separately launches the packaged Tauri application through
+`tauri-driver`, verifies the PTY and PDF preview, and writes a native screenshot artifact to
+`build/e2e/tauri-driver.png`.
+
 ## Initial Workspace Load (WebKit / Safari Engine)
 
 ![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)

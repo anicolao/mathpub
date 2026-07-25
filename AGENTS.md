@@ -53,11 +53,14 @@ Preserve explicit seeds in reports and commits. Do not put answer or solution co
 Launch the interactive split-pane authoring workspace (PTY terminal + SyncTeX PDF preview):
 
 ```console
-nix run .#mathpub-workspace
-# or
 nix run .#mathpub-gui
+# browser-hosted fallback
+nix run .#mathpub-workspace
 ```
 
 The workspace watches authored component roots and incrementally rebuilds the active PDF
 projection. Prepare formats manually with `nix run .#mathpub -- dump-format ...`; use
 `mathpub build --lesson LESSON_ID --incremental` for an explicit single-lesson preview build.
+On Linux, validate the packaged native application with `nix run .#mathpub-gui-e2e`. The macOS
+zero-pixel renderer baseline remains the Playwright WebKit test because direct `tauri-driver`
+does not support WKWebView.

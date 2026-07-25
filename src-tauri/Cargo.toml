@@ -1,0 +1,18 @@
+[package]
+name = "mathpub-gui"
+version = "0.1.0"
+description = "Native mathpub authoring workspace"
+authors = ["mathpub contributors"]
+license = "GPL-3.0-only"
+edition = "2021"
+rust-version = "1.85"
+
+[build-dependencies]
+tauri-build = { version = "2.5", features = [] }
+
+[dependencies]
+tauri = { version = "2.9", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

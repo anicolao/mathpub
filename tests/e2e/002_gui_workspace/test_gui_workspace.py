@@ -10,32 +10,12 @@ import sys
 import threading
 from pathlib import Path
 
-from PIL import Image, ImageChops
 from playwright.sync_api import sync_playwright
 
 from mathpub.config import find_project
 from mathpub.gui.server import WorkspaceServer
 from mathpub.publish import build
-
-
-def _verify_screenshot(page, scenario_dir, screenshots_dir, diffs_dir, name, update):
-    baseline_path = screenshots_dir / f"{name}.png"
-    candidate_path = scenario_dir / f"temp-{name}.png"
-    page.screenshot(path=str(candidate_path))
-
-    if update or not baseline_path.exists():
-        candidate_path.replace(baseline_path)
-        return
-
-    img_cand = Image.open(candidate_path).convert("RGB")
-    img_base = Image.open(baseline_path).convert("RGB")
-    diff = ImageChops.difference(img_cand, img_base)
-    candidate_path.unlink()
-    if diff.getbbox() is not None:
-        diff.save(diffs_dir / f"{name}-diff.png")
-        raise AssertionError(
-            f"Visual regression in WebKit GUI workspace layout!\nBaseline: {baseline_path}"
-        )
+from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 
 
 def test_gui_workspace_e2e(update_baselines: bool):
@@ -49,6 +29,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
     diffs_dir = scenario_dir / "diffs"
     screenshots_dir.mkdir(exist_ok=True)
     diffs_dir.mkdir(exist_ok=True)
+    steps = GUIStepHelper(scenario_dir, update_baselines)
 
     # Pre-build physics practice PDF so the right pane renders its first page.
     project = find_project()
@@ -216,14 +197,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
             )
 
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
-            _verify_screenshot(
-                page,
-                scenario_dir,
-                screenshots_dir,
-                diffs_dir,
-                "000-initial-workspace-load",
-                update_baselines,
-            )
+            steps.verify(page, "000-initial-workspace-load")
 
             # 5. Hover and click a mapped region without first revealing every region.
             toggle = page.locator("#mapped-regions-toggle")
@@ -245,14 +219,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 == "1"
             )
 
-            _verify_screenshot(
-                page,
-                scenario_dir,
-                screenshots_dir,
-                diffs_dir,
-                "001-hovered-region-visible",
-                update_baselines,
-            )
+            steps.verify(page, "001-hovered-region-visible")
 
             ramp_region.click()
             feedback_dialog = page.locator("#feedback-dialog")
@@ -318,14 +285,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                     "height": expected_bottom - expected_top,
                 }
 
-            _verify_screenshot(
-                page,
-                scenario_dir,
-                screenshots_dir,
-                diffs_dir,
-                "001-mapped-regions-visible",
-                update_baselines,
-            )
+            steps.verify(page, "001-mapped-regions-visible")
 
             # 7. Verify the mapped region's source-aware feedback modal.
             assert ramp_region.get_attribute("role") == "button"
@@ -349,14 +309,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "element => element === document.activeElement"
             )
 
-            _verify_screenshot(
-                page,
-                scenario_dir,
-                screenshots_dir,
-                diffs_dir,
-                "002-element-feedback-dialog",
-                update_baselines,
-            )
+            steps.verify(page, "002-element-feedback-dialog")
 
             # 8. Insert structured feedback into the active terminal without executing it.
             feedback = "Make the ramp diagram labels larger and clarify why energy is conserved."
@@ -373,14 +326,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
             assert "command not found" not in terminal_text
             assert page.locator("#status-synctex").text_content() == "Feedback inserted"
 
-            _verify_screenshot(
-                page,
-                scenario_dir,
-                screenshots_dir,
-                diffs_dir,
-                "003-feedback-inserted-in-terminal",
-                update_baselines,
-            )
+            steps.verify(page, "003-feedback-inserted-in-terminal")
 
             # 9. Touch an authored component and verify incremental PDF hot-swap.
             source_stat = watched_source.stat()
@@ -406,20 +352,20 @@ def test_gui_workspace_e2e(update_baselines: bool):
             )
             assert page.locator("#pdf-select").input_value() == expected_pdf
 
-            _verify_screenshot(
-                page,
-                scenario_dir,
-                screenshots_dir,
-                diffs_dir,
-                "004-incremental-preview-updated",
-                update_baselines,
-            )
+            steps.verify(page, "004-incremental-preview-updated")
 
             # 10. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
                 "Auto-generated visual walkthrough for `tests/e2e/002_gui_workspace`:\n\n"
+                "The committed images below are exact Playwright WebKit renderer baselines. "
+                "On Linux,\n"
+                "`nix run .#mathpub-gui-e2e` separately launches the packaged Tauri "
+                "application through\n"
+                "`tauri-driver`, verifies the PTY and PDF preview, and writes a native "
+                "screenshot artifact to\n"
+                "`build/e2e/tauri-driver.png`.\n\n"
                 "## Initial Workspace Load (WebKit / Safari Engine)\n\n"
                 "![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)\n\n"
                 "## Hovered SyncTeX Region\n\n"
