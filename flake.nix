@@ -168,6 +168,9 @@
                     export TAURI_DRIVER_BINARY=${tauri-driver}/bin/tauri-driver
                     export MATHPUB_GUI_NATIVE_SCREENSHOT="$PWD/build/e2e/tauri-driver.png"
                     export NO_AT_BRIDGE=1
+                    export GDK_BACKEND=x11
+                    export LIBGL_ALWAYS_SOFTWARE=1
+                    export WEBKIT_DISABLE_COMPOSITING_MODE=1
                     export WEBKIT_DISABLE_DMABUF_RENDERER=1
                     ${mathpub}/bin/mathpub build publications/physics-practice.toml \
                       --seed 2026 --variant A --projection student --replace --json
