@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "mathpub",
+  "productName": "MathPub",
   "version": "0.1.0",
   "identifier": "org.mathpub.workspace",
   "build": {

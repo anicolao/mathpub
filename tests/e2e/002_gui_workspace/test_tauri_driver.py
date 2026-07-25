@@ -108,6 +108,7 @@ def test_packaged_tauri_workspace_launches_and_renders():
     application = Path(application_value)
     driver_binary = Path(driver_value)
     assert application.is_file()
+    assert application.name == "MathPub"
     assert driver_binary.is_file()
 
     driver_process = subprocess.Popen([str(driver_binary)])

@@ -85,7 +85,7 @@ fn main() {
     let app = tauri::Builder::default()
         .setup(move |app| {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(workspace_url))
-                .title("mathpub Interactive Workspace")
+                .title("MathPub Interactive Workspace")
                 .inner_size(1280.0, 720.0)
                 .min_inner_size(960.0, 600.0)
                 .build()?;

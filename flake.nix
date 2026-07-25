@@ -125,13 +125,16 @@
               pkgs.wrapGAppsHook3
             ];
             buildInputs = guiBuildInputs;
+            postInstall = ''
+              mv $out/bin/mathpub-gui $out/bin/MathPub
+            '';
           };
           mathpub-gui = pkgs.symlinkJoin {
             name = "mathpub-gui-0.1.0";
             paths = [ mathpub-gui-unwrapped ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
-              wrapProgram $out/bin/mathpub-gui \
+              makeWrapper ${mathpub-gui-unwrapped}/bin/MathPub $out/bin/mathpub-gui \
                 --set MATHPUB_GUI_BACKEND ${mathpub}/bin/mathpub
             '';
             passthru.unwrapped = mathpub-gui-unwrapped;
@@ -160,7 +163,8 @@
                     tauri-driver
                   ];
                   text = ''
-                    export MATHPUB_GUI_BINARY=${mathpub-gui}/bin/mathpub-gui
+                    export MATHPUB_GUI_BINARY=${mathpub-gui}/bin/MathPub
+                    export MATHPUB_GUI_BACKEND=${mathpub}/bin/mathpub
                     export TAURI_DRIVER_BINARY=${tauri-driver}/bin/tauri-driver
                     export MATHPUB_GUI_NATIVE_SCREENSHOT="$PWD/build/e2e/tauri-driver.png"
                     export NO_AT_BRIDGE=1
