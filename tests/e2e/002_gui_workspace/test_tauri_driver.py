@@ -18,6 +18,7 @@ import pytest
 from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 
 DRIVER_URL = "http://127.0.0.1:4444"
+DRIVER_PORTS = (4444, 4445)
 ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf"
 
 
@@ -92,8 +93,10 @@ def _wait_for_driver(process: subprocess.Popen[bytes]) -> None:
         if process.poll() is not None:
             raise AssertionError(f"tauri-driver exited during startup with {process.returncode}")
         try:
-            with socket.create_connection(("127.0.0.1", 4444), timeout=0.2):
-                return
+            for port in DRIVER_PORTS:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                    pass
+            return
         except OSError:
             time.sleep(0.1)
     raise AssertionError("timed out waiting for tauri-driver")
