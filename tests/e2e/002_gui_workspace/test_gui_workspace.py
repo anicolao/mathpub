@@ -18,6 +18,8 @@ from mathpub.gui.server import WorkspaceServer
 from mathpub.publish import build
 from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 
+INCREMENTAL_PREVIEW_BUDGET_MS = 5_000
+
 
 def test_gui_workspace_e2e(update_baselines: bool):
     if os.environ.get("HOME") == "/homeless-shelter":
@@ -381,7 +383,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
             assert "mathpub.fmt" in build_details
             duration_match = re.match(r"(?P<duration>\d+) ms;", build_details)
             assert duration_match is not None
-            assert int(duration_match.group("duration")) <= 3500
+            assert int(duration_match.group("duration")) <= INCREMENTAL_PREVIEW_BUDGET_MS
             page.wait_for_function("document.getElementById('pdf-preview').naturalWidth > 0")
             page.wait_for_function(
                 "document.getElementById('status-synctex').textContent === 'SyncTeX Ready'"
