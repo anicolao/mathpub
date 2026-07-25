@@ -172,6 +172,7 @@
                     export LIBGL_ALWAYS_SOFTWARE=1
                     export WEBKIT_DISABLE_COMPOSITING_MODE=1
                     export WEBKIT_DISABLE_DMABUF_RENDERER=1
+                    export WEBKIT_SKIA_ENABLE_CPU_RENDERING=1
                     ${mathpub}/bin/mathpub build publications/physics-practice.toml \
                       --seed 2026 --variant A --projection student --replace --json
                     exec xvfb-run -a pytest \
