@@ -268,6 +268,17 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
             publication_paths=args.publication_paths,
         )
 
+    if args.command == "workspace":
+        from mathpub.gui.server import run_workspace_server
+
+        run_workspace_server(
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_browser,
+            browser=getattr(args, "browser", "webkit"),
+        )
+        return "workspace", {"host": args.host, "port": args.port}
+
     project = find_project()
     if args.command == "dump-format":
         return "dump-format", dump_latex_format(
@@ -587,16 +598,6 @@ placement = {json.dumps(placement)}
             "publications": len(catalog.publications),
             "profiles": len(catalog.profiles),
         }
-    if args.command == "workspace":
-        from mathpub.gui.server import run_workspace_server
-
-        run_workspace_server(
-            host=args.host,
-            port=args.port,
-            open_browser=not args.no_browser,
-            browser=getattr(args, "browser", "webkit"),
-        )
-        return "workspace", {"host": args.host, "port": args.port}
     raise AssertionError(f"unhandled command: {args.command}")
 
 

@@ -121,6 +121,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const feedbackSource = document.getElementById("feedback-source");
   const feedbackClose = document.getElementById("feedback-close");
   const feedbackCancel = document.getElementById("feedback-cancel");
+  const libraryName = document.getElementById("library-name");
+  const createLibrary = document.getElementById("create-library");
+  const libraryDialog = document.getElementById("library-dialog");
+  const libraryForm = document.getElementById("library-form");
+  const libraryParent = document.getElementById("library-parent");
+  const libraryProjectName = document.getElementById("library-project-name");
+  const libraryError = document.getElementById("library-error");
+  const libraryClose = document.getElementById("library-close");
+  const libraryCancel = document.getElementById("library-cancel");
+  const librarySubmit = document.getElementById("library-submit");
+  const startAgent = document.getElementById("start-agent");
+  const agentStatus = document.getElementById("agent-status");
+  const starterPrompt = document.getElementById("starter-prompt");
+  const placeholderTitle = document.getElementById("placeholder-title");
+  const placeholderCopy = document.getElementById("placeholder-copy");
   const svgNamespace = "http://www.w3.org/2000/svg";
   let publicationsFingerprint = "";
   let publicationsRequestId = 0;
@@ -133,6 +148,43 @@ document.addEventListener("DOMContentLoaded", () => {
   let refreshTimer = null;
   let mappingRequestId = 0;
   let currentPage = 1;
+  let workspaceState = null;
+
+  async function refreshWorkspace() {
+    try {
+      const response = await fetch("/api/workspace");
+      if (!response.ok) throw new Error(`Workspace request failed: ${response.status}`);
+      workspaceState = await response.json();
+      libraryName.textContent = workspaceState.project || "No library open";
+      libraryName.title = workspaceState.root || "";
+      if (!libraryParent.value) libraryParent.value = workspaceState.default_parent || "";
+
+      const agent = workspaceState.agent || {};
+      startAgent.textContent = `Start ${agent.label || "agent"}`;
+      startAgent.disabled = !workspaceState.project || agent.available !== true;
+      if (!workspaceState.project) {
+        agentStatus.textContent = "Create or open a library first";
+        placeholderTitle.textContent = "Create your private authoring library";
+        placeholderCopy.textContent =
+          "Keep many publications and reusable components together, then let an agent operate " +
+          "MathPub on your behalf.";
+      } else if (agent.available === true) {
+        agentStatus.textContent = `${agent.label} ready`;
+        placeholderTitle.textContent = "Your authoring agent is ready";
+        placeholderCopy.textContent =
+          "Start the agent, then insert a first-book prompt or give it your own direction.";
+      } else {
+        agentStatus.textContent = `${agent.label || "Agent"} unavailable`;
+        startAgent.title = `${agent.command || "Configured agent command"} was not found`;
+        placeholderTitle.textContent = "No built PDF selected";
+        placeholderCopy.textContent =
+          "Configure an authoring agent or use the terminal to build a publication.";
+      }
+    } catch (error) {
+      agentStatus.textContent = "Workspace unavailable";
+      agentStatus.title = error.message;
+    }
+  }
 
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS(svgNamespace, name);
@@ -218,6 +270,24 @@ document.addEventListener("DOMContentLoaded", () => {
         `${message.duration_ms} ms; ${reused} instances reused; ` +
         `format: ${message.format || "none"}`;
       refreshPublications(message.path);
+      return true;
+    }
+    if (message.type === "agent-started") {
+      agentStatus.textContent = `${message.label || "Agent"} started`;
+      startAgent.disabled = true;
+      starterPrompt.disabled = false;
+      term.focus();
+      return true;
+    }
+    if (message.type === "agent-unavailable") {
+      agentStatus.textContent = `${message.label || "Agent"} unavailable`;
+      startAgent.disabled = true;
+      return true;
+    }
+    if (message.type === "starter-prompt-inserted") {
+      agentStatus.textContent = "First-book prompt ready";
+      starterPrompt.disabled = true;
+      term.focus();
       return true;
     }
     return false;
@@ -537,6 +607,51 @@ document.addEventListener("DOMContentLoaded", () => {
     setMappedRegionsVisible(!mappedRegionsVisible);
   });
 
+  createLibrary.addEventListener("click", () => {
+    libraryError.textContent = "";
+    libraryDialog.showModal();
+    libraryProjectName.focus();
+  });
+  libraryClose.addEventListener("click", () => libraryDialog.close());
+  libraryCancel.addEventListener("click", () => libraryDialog.close());
+  libraryForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!libraryForm.reportValidity()) return;
+    libraryError.textContent = "";
+    librarySubmit.disabled = true;
+    librarySubmit.textContent = "Creating and pinning…";
+    try {
+      const response = await fetch("/api/libraries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parent: libraryParent.value.trim(),
+          name: libraryProjectName.value.trim()
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Library creation failed: ${response.status}`);
+      libraryDialog.close();
+      window.location.reload();
+    } catch (error) {
+      libraryError.textContent = error.message;
+      librarySubmit.disabled = false;
+      librarySubmit.textContent = "Create private library";
+    }
+  });
+
+  startAgent.addEventListener("click", () => {
+    if (ws.readyState !== WebSocket.OPEN || startAgent.disabled) return;
+    startAgent.disabled = true;
+    agentStatus.textContent = "Starting agent…";
+    ws.send(JSON.stringify({ type: "start-agent" }));
+  });
+
+  starterPrompt.addEventListener("click", () => {
+    if (ws.readyState !== WebSocket.OPEN || starterPrompt.disabled) return;
+    ws.send(JSON.stringify({ type: "starter-prompt" }));
+  });
+
   feedbackClose.addEventListener("click", () => feedbackDialog.close());
   feedbackCancel.addEventListener("click", () => feedbackDialog.close());
   feedbackForm.addEventListener("submit", (event) => {
@@ -570,6 +685,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Initial publication load and periodic polling
+  refreshWorkspace();
   refreshPublications();
   setInterval(refreshPublications, 5000);
 

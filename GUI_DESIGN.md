@@ -16,7 +16,7 @@ The interface is divided into two primary vertical columns:
 
 *   **Left Pane: Terminal Emulator**
     *   **Agent Pluggability**: Instead of a hardcoded chat UI, this panel embeds a full-featured terminal emulator (e.g., via `xterm.js`).
-    *   **User Control**: The user runs their shell or preferred CLI chatbot agent (e.g., `antigravity-cli`, `claude-code`, standard Python/Sage REPLs). The workspace tool provides the terminal window but does not control the agent inside it.
+    *   **User Control**: The user runs their shell or preferred CLI chatbot agent (by default `nix run github:anicolao/nix-antigravity`; alternatives can include Claude Code or standard Python/Sage REPLs). The workspace tool provides the terminal window but does not control the agent inside it.
 *   **Right Pane: SyncTeX-Enabled PDF Viewer**
     *   **Visual Highlights**: The PDF viewer parses SyncTeX outputs to overlay selectable boundary boxes around page elements (lessons, examples, or equations).
     *   **Annotating elements**: Hovering over or clicking a textbook element reveals options to add feedback, copy details, or inspect the source. Adding feedback registers a comment associated with that specific TeX source code line.

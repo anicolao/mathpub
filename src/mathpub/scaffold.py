@@ -12,6 +12,30 @@ AGENTS = r"""# Working with mathpub
 
 This is a publication-content repository. Its authored components and publications are separate
 from the public mathpub tooling repository. Do not copy private content into the tooling checkout.
+This repository is an authoring library and may contain many related publications that reuse one
+reviewed component catalog; do not assume that one repository represents one book.
+
+## Agent role
+
+Operate MathPub on the author's behalf. The author should be able to direct the work in ordinary
+editorial language and review the resulting PDFs without managing component schemas, publication
+TOML, TeX builds, or Nix commands. Treat the rendered student, answer, solution, validation, and
+parent editions as the primary human review surfaces.
+
+At the beginning of a task:
+
+1. inspect the working tree, project catalog, and relevant publications;
+2. clarify the audience, scope, sequence, and desired editions when they would change the result;
+3. search for reviewed components that can be reused before creating new ones; and
+4. propose a bounded outline or change before generating a large body of content.
+
+After editing, run focused checks with explicit seeds, build the smallest useful review projection,
+and tell the author exactly which PDF is ready. Run the complete publication loop before proposing
+a commit or release. Never commit, push, publish, or change repository visibility without the
+author's approval.
+
+## Tooling rules
+
 Use only the programs supplied by this repository's Nix flake. Enter the environment with
 `nix develop`, or run `nix run .#mathpub -- COMMAND`. Never use host Python, Sage, TeX,
 formatters, or test runners, and never edit generated files beneath `build/`.

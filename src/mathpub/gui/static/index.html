@@ -14,8 +14,12 @@
     <div class="header-brand">
       <span class="logo">mathpub</span>
       <span class="subtitle">Interactive Workspace</span>
+      <span class="library-name" id="library-name">No library open</span>
     </div>
     <div class="header-status">
+      <button id="create-library" class="header-action" type="button">
+        Create private library
+      </button>
       <span class="badge badge-success" id="status-terminal">PTY Connected</span>
       <span class="badge badge-info" id="status-build">Preview idle</span>
       <span class="badge badge-info" id="status-synctex">Loading mappings…</span>
@@ -26,8 +30,13 @@
     <!-- Left Pane: Terminal Emulator -->
     <section class="pane pane-left" id="pane-left">
       <div class="pane-header">
-        <h2>Terminal Shell / Agent</h2>
-        <span class="pane-tag">xterm.js PTY</span>
+        <h2>Authoring Agent</h2>
+        <div class="agent-controls">
+          <span class="pane-tag" id="agent-status">Checking agent…</span>
+          <button id="start-agent" class="agent-start" type="button" disabled>
+            Start Antigravity
+          </button>
+        </div>
       </div>
       <div id="terminal-container"></div>
     </section>
@@ -66,12 +75,65 @@
           aria-hidden="true"
         ></svg>
         <div class="pdf-placeholder" id="pdf-placeholder">
-          <p>No built PDF selected</p>
-          <code>mathpub build publications/physics-practice.toml --seed 2026 --variant A</code>
+          <span class="placeholder-kicker">Agentic authoring</span>
+          <h3 id="placeholder-title">No built PDF selected</h3>
+          <p id="placeholder-copy">
+            Start the authoring agent, then ask it to outline or build your first publication.
+          </p>
+          <button id="starter-prompt" class="button-primary" type="button" disabled>
+            Insert first-book prompt
+          </button>
         </div>
       </div>
     </section>
   </main>
+
+  <dialog id="library-dialog" class="library-dialog" aria-labelledby="library-title">
+    <form id="library-form">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Local private Git repository</span>
+          <h2 id="library-title">Create an authoring library</h2>
+        </div>
+        <button
+          id="library-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close library dialog"
+        >×</button>
+      </div>
+
+      <p class="library-intro">
+        One library can hold all of your related books, worksheets, quizzes, and reusable
+        components. A private remote can be added after creation.
+      </p>
+
+      <label for="library-parent">Parent folder</label>
+      <input id="library-parent" name="parent" type="text" required>
+
+      <label for="library-project-name">Library name</label>
+      <input
+        id="library-project-name"
+        name="name"
+        type="text"
+        value="anna-math-library"
+        pattern="[a-z0-9]+([.-][a-z0-9]+)*"
+        required
+      >
+      <p class="feedback-help">
+        Use lowercase letters, digits, dots, or hyphens. MathPub initializes Git and pins the
+        publishing toolchain; it does not create or push a remote yet.
+      </p>
+      <p id="library-error" class="library-error" role="alert"></p>
+
+      <div class="feedback-actions">
+        <button id="library-cancel" class="button-secondary" type="button">Cancel</button>
+        <button id="library-submit" class="button-primary" type="submit">
+          Create private library
+        </button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-title">
     <form id="feedback-form" method="dialog">
