@@ -80,6 +80,7 @@
             ];
             nativeCheckInputs = [
               pkgs.git
+              pkgs.nix
               pkgs.poppler-utils
               pkgs.playwright-driver.browsers
               pythonPackages.pillow
@@ -95,7 +96,7 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/mathpub \
-                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git sage tex pkgs.poppler-utils ]}
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
               makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
                 --add-flags "workspace"
             '';
@@ -256,6 +257,7 @@
               pkgs.gh
               pkgs.git
               pkgs.jq
+              pkgs.nix
               pkgs.cargo
               pkgs.cargo-tauri
               pkgs.ripgrep
