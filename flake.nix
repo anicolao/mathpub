@@ -305,6 +305,7 @@
         { src
         , projectName
         , publicationPaths ? [ ]
+        , extraPackages ? (_: [ ])
         }:
         {
           packages = self.packages;
@@ -320,8 +321,10 @@
                   pkgs.gh
                   pkgs.git
                   pkgs.jq
+                  pkgs.nix
                   pkgs.ripgrep
-                ];
+                ] ++ extraPackages pkgs;
+                MATHPUB_AUTHORING_ENV = "1";
               };
             });
           formatter = self.formatter;

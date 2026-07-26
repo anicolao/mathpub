@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shlex
+import subprocess
 import sys
 import threading
 import time
@@ -17,6 +18,7 @@ from mathpub.gui.server import (
     _publication_output_metadata,
 )
 from mathpub.gui.terminal import PTYManager
+from mathpub.scaffold import init_project
 
 
 def test_pty_manager_lifecycle():
@@ -80,11 +82,39 @@ def test_agent_configuration_requires_an_available_executable():
         "label": "Antigravity",
         "available": True,
         "command": sys.executable,
+        "environment": None,
     }
 
     missing = AgentConfiguration("Antigravity", ("not-a-real-agent-command",))
     assert missing.available is False
     assert missing.shell_command is None
+
+
+def test_agent_configuration_uses_project_flake_environment(tmp_path):
+    (tmp_path / "flake.nix").write_text("{}")
+    configuration = AgentConfiguration("Repository agent", ("repository-agent", "--interactive"))
+
+    assert configuration.available is False
+    assert configuration.command_for(tmp_path) == (
+        "nix",
+        "develop",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        "--command",
+        "repository-agent",
+        "--interactive",
+    )
+    assert configuration.shell_command_for(tmp_path) == (
+        "nix develop --no-write-lock-file --no-warn-dirty --quiet "
+        "--command repository-agent --interactive"
+    )
+    assert configuration.payload(tmp_path) == {
+        "label": "Repository agent",
+        "available": True,
+        "command": "repository-agent",
+        "environment": "nix develop",
+    }
 
 
 def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
@@ -101,6 +131,14 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     assert result["flake_locked"] is False
     assert result["remote_created"] is False
     assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"
+    tracked = subprocess.run(
+        ["git", "-C", library, "ls-files"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert "flake.nix" in tracked
+    assert "AGENTS.md" in tracked
     assert (library / "mathpub.toml").is_file()
     assert {path.name for path in library.iterdir()} >= {
         ".git",
@@ -117,6 +155,11 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     assert "many related publications" in instructions
     assert "Operate MathPub on the author's behalf" in instructions
     assert "student, answer, solution, validation, and\nparent editions" in instructions
+    assert "locked `nix develop` environment" in instructions
+    assert "`gh` and `git`" in instructions
+    assert "add its Nixpkgs attribute to `extraPackages`" in instructions
+    flake = (library / "flake.nix").read_text()
+    assert "extraPackages = pkgs: with pkgs;" in flake
 
 
 def test_publication_metadata_reports_stale_synctex_build(tmp_path):
@@ -161,8 +204,10 @@ def test_publication_metadata_reports_stale_synctex_build(tmp_path):
     )
 
 
-def test_workspace_server_http():
-    server = WorkspaceServer(host="127.0.0.1", port=8912)
+def test_workspace_server_http(tmp_path):
+    project_root = tmp_path / "workspace-project"
+    init_project(project_root)
+    server = WorkspaceServer(host="127.0.0.1", port=8912, project_root=project_root)
     server_ready = threading.Event()
     stop_event = None
     loop_ref = []
@@ -198,9 +243,10 @@ def test_workspace_server_http():
         req_workspace = urllib.request.urlopen("http://127.0.0.1:8912/api/workspace")
         assert req_workspace.status == 200
         workspace_data = json.loads(req_workspace.read().decode("utf-8"))
-        assert workspace_data["project"] == "mathpub"
+        assert workspace_data["project"] == "workspace-project"
         assert workspace_data["root"]
         assert workspace_data["agent"]["label"] == "Antigravity"
+        assert workspace_data["agent"]["environment"] == "nix develop"
         assert "Outline my first book" in workspace_data["starter_prompt"]
 
         # Test static file serving (index.html)

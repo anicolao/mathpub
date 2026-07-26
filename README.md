@@ -96,8 +96,10 @@ terminal in that library. The first implementation is deliberately local-only: i
 or push a Git remote.
 
 The agent button launches Anna's pinned Antigravity flake with
-`nix run github:anicolao/nix-antigravity` by default. Configure another executable or label without
-rebuilding MathPub:
+`nix run github:anicolao/nix-antigravity` by default. MathPub runs the configured agent through the
+authoring library's locked `nix develop` environment, which guarantees `mathpub`, `nix`, `gh`,
+`git`, `jq`, and `rg`. Repository-specific tools can be added with the generated flake's
+`extraPackages` function. Configure another executable or label without rebuilding MathPub:
 
 ```console
 MATHPUB_AGENT_COMMAND="nix run github:anicolao/nix-antigravity" \

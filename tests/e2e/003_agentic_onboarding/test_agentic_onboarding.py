@@ -28,8 +28,12 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
         host="127.0.0.1",
         port=0,
         project_root=tmp_path,
-        agent_command=["echo", "Antigravity E2E ready"],
-        lock_libraries=False,
+        agent_command=[
+            "sh",
+            "-c",
+            'test "$MATHPUB_AUTHORING_ENV" = 1 && command -v gh >/dev/null '
+            '&& printf "Antigravity E2E %s\\n" ready',
+        ],
         mathpub_url=f"path:{project.root}",
     )
     server_ready = threading.Event()
@@ -100,15 +104,20 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             )
             library = tmp_path / "anna-math-library"
             assert (library / "mathpub.toml").is_file()
+            assert (library / "flake.lock").is_file()
             assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"
             instructions = (library / "AGENTS.md").read_text()
             assert "Operate MathPub on the author's behalf" in instructions
             assert "many related publications" in instructions
+            assert "locked `nix develop` environment" in instructions
+            assert "`gh` and `git`" in instructions
+            assert "extraPackages" in instructions
 
             workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
             assert workspace["project"] == "anna-math-library"
             assert workspace["root"] == str(library)
             assert workspace["agent"]["available"] is True
+            assert workspace["agent"]["environment"] == "nix develop"
 
             page.wait_for_function(
                 "!document.getElementById('start-agent').disabled && "
@@ -117,7 +126,8 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             page.locator("#start-agent").click()
             page.wait_for_function(
                 "document.querySelector('.xterm-rows').textContent.includes("
-                "'Antigravity E2E ready')"
+                "'Antigravity E2E ready')",
+                timeout=300_000,
             )
             assert page.locator("#agent-status").text_content() == "Antigravity started"
 

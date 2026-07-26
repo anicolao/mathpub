@@ -248,7 +248,7 @@ class WorkspaceServer:
             "project": project.config["project"] if project is not None else None,
             "root": str(root) if root is not None else None,
             "default_parent": str(root.parent if root is not None else Path.home()),
-            "agent": self.agent.payload(),
+            "agent": self.agent.payload(root),
             "starter_prompt": STARTER_PROMPT,
         }
 
@@ -655,7 +655,9 @@ class WorkspaceServer:
                                         pty.write(prompt.encode())
                                     continue
                                 if msg.get("type") == "start-agent":
-                                    command = self.agent.shell_command
+                                    command = self.agent.shell_command_for(
+                                        project.root if project is not None else None
+                                    )
                                     if command is None:
                                         await send_event(
                                             {

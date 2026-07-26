@@ -93,6 +93,7 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Allow the workspace backend and native application to start without an existing MathPub project.
 - [x] Add an in-app flow that creates a content-only authoring library, initializes local Git, pins the flake, switches the active workspace root, and reconnects the PTY there.
 - [x] Add a configurable one-click Antigravity-compatible CLI launcher with executable detection and clear unavailable state.
+- [x] Launch the agent through the authoring library's locked development shell, with a documented core toolset and an `extraPackages` extension point.
 - [x] Add a first-book starter prompt and generate agent instructions describing the PDF-centered, multi-publication operating model.
 - [x] Add a zero-pixel browser E2E scenario that creates a library, verifies its Git and instructions, launches a deterministic agent command, and inserts the starter prompt.
 - [ ] Add open/clone controls, private-remote creation and visibility verification, provider authentication guidance, resumable agent sessions, and versioned skill delivery.
