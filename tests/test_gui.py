@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
+import sys
 import threading
 import time
 import urllib.request
@@ -71,13 +73,13 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
 
 
 def test_agent_configuration_requires_an_available_executable():
-    available = AgentConfiguration("Antigravity", ("/bin/echo", "ready"))
+    available = AgentConfiguration("Antigravity", (sys.executable, "ready"))
     assert available.available is True
-    assert available.shell_command == "/bin/echo ready"
+    assert available.shell_command == shlex.join(available.command)
     assert available.payload() == {
         "label": "Antigravity",
         "available": True,
-        "command": "/bin/echo",
+        "command": sys.executable,
     }
 
     missing = AgentConfiguration("Antigravity", ("not-a-real-agent-command",))

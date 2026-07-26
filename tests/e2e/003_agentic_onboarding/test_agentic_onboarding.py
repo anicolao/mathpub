@@ -28,7 +28,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
         host="127.0.0.1",
         port=0,
         project_root=tmp_path,
-        agent_command=["/bin/echo", "Antigravity E2E ready"],
+        agent_command=["echo", "Antigravity E2E ready"],
         lock_libraries=False,
         mathpub_url=f"path:{project.root}",
     )
