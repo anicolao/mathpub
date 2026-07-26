@@ -13,6 +13,7 @@ import shlex
 import struct
 import subprocess
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -212,6 +213,7 @@ class WorkspaceServer:
         agent_label: str = "Antigravity",
         lock_libraries: bool = True,
         mathpub_url: str = "github:anicolao/mathpub",
+        library_creator: Callable[..., dict[str, object]] = create_authoring_library,
     ) -> None:
         self.host = host
         self.port = port
@@ -223,6 +225,7 @@ class WorkspaceServer:
         )
         self.lock_libraries = lock_libraries
         self.mathpub_url = mathpub_url
+        self.library_creator = library_creator
 
     @staticmethod
     def _initial_project_root(project_root: Path | None) -> Path | None:
@@ -346,7 +349,7 @@ class WorkspaceServer:
                     parent = payload.get("parent")
                     name = payload.get("name")
                     result = await asyncio.to_thread(
-                        create_authoring_library,
+                        self.library_creator,
                         parent,
                         name,
                         mathpub_url=self.mathpub_url,
@@ -358,7 +361,11 @@ class WorkspaceServer:
                     status = 409 if error.code == "MP-GUI-002" else 400
                     response = _json_response(
                         status,
-                        {"error": error.message, "code": error.code},
+                        {
+                            "error": error.message,
+                            "code": error.code,
+                            "details": error.details,
+                        },
                     )
                 except Exception as error:
                     response = _json_response(500, {"error": str(error)})

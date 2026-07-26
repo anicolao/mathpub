@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -17,6 +18,60 @@ STARTER_PROMPT = (
     "Outline my first book. Ask about the audience, prerequisites, scope, sequence, and desired "
     "editions, then show me the proposed units and dependencies before writing the first section."
 )
+PROCESS_OUTPUT_LIMIT = 8_000
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+URL_CREDENTIAL_RE = re.compile(r"(https?://)[^/\s@]+@")
+GITHUB_TOKEN_RE = re.compile(r"\b(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+\b")
+SECRET_ASSIGNMENT_RE = re.compile(r"(?i)\b(token|password|secret|authorization)(\s*[:=]\s*)\S+")
+
+
+def _clean_process_output(value: object) -> str:
+    if value is None:
+        return ""
+    text = value.decode(errors="replace") if isinstance(value, bytes) else str(value)
+    text = ANSI_ESCAPE_RE.sub("", text)
+    text = "".join(
+        character for character in text if character in "\n\t" or character.isprintable()
+    )
+    text = URL_CREDENTIAL_RE.sub(r"\1[redacted]@", text)
+    text = GITHUB_TOKEN_RE.sub("[redacted]", text)
+    text = SECRET_ASSIGNMENT_RE.sub(r"\1\2[redacted]", text)
+    text = text.strip()
+    if len(text) > PROCESS_OUTPUT_LIMIT:
+        text = f"[output truncated]\n{text[-PROCESS_OUTPUT_LIMIT:]}"
+    return text
+
+
+def _process_failure_details(
+    error: OSError | subprocess.SubprocessError,
+    *,
+    stage: str,
+    command: list[str] | None,
+) -> dict[str, object]:
+    details: dict[str, object] = {"stage": stage}
+    error_command = getattr(error, "cmd", None)
+    displayed_command = command if command is not None else error_command
+    if isinstance(displayed_command, (list, tuple)):
+        details["command"] = shlex.join(str(part) for part in displayed_command)
+    elif displayed_command:
+        details["command"] = _clean_process_output(displayed_command)
+
+    return_code = getattr(error, "returncode", None)
+    if return_code is not None:
+        details["exit_status"] = return_code
+
+    stdout = _clean_process_output(getattr(error, "stdout", None))
+    stderr = _clean_process_output(getattr(error, "stderr", None))
+    output_sections = []
+    if stdout:
+        output_sections.append(f"stdout:\n{stdout}")
+    if stderr:
+        output_sections.append(f"stderr:\n{stderr}")
+    if output_sections:
+        details["output"] = "\n\n".join(output_sections)
+    elif isinstance(error, OSError):
+        details["output"] = _clean_process_output(error)
+    return details
 
 
 @dataclass(frozen=True)
@@ -121,7 +176,8 @@ def create_authoring_library(
     if target.exists():
         raise MathpubError("MP-GUI-002", f"library directory already exists: {target}")
 
-    stage = "lock"
+    stage = "Pinning the library toolchain"
+    command: list[str] | None = None
     try:
         result = init_project(target, mathpub_url=mathpub_url)
         if lock_flake:
@@ -130,28 +186,31 @@ def create_authoring_library(
                 raise MathpubError(
                     "MP-GUI-004", "Nix is unavailable; cannot pin the library toolchain"
                 )
+            command = [nix, "flake", "lock"]
             subprocess.run(
-                [nix, "flake", "lock"],
+                command,
                 cwd=target,
                 check=True,
                 capture_output=True,
                 text=True,
                 timeout=300,
             )
-        stage = "git"
+        stage = "Initializing the private Git repository"
         git = shutil.which("git")
         if git is None:
             raise MathpubError("MP-GUI-003", "Git is unavailable; cannot initialize the library")
+        command = [git, "init", "-b", "main"]
         subprocess.run(
-            [git, "init", "-b", "main"],
+            command,
             cwd=target,
             check=True,
             capture_output=True,
             text=True,
             timeout=30,
         )
+        command = [git, "add", "--intent-to-add", "--", "."]
         subprocess.run(
-            [git, "add", "--intent-to-add", "--", "."],
+            command,
             cwd=target,
             check=True,
             capture_output=True,
@@ -163,14 +222,17 @@ def create_authoring_library(
         raise
     except (OSError, subprocess.SubprocessError) as error:
         shutil.rmtree(target, ignore_errors=True)
-        if stage == "lock":
+        details = _process_failure_details(error, stage=stage, command=command)
+        if stage == "Pinning the library toolchain":
             raise MathpubError(
                 "MP-GUI-004",
-                f"could not pin the library toolchain: {error}",
+                "could not pin the library toolchain",
+                details=details,
             ) from error
         raise MathpubError(
             "MP-GUI-003",
-            f"could not initialize the private Git repository: {error}",
+            "could not initialize the private Git repository",
+            details=details,
         ) from error
 
     return {

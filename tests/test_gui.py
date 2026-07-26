@@ -11,6 +11,9 @@ import threading
 import time
 import urllib.request
 
+import pytest
+
+from mathpub.errors import MathpubError
 from mathpub.gui.onboarding import AgentConfiguration, create_authoring_library
 from mathpub.gui.server import (
     WorkspaceServer,
@@ -160,6 +163,36 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     assert "add its Nixpkgs attribute to `extraPackages`" in instructions
     flake = (library / "flake.nix").read_text()
     assert "extraPackages = pkgs: with pkgs;" in flake
+
+
+def test_create_authoring_library_reports_sanitized_command_failure(tmp_path, monkeypatch):
+    def fail_lock(command, **_kwargs):
+        raise subprocess.CalledProcessError(
+            1,
+            command,
+            output="evaluated authoring shell\n",
+            stderr="\x1b[31merror:\x1b[0m token=ghp_not-for-the-author\n",
+        )
+
+    monkeypatch.setattr(
+        "mathpub.gui.onboarding.shutil.which",
+        lambda executable: f"/nix/store/fake/bin/{executable}",
+    )
+    monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", fail_lock)
+
+    with pytest.raises(MathpubError) as caught:
+        create_authoring_library(str(tmp_path), "broken-library")
+
+    error = caught.value
+    assert error.code == "MP-GUI-004"
+    assert error.message == "could not pin the library toolchain"
+    assert error.details == {
+        "stage": "Pinning the library toolchain",
+        "command": "/nix/store/fake/bin/nix flake lock",
+        "exit_status": 1,
+        "output": ("stdout:\nevaluated authoring shell\n\nstderr:\nerror: token=[redacted]"),
+    }
+    assert not (tmp_path / "broken-library").exists()
 
 
 def test_publication_metadata_reports_stale_synctex_build(tmp_path):

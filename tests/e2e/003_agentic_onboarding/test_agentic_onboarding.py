@@ -11,6 +11,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from mathpub.config import find_project
+from mathpub.errors import MathpubError
+from mathpub.gui.onboarding import create_authoring_library
 from mathpub.gui.server import WorkspaceServer
 from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 
@@ -24,6 +26,24 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
     scenario_dir = Path(__file__).parent
     steps = GUIStepHelper(scenario_dir, update_baselines)
     project = find_project()
+    creation_attempts = 0
+
+    def fail_once_then_create(parent, name, **kwargs):
+        nonlocal creation_attempts
+        creation_attempts += 1
+        if creation_attempts == 1:
+            raise MathpubError(
+                "MP-GUI-004",
+                "could not pin the library toolchain",
+                details={
+                    "stage": "Pinning the library toolchain",
+                    "command": "nix flake lock",
+                    "exit_status": 1,
+                    "output": "stderr:\nerror: deterministic lock failure",
+                },
+            )
+        return create_authoring_library(parent, name, **kwargs)
+
     server = WorkspaceServer(
         host="127.0.0.1",
         port=0,
@@ -32,9 +52,10 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             "sh",
             "-c",
             'test "$MATHPUB_AUTHORING_ENV" = 1 && command -v gh >/dev/null '
-            '&& printf "Antigravity E2E %s\\n" ready',
+            '&& printf "\\033cAntigravity E2E %s\\n" ready',
         ],
         mathpub_url=f"path:{project.root}",
+        library_creator=fail_once_then_create,
     )
     server_ready = threading.Event()
     stop_event = None
@@ -98,6 +119,21 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             page.locator("#library-project-name").fill("anna-math-library")
             page.locator("#library-submit").click()
 
+            page.wait_for_function(
+                "document.getElementById('library-error').textContent.includes("
+                "'deterministic lock failure')"
+            )
+            assert dialog.is_visible()
+            assert page.locator("#library-submit").is_enabled()
+            error_text = page.locator("#library-error").text_content()
+            assert "could not pin the library toolchain" in error_text
+            assert "Code: MP-GUI-004" in error_text
+            assert "Stage: Pinning the library toolchain" in error_text
+            assert "Command: nix flake lock" in error_text
+            assert "Exit status: 1" in error_text
+            assert "stderr:\nerror: deterministic lock failure" in error_text
+
+            page.locator("#library-submit").click()
             page.wait_for_function(
                 "document.getElementById('library-name').textContent === 'anna-math-library'",
                 timeout=30_000,
