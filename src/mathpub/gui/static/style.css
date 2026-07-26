@@ -509,6 +509,18 @@ body {
   margin-top: 10px;
   color: #fca5a5;
   font-size: 0.72rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.library-error:not(:empty) {
+  max-height: 220px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid rgb(252 165 165 / 35%);
+  border-radius: 6px;
+  background: rgb(127 29 29 / 18%);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 .pdf-placeholder {

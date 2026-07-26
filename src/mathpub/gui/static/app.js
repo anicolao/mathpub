@@ -607,6 +607,19 @@ document.addEventListener("DOMContentLoaded", () => {
     setMappedRegionsVisible(!mappedRegionsVisible);
   });
 
+  function libraryFailureMessage(payload, status) {
+    const lines = [payload.error || `Library creation failed: ${status}`];
+    if (payload.code) lines.push(`Code: ${payload.code}`);
+    const details = payload.details || {};
+    if (details.stage) lines.push(`Stage: ${details.stage}`);
+    if (details.command) lines.push(`Command: ${details.command}`);
+    if (details.exit_status !== undefined) {
+      lines.push(`Exit status: ${details.exit_status}`);
+    }
+    if (details.output) lines.push("", details.output);
+    return lines.join("\n");
+  }
+
   createLibrary.addEventListener("click", () => {
     libraryError.textContent = "";
     libraryDialog.showModal();
@@ -630,7 +643,7 @@ document.addEventListener("DOMContentLoaded", () => {
         })
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || `Library creation failed: ${response.status}`);
+      if (!response.ok) throw new Error(libraryFailureMessage(payload, response.status));
       libraryDialog.close();
       window.location.reload();
     } catch (error) {
