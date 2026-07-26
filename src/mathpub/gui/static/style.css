@@ -56,9 +56,43 @@ body {
   padding-left: 8px;
 }
 
+.library-name {
+  max-width: 190px;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .header-status {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.header-action,
+.agent-start {
+  padding: 4px 8px;
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.header-action:hover,
+.agent-start:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.28);
+}
+
+.agent-start:disabled {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border);
+  cursor: not-allowed;
 }
 
 .badge {
@@ -117,6 +151,17 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
+}
+
+.agent-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pane-tag {
+  color: var(--text-muted);
+  font-size: 0.68rem;
 }
 
 .preview-controls {
@@ -293,7 +338,8 @@ body {
   opacity: 1;
 }
 
-.feedback-dialog {
+.feedback-dialog,
+.library-dialog {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -308,11 +354,13 @@ body {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
 
-.feedback-dialog::backdrop {
+.feedback-dialog::backdrop,
+.library-dialog::backdrop {
   background: rgba(2, 6, 23, 0.72);
 }
 
-.feedback-dialog form {
+.feedback-dialog form,
+.library-dialog form {
   padding: 20px;
 }
 
@@ -378,7 +426,8 @@ body {
   white-space: nowrap;
 }
 
-.feedback-dialog label {
+.feedback-dialog label,
+.library-dialog label {
   display: block;
   margin-bottom: 7px;
   color: var(--text-main);
@@ -386,9 +435,9 @@ body {
   font-weight: 700;
 }
 
-.feedback-dialog textarea {
+.feedback-dialog textarea,
+.library-dialog input {
   width: 100%;
-  resize: vertical;
   padding: 10px;
   color: var(--text-main);
   background: #020617;
@@ -399,7 +448,12 @@ body {
   line-height: 1.45;
 }
 
-.feedback-dialog textarea:focus {
+.feedback-dialog textarea {
+  resize: vertical;
+}
+
+.feedback-dialog textarea:focus,
+.library-dialog input:focus {
   border-color: var(--accent);
   outline: 2px solid rgba(56, 189, 248, 0.2);
 }
@@ -439,18 +493,61 @@ body {
   font-weight: 700;
 }
 
+.library-intro {
+  margin: 18px 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.library-dialog label + input {
+  margin: 7px 0 14px;
+}
+
+.library-error {
+  min-height: 1.2em;
+  margin-top: 10px;
+  color: #fca5a5;
+  font-size: 0.72rem;
+}
+
 .pdf-placeholder {
+  max-width: 440px;
+  padding: 28px;
   text-align: center;
   color: var(--text-muted);
 }
 
-.pdf-placeholder code {
-  display: inline-block;
-  margin-top: 12px;
-  padding: 6px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.placeholder-kicker {
+  display: block;
+  margin-bottom: 8px;
   color: var(--accent);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pdf-placeholder h3 {
+  margin-bottom: 9px;
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.pdf-placeholder p {
+  margin-bottom: 16px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.pdf-placeholder .button-primary {
+  padding: 7px 12px;
+  border-radius: 5px;
   font-family: monospace;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.pdf-placeholder .button-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

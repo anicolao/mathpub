@@ -58,7 +58,7 @@ def test_gui_workspace_e2e(update_baselines: bool):
             )
 
         bound_port = 0
-        server = WorkspaceServer(host="127.0.0.1", port=0)
+        server = WorkspaceServer(host="127.0.0.1", port=0, agent_command=[])
         server_ready = threading.Event()
         stop_event = None
         loop_ref = []

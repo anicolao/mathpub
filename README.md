@@ -90,6 +90,25 @@ nix run .#mathpub-workspace
 mathpub workspace
 ```
 
+The workspace can start outside an existing MathPub project. **Create private library** initializes
+a content-only project, a new local `main` Git history, and a pinned flake, then reconnects the
+terminal in that library. The first implementation is deliberately local-only: it does not create
+or push a Git remote.
+
+The agent button launches Anna's pinned Antigravity flake with
+`nix run github:anicolao/nix-antigravity` by default. Configure another executable or label without
+rebuilding MathPub:
+
+```console
+MATHPUB_AGENT_COMMAND="nix run github:anicolao/nix-antigravity" \
+MATHPUB_AGENT_LABEL="Antigravity" \
+nix run .#mathpub-gui
+```
+
+After the agent starts, **Insert first-book prompt** places a curriculum-planning request at its
+active prompt for the author to review and submit. Newly created libraries include agent
+instructions describing the PDF-centered, multi-publication workflow.
+
 Options:
 - `--port PORT`: Specify custom port (default: `8765`).
 - `--host HOST`: Specify custom host IP (default: `127.0.0.1`).
@@ -121,13 +140,25 @@ nix run .#mathpub -- build publications/book.toml --seed 2026 --variant A \
   --projection student --lesson linear-equations --incremental --replace --json
 ```
 
-For detailed interface design, SyncTeX source-map routing, and Tauri desktop integration, see [GUI_DESIGN.md](GUI_DESIGN.md) and [GUI_IMPLEMENTATION_PLAN.md](GUI_IMPLEMENTATION_PLAN.md).
+For detailed interface design, SyncTeX source-map routing, Tauri desktop integration, and the
+agentic onboarding implementation, see [GUI_DESIGN.md](GUI_DESIGN.md),
+[GUI_IMPLEMENTATION_PLAN.md](GUI_IMPLEMENTATION_PLAN.md), and
+[AGENTIC_VISION.md](AGENTIC_VISION.md).
 
 The repository’s [AGENTS.md](AGENTS.md) is the operational interface for Codex CLI and other LLM
 harnesses. `mathpub init` generates equivalent instructions. New source is scaffolded beneath the
 component root with singular persisted kinds and plural collection directories; `new component`
 provides complete objective, misconception, teaching-tip, cohesive or structured example, and
 question templates.
+
+For the end-to-end path from an empty private repository to a reviewed first lesson and interactive
+PDF preview, see [AUTHOR_WORKFLOW.md](AUTHOR_WORKFLOW.md). It also records the remaining gaps
+between the current command-driven workflow and a self-service authoring application.
+
+The intended author-facing product is agentic: MathPub creates or opens a private, multi-publication
+content library, launches a CLI authoring agent in the embedded terminal, and lets the author work
+mainly by directing that agent and reviewing source-mapped PDFs. See
+[AGENTIC_VISION.md](AGENTIC_VISION.md).
 
 ## Reviewed examples
 

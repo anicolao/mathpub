@@ -8,6 +8,7 @@ import threading
 import time
 import urllib.request
 
+from mathpub.gui.onboarding import AgentConfiguration, create_authoring_library
 from mathpub.gui.server import (
     WorkspaceServer,
     _feedback_prompt,
@@ -56,6 +57,64 @@ def test_feedback_prompt_is_single_line_and_validated():
         )
         is None
     )
+
+
+def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch):
+    monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
+    configuration = AgentConfiguration.from_environment()
+    assert configuration.label == "Antigravity"
+    assert configuration.command == (
+        "nix",
+        "run",
+        "github:anicolao/nix-antigravity",
+    )
+
+
+def test_agent_configuration_requires_an_available_executable():
+    available = AgentConfiguration("Antigravity", ("/bin/echo", "ready"))
+    assert available.available is True
+    assert available.shell_command == "/bin/echo ready"
+    assert available.payload() == {
+        "label": "Antigravity",
+        "available": True,
+        "command": "/bin/echo",
+    }
+
+    missing = AgentConfiguration("Antigravity", ("not-a-real-agent-command",))
+    assert missing.available is False
+    assert missing.shell_command is None
+
+
+def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
+    result = create_authoring_library(
+        str(tmp_path),
+        "anna-math-library",
+        mathpub_url="github:publisher/mathpub",
+        lock_flake=False,
+    )
+
+    library = tmp_path / "anna-math-library"
+    assert result["root"] == str(library)
+    assert result["git_initialized"] is True
+    assert result["flake_locked"] is False
+    assert result["remote_created"] is False
+    assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"
+    assert (library / "mathpub.toml").is_file()
+    assert {path.name for path in library.iterdir()} >= {
+        ".git",
+        ".gitignore",
+        "AGENTS.md",
+        "README.md",
+        "components",
+        "flake.nix",
+        "mathpub.toml",
+        "profiles",
+        "publications",
+    }
+    instructions = (library / "AGENTS.md").read_text()
+    assert "many related publications" in instructions
+    assert "Operate MathPub on the author's behalf" in instructions
+    assert "student, answer, solution, validation, and\nparent editions" in instructions
 
 
 def test_publication_metadata_reports_stale_synctex_build(tmp_path):
@@ -133,6 +192,14 @@ def test_workspace_server_http():
         assert req.status == 200
         data = json.loads(req.read().decode("utf-8"))
         assert data["status"] == "ok"
+
+        req_workspace = urllib.request.urlopen("http://127.0.0.1:8912/api/workspace")
+        assert req_workspace.status == 200
+        workspace_data = json.loads(req_workspace.read().decode("utf-8"))
+        assert workspace_data["project"] == "mathpub"
+        assert workspace_data["root"]
+        assert workspace_data["agent"]["label"] == "Antigravity"
+        assert "Outline my first book" in workspace_data["starter_prompt"]
 
         # Test static file serving (index.html)
         req_root = urllib.request.urlopen("http://127.0.0.1:8912/")

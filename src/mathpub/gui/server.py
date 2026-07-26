@@ -16,7 +16,13 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from mathpub.config import find_project
+from mathpub.config import Project, find_project
+from mathpub.errors import MathpubError
+from mathpub.gui.onboarding import (
+    STARTER_PROMPT,
+    AgentConfiguration,
+    create_authoring_library,
+)
 from mathpub.gui.synctex import SyncTeXError, spatial_index
 from mathpub.gui.terminal import PTYManager
 from mathpub.gui.watch import IncrementalPreviewWatcher
@@ -25,8 +31,16 @@ STATIC_DIR = Path(__file__).parent / "static"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 SOURCE_PATH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-HTTP_REASONS = {200: "OK", 400: "Bad Request", 404: "Not Found"}
+HTTP_REASONS = {
+    200: "OK",
+    201: "Created",
+    400: "Bad Request",
+    404: "Not Found",
+    409: "Conflict",
+    500: "Internal Server Error",
+}
 FEEDBACK_LIMIT = 2000
+REQUEST_BODY_LIMIT = 16_384
 
 
 def _websocket_accept_key(sec_key: str) -> str:
@@ -188,9 +202,55 @@ def _publication_output_metadata(
 class WorkspaceServer:
     """Workspace HTTP & WebSocket server for mathpub GUI."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765) -> None:
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8765,
+        *,
+        project_root: Path | None = None,
+        agent_command: list[str] | None = None,
+        agent_label: str = "Antigravity",
+        lock_libraries: bool = True,
+        mathpub_url: str = "github:anicolao/mathpub",
+    ) -> None:
         self.host = host
         self.port = port
+        self.project_root = self._initial_project_root(project_root)
+        self.agent = (
+            AgentConfiguration.from_environment()
+            if agent_command is None
+            else AgentConfiguration(agent_label, tuple(agent_command))
+        )
+        self.lock_libraries = lock_libraries
+        self.mathpub_url = mathpub_url
+
+    @staticmethod
+    def _initial_project_root(project_root: Path | None) -> Path | None:
+        try:
+            return find_project(project_root).root
+        except MathpubError as error:
+            if error.code == "MP-SRC-004":
+                return None
+            raise
+
+    def _project(self) -> Project | None:
+        if self.project_root is None:
+            return None
+        try:
+            return find_project(self.project_root)
+        except MathpubError:
+            return None
+
+    def _workspace_payload(self) -> dict[str, object]:
+        project = self._project()
+        root = project.root if project is not None else None
+        return {
+            "project": project.config["project"] if project is not None else None,
+            "root": str(root) if root is not None else None,
+            "default_parent": str(root.parent if root is not None else Path.home()),
+            "agent": self.agent.payload(),
+            "starter_prompt": STARTER_PROMPT,
+        }
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -204,7 +264,11 @@ class WorkspaceServer:
             _close_writer(writer)
             return
 
-        header_text = header_bytes.decode(errors="ignore")
+        header_block, separator, initial_body = header_bytes.partition(b"\r\n\r\n")
+        if not separator:
+            _close_writer(writer)
+            return
+        header_text = header_block.decode(errors="ignore")
         lines = header_text.split("\r\n")
         if not lines:
             _close_writer(writer)
@@ -216,7 +280,13 @@ class WorkspaceServer:
             _close_writer(writer)
             return
 
+        method = parts[0]
         path = parts[1]
+        headers = {}
+        for line in lines[1:]:
+            key, separator, value = line.partition(":")
+            if separator:
+                headers[key.strip().lower()] = value.strip()
 
         # Handle WebSocket Handshake
         if "Upgrade: websocket" in header_text or "upgrade: websocket" in header_text:
@@ -247,8 +317,72 @@ class WorkspaceServer:
             _close_writer(writer)
             return
 
+        if path == "/api/workspace":
+            writer.write(_json_response(200, self._workspace_payload()))
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path == "/api/libraries" and method == "POST":
+            content_type = headers.get("content-type", "")
+            try:
+                content_length = int(headers.get("content-length", "0"))
+            except ValueError:
+                content_length = -1
+            if not content_type.lower().startswith("application/json"):
+                response = _json_response(400, {"error": "request body must use application/json"})
+            elif content_length < 0 or content_length > REQUEST_BODY_LIMIT:
+                response = _json_response(400, {"error": "invalid request body length"})
+            else:
+                body = initial_body
+                remaining = content_length - len(body)
+                if remaining > 0:
+                    try:
+                        body += await reader.readexactly(remaining)
+                    except asyncio.IncompleteReadError:
+                        body = b""
+                try:
+                    payload = json.loads(body[:content_length])
+                    parent = payload.get("parent")
+                    name = payload.get("name")
+                    result = await asyncio.to_thread(
+                        create_authoring_library,
+                        parent,
+                        name,
+                        mathpub_url=self.mathpub_url,
+                        lock_flake=self.lock_libraries,
+                    )
+                except (json.JSONDecodeError, AttributeError):
+                    response = _json_response(400, {"error": "request body must be a JSON object"})
+                except MathpubError as error:
+                    status = 409 if error.code == "MP-GUI-002" else 400
+                    response = _json_response(
+                        status,
+                        {"error": error.message, "code": error.code},
+                    )
+                except Exception as error:
+                    response = _json_response(500, {"error": str(error)})
+                else:
+                    self.project_root = Path(str(result["root"])).resolve()
+                    response = _json_response(
+                        201,
+                        {
+                            "library": result,
+                            "workspace": self._workspace_payload(),
+                        },
+                    )
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
         if path.startswith("/api/publications"):
-            project = find_project()
+            project = self._project()
+            if project is None:
+                writer.write(_json_response(200, {"publications": []}))
+                await writer.drain()
+                _close_writer(writer)
+                return
             build_dir = project.root / project.config.get("build_dir", "build")
             metadata_by_path: dict[Path, dict[str, object]] = {}
             if build_dir.exists():
@@ -320,7 +454,9 @@ class WorkspaceServer:
                 )
             else:
                 try:
-                    project = find_project()
+                    project = self._project()
+                    if project is None:
+                        raise SyncTeXError("no authoring library is open")
                     payload = spatial_index(
                         project.root,
                         publication_id,
@@ -348,7 +484,14 @@ class WorkspaceServer:
                 page_number = 0
 
             if pdf_rel_path and page_number >= 1:
-                project_root = Path.cwd().resolve()
+                project = self._project()
+                project_root = project.root if project is not None else None
+                if project_root is None:
+                    response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+                    writer.write(response)
+                    await writer.drain()
+                    _close_writer(writer)
+                    return
                 target_pdf = (project_root / pdf_rel_path).resolve()
                 if (
                     target_pdf.exists()
@@ -401,7 +544,14 @@ class WorkspaceServer:
             pdf_rel_path = query.get("path", [""])[0]
 
             if pdf_rel_path:
-                project_root = Path.cwd().resolve()
+                project = self._project()
+                project_root = project.root if project is not None else None
+                if project_root is None:
+                    response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+                    writer.write(response)
+                    await writer.drain()
+                    _close_writer(writer)
+                    return
                 target_pdf = (project_root / pdf_rel_path).resolve()
                 if (
                     target_pdf.exists()
@@ -450,18 +600,23 @@ class WorkspaceServer:
     async def _run_terminal_websocket(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
-        pty = PTYManager()
+        project = self._project()
+        terminal_root = project.root if project is not None else Path.cwd()
+        pty = PTYManager(cwd=str(terminal_root))
         pty.start(rows=24, cols=80)
 
         loop = asyncio.get_running_loop()
         write_lock = asyncio.Lock()
 
         async def send_event(event: dict[str, object]) -> None:
-            async with write_lock:
-                writer.write(_encode_ws_frame(json.dumps(event), opcode=0x1))
-                await writer.drain()
+            try:
+                async with write_lock:
+                    writer.write(_encode_ws_frame(json.dumps(event), opcode=0x1))
+                    await writer.drain()
+            except (ConnectionResetError, BrokenPipeError):
+                return
 
-        watcher = IncrementalPreviewWatcher(find_project(), send_event)
+        watcher = IncrementalPreviewWatcher(project, send_event) if project is not None else None
 
         async def read_pty_to_ws() -> None:
             while pty.is_alive():
@@ -499,8 +654,30 @@ class WorkspaceServer:
                                     if prompt is not None:
                                         pty.write(prompt.encode())
                                     continue
+                                if msg.get("type") == "start-agent":
+                                    command = self.agent.shell_command
+                                    if command is None:
+                                        await send_event(
+                                            {
+                                                "type": "agent-unavailable",
+                                                "label": self.agent.label,
+                                            }
+                                        )
+                                    else:
+                                        pty.write(b"\x15" + command.encode() + b"\r")
+                                        await send_event(
+                                            {
+                                                "type": "agent-started",
+                                                "label": self.agent.label,
+                                            }
+                                        )
+                                    continue
+                                if msg.get("type") == "starter-prompt":
+                                    pty.write(STARTER_PROMPT.encode())
+                                    await send_event({"type": "starter-prompt-inserted"})
+                                    continue
                                 if msg.get("type") == "watch-preview":
-                                    selection = watcher.select(msg)
+                                    selection = watcher.select(msg) if watcher is not None else None
                                     preparation_error = None
                                     if selection is not None:
                                         try:
@@ -535,7 +712,8 @@ class WorkspaceServer:
         try:
             await asyncio.gather(read_pty_to_ws(), read_ws_to_pty())
         finally:
-            await watcher.close()
+            if watcher is not None:
+                await watcher.close()
             pty.close()
             writer.close()
 

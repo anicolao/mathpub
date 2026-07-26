@@ -89,9 +89,17 @@ The interactive workspace is a local desktop application packaged using **Tauri*
 - [x] Reuse compatible TeX auxiliary and font-cache state, skip Sage for fragment-only edits, and avoid unconditional second compilation passes.
 - [x] Add E2E coverage for page navigation, page-specific mappings, page-preserving hot swaps, and a 5-second incremental-turnaround CI budget.
 
+### Phase 7: Agentic Onboarding Vertical Slice
+- [x] Allow the workspace backend and native application to start without an existing MathPub project.
+- [x] Add an in-app flow that creates a content-only authoring library, initializes local Git, pins the flake, switches the active workspace root, and reconnects the PTY there.
+- [x] Add a configurable one-click Antigravity-compatible CLI launcher with executable detection and clear unavailable state.
+- [x] Add a first-book starter prompt and generate agent instructions describing the PDF-centered, multi-publication operating model.
+- [x] Add a zero-pixel browser E2E scenario that creates a library, verifies its Git and instructions, launches a deterministic agent command, and inserts the starter prompt.
+- [ ] Add open/clone controls, private-remote creation and visibility verification, provider authentication guidance, resumable agent sessions, and versioned skill delivery.
+
 ---
 
 ## 4. Verification & Testing Strategy
 
-- **Unit Tests**: Test `PTYManager` process spawning, `synctex` coordinate parsing, and source-map resolution in `tests/test_gui.py`.
-- **Tauri E2E Visual Tests**: The Linux native smoke scenario launches the packaged application through `tauri-driver` and preserves a native WebKitGTK screenshot artifact. The Playwright WebKit scenario uses `GUIStepHelper` to verify terminal output, rendered PDF content, and overlay positioning against committed 0-pixel tolerance baselines on macOS, where direct `tauri-driver` cannot automate WKWebView.
+- **Unit Tests**: Test `PTYManager` process spawning, agent detection, authoring-library creation, `synctex` coordinate parsing, and source-map resolution in `tests/test_gui.py`.
+- **Tauri E2E Visual Tests**: The Linux native smoke scenario launches the packaged application through `tauri-driver` and preserves a native WebKitGTK screenshot artifact. The Playwright WebKit scenarios use `GUIStepHelper` to verify terminal output, rendered PDF content, overlay positioning, private-library onboarding, and agent startup against committed 0-pixel tolerance baselines on macOS, where direct `tauri-driver` cannot automate WKWebView.
