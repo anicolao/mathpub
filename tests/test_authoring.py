@@ -22,6 +22,8 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert (project / "mathpub.toml").is_file()
     instructions = (project / "AGENTS.md").read_text()
     assert "never edit generated files beneath `build/`" in instructions
+    assert "locked `nix develop` environment" in instructions
+    assert "Do not assume that any program inherited from the\nhost machine exists" in instructions
 
     code, payload = invoke(
         monkeypatch,
@@ -77,6 +79,7 @@ def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):
     assert 'inputs.mathpub.url = "github:publisher/mathpub/reviewed";' in flake
     assert 'projectName = "private-course";' in flake
     assert 'publicationPaths = [ "publications/book.toml" ];' in flake
+    assert "extraPackages = pkgs: with pkgs;" in flake
     assert "mathpub.lib.mkPublicationProject" in flake
     assert "private publication source" in (project / "README.md").read_text()
     assert "/build/" in (project / ".gitignore").read_text()

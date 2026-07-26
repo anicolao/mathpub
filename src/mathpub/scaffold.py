@@ -36,9 +36,36 @@ author's approval.
 
 ## Tooling rules
 
-Use only the programs supplied by this repository's Nix flake. Enter the environment with
-`nix develop`, or run `nix run .#mathpub -- COMMAND`. Never use host Python, Sage, TeX,
-formatters, or test runners, and never edit generated files beneath `build/`.
+Use only the programs supplied by this repository's Nix flake. The MathPub GUI launches its
+configured agent through this repository's locked `nix develop` environment. If you are operating
+outside that launcher, enter the same environment with `nix develop`, or run
+`nix run .#mathpub -- COMMAND`. Never use host Python, Sage, TeX, formatters, or test runners, and
+never edit generated files beneath `build/`.
+
+The default authoring environment guarantees:
+
+- `mathpub`, the publication CLI;
+- `nix`, for the pinned environment and flake applications;
+- `gh` and `git`, for repository work that the author has approved; and
+- `jq` and `rg`, for inspecting structured output and searching authored source.
+
+MathPub itself invokes its Nix-provided Sage, TeX, and PDF utilities. Prefer the MathPub CLI over
+calling those implementation tools directly. Do not assume that any program inherited from the
+host machine exists or is an acceptable substitute.
+
+If a task genuinely needs another program, add its Nixpkgs attribute to `extraPackages` in
+`flake.nix`, for example:
+
+```nix
+extraPackages = pkgs: with pkgs; [
+  imagemagick
+];
+```
+
+Keep additions minimal and relevant to authoring, use the package version selected by the locked
+flake, and explain the change to the author. After changing `extraPackages`, restart the agent
+through the GUI or enter a fresh `nix develop` shell. Changing packages does not justify changing
+flake inputs; update `flake.lock` only when an input change is intentional and approved.
 
 Before authoring, inspect the component catalog:
 
@@ -103,6 +130,9 @@ CONTENT_FLAKE = """{{
       src = self;
       projectName = {project_name};
       publicationPaths = {publication_paths};
+      extraPackages = pkgs: with pkgs; [
+        # Add repository-specific authoring tools here.
+      ];
     }};
 }}
 """

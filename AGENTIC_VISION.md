@@ -411,6 +411,8 @@ Several foundations already exist:
 - a native GUI with an embedded PTY terminal;
 - project-independent startup and local private authoring-library creation;
 - a configurable one-click agent launcher with executable detection;
+- agent launch through the library's locked Nix environment, including core repository tools and
+  a documented extension point;
 - a first-book starter prompt and generated agent operating instructions;
 - deterministic PDF builds and multiple projections;
 - SyncTeX hover regions and source-map resolution;
