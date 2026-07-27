@@ -121,6 +121,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const feedbackSource = document.getElementById("feedback-source");
   const feedbackClose = document.getElementById("feedback-close");
   const feedbackCancel = document.getElementById("feedback-cancel");
+  const feedbackEdit = document.getElementById("feedback-edit");
+  const editorDialog = document.getElementById("editor-dialog");
+  const editorForm = document.getElementById("editor-form");
+  const editorSource = document.getElementById("editor-source");
+  const editorContent = document.getElementById("editor-content");
+  const editorStatus = document.getElementById("editor-status");
+  const editorClose = document.getElementById("editor-close");
+  const editorCancel = document.getElementById("editor-cancel");
+  const editorSave = document.getElementById("editor-save");
   const libraryName = document.getElementById("library-name");
   const createLibrary = document.getElementById("create-library");
   const libraryDialog = document.getElementById("library-dialog");
@@ -145,6 +154,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentSpatialIndex = null;
   let mappedRegionsVisible = false;
   let selectedFeedbackBox = null;
+  let editorRevision = null;
+  let editorOriginalContent = "";
   let refreshTimer = null;
   let mappingRequestId = 0;
   let currentPage = 1;
@@ -200,6 +211,45 @@ document.addEventListener("DOMContentLoaded", () => {
     feedbackText.value = "";
     feedbackDialog.showModal();
     feedbackText.focus();
+  }
+
+  function sourceFailureMessage(payload, status) {
+    const lines = [payload.error || `Source request failed: ${status}`];
+    const details = payload.details || {};
+    if (details.command) lines.push(`Command: ${details.command}`);
+    if (details.exit_status !== undefined) {
+      lines.push(`Exit status: ${details.exit_status}`);
+    }
+    if (details.output) lines.push("", details.output);
+    return lines.join("\n");
+  }
+
+  async function openSourceEditor() {
+    if (!selectedFeedbackBox) return;
+    const sourcePath = selectedFeedbackBox.authored_source;
+    feedbackDialog.close();
+    editorSource.textContent = sourcePath;
+    editorContent.value = "";
+    editorContent.disabled = true;
+    editorStatus.classList.remove("error");
+    editorStatus.textContent = "Loading source…";
+    editorSave.disabled = true;
+    editorDialog.showModal();
+    try {
+      const response = await fetch(`/api/source?path=${encodeURIComponent(sourcePath)}`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(sourceFailureMessage(payload, response.status));
+      editorRevision = payload.source.revision;
+      editorOriginalContent = payload.source.content;
+      editorContent.value = editorOriginalContent;
+      editorContent.disabled = false;
+      editorStatus.textContent = "Source loaded";
+      editorContent.focus();
+    } catch (error) {
+      editorRevision = null;
+      editorStatus.classList.add("error");
+      editorStatus.textContent = error.message;
+    }
   }
 
   function mappingAvailable(publication) {
@@ -381,7 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
         class: "synctex-region",
         role: "button",
         tabindex: "0",
-        "aria-label": `Add feedback for ${box.component_id} ${box.fragment}`
+        "aria-label": `Review or edit ${box.component_id} ${box.fragment}`
       });
       region.dataset.componentId = box.component_id;
       region.dataset.fragment = box.fragment;
@@ -667,6 +717,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   feedbackClose.addEventListener("click", () => feedbackDialog.close());
   feedbackCancel.addEventListener("click", () => feedbackDialog.close());
+  feedbackEdit.addEventListener("click", openSourceEditor);
   feedbackForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const feedback = feedbackText.value.trim();
@@ -688,6 +739,70 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   feedbackDialog.addEventListener("close", () => {
     feedbackText.value = "";
+  });
+
+  function closeSourceEditor() {
+    editorDialog.close();
+  }
+
+  editorClose.addEventListener("click", closeSourceEditor);
+  editorCancel.addEventListener("click", closeSourceEditor);
+  editorContent.addEventListener("input", () => {
+    editorSave.disabled =
+      !editorRevision || editorContent.value === editorOriginalContent;
+    if (editorStatus.classList.contains("error")) {
+      editorStatus.classList.remove("error");
+      editorStatus.textContent = "";
+    }
+  });
+  editorForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (
+      !selectedFeedbackBox ||
+      !editorRevision ||
+      editorContent.value === editorOriginalContent
+    ) return;
+
+    editorContent.disabled = true;
+    editorSave.disabled = true;
+    editorSave.textContent = "Saving and committing…";
+    editorStatus.classList.remove("error");
+    editorStatus.textContent = "Saving source and creating a Git commit…";
+    try {
+      const response = await fetch("/api/source", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: selectedFeedbackBox.authored_source,
+          content: editorContent.value,
+          revision: editorRevision
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(sourceFailureMessage(payload, response.status));
+      const commit = payload.source.commit || "";
+      editorDialog.close();
+      synctexStatus.textContent = "Edit committed";
+      synctexStatus.title = commit ? `Git commit ${commit.slice(0, 12)}` : "";
+      selectedFeedbackBox = null;
+    } catch (error) {
+      editorContent.disabled = false;
+      editorSave.disabled = false;
+      editorStatus.classList.add("error");
+      editorStatus.textContent = error.message;
+    } finally {
+      editorSave.textContent = "Save and commit";
+    }
+  });
+  editorDialog.addEventListener("close", () => {
+    editorRevision = null;
+    editorOriginalContent = "";
+    editorContent.value = "";
+    editorContent.disabled = true;
+    editorStatus.classList.remove("error");
+    editorStatus.textContent = "";
+    editorSave.disabled = true;
+    editorSave.textContent = "Save and commit";
   });
 
   pdfPreview.addEventListener("load", renderMappedRegions);

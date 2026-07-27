@@ -180,8 +180,47 @@
 
       <div class="feedback-actions">
         <button id="feedback-cancel" class="button-secondary" type="button">Cancel</button>
+        <button id="feedback-edit" class="button-secondary" type="button">Edit source</button>
         <button id="feedback-send" class="button-primary" type="submit">
           Insert into terminal
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-dialog" class="source-editor-dialog" aria-labelledby="editor-title">
+    <form id="editor-form">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Quick TeX edit</span>
+          <h2 id="editor-title">Edit authored source</h2>
+        </div>
+        <button
+          id="editor-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close source editor"
+        >×</button>
+      </div>
+
+      <p id="editor-source" class="editor-source"></p>
+      <label for="editor-content">TeX source</label>
+      <textarea
+        id="editor-content"
+        name="content"
+        rows="22"
+        spellcheck="false"
+        disabled
+      ></textarea>
+      <p class="feedback-help">
+        Saving commits only this file. The active preview will rebuild incrementally.
+      </p>
+      <p id="editor-status" class="editor-status" role="status"></p>
+
+      <div class="feedback-actions">
+        <button id="editor-cancel" class="button-secondary" type="button">Cancel</button>
+        <button id="editor-save" class="button-primary" type="submit" disabled>
+          Save and commit
         </button>
       </div>
     </form>

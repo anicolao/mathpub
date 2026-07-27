@@ -24,6 +24,7 @@ from mathpub.gui.onboarding import (
     AgentConfiguration,
     create_authoring_library,
 )
+from mathpub.gui.source_edit import SOURCE_EDIT_LIMIT, load_tex_source, save_tex_source
 from mathpub.gui.synctex import SyncTeXError, spatial_index
 from mathpub.gui.terminal import PTYManager
 from mathpub.gui.watch import IncrementalPreviewWatcher
@@ -38,10 +39,12 @@ HTTP_REASONS = {
     400: "Bad Request",
     404: "Not Found",
     409: "Conflict",
+    413: "Content Too Large",
     500: "Internal Server Error",
 }
 FEEDBACK_LIMIT = 2000
 REQUEST_BODY_LIMIT = 16_384
+SOURCE_REQUEST_BODY_LIMIT = SOURCE_EDIT_LIMIT * 2 + 16_384
 
 
 def _websocket_accept_key(sec_key: str) -> str:
@@ -226,6 +229,7 @@ class WorkspaceServer:
         self.lock_libraries = lock_libraries
         self.mathpub_url = mathpub_url
         self.library_creator = library_creator
+        self.source_edit_lock = asyncio.Lock()
 
     @staticmethod
     def _initial_project_root(project_root: Path | None) -> Path | None:
@@ -322,6 +326,89 @@ class WorkspaceServer:
 
         if path == "/api/workspace":
             writer.write(_json_response(200, self._workspace_payload()))
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        parsed_path = urlparse(path)
+        if parsed_path.path == "/api/source" and method == "GET":
+            project = self._project()
+            if project is None:
+                response = _json_response(404, {"error": "no authoring library is open"})
+            else:
+                source = parse_qs(parsed_path.query).get("path", [""])[0]
+                try:
+                    document = await asyncio.to_thread(load_tex_source, project, source)
+                except MathpubError as error:
+                    status = 404 if error.code == "MP-GUI-011" else 400
+                    response = _json_response(
+                        status,
+                        {
+                            "error": error.message,
+                            "code": error.code,
+                            "details": error.details,
+                        },
+                    )
+                else:
+                    response = _json_response(200, {"source": document})
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if parsed_path.path == "/api/source" and method == "PUT":
+            project = self._project()
+            content_type = headers.get("content-type", "")
+            try:
+                content_length = int(headers.get("content-length", "0"))
+            except ValueError:
+                content_length = -1
+            if project is None:
+                response = _json_response(404, {"error": "no authoring library is open"})
+            elif not content_type.lower().startswith("application/json"):
+                response = _json_response(400, {"error": "request body must use application/json"})
+            elif content_length < 0:
+                response = _json_response(400, {"error": "invalid request body length"})
+            elif content_length > SOURCE_REQUEST_BODY_LIMIT:
+                response = _json_response(413, {"error": "source edit request is too large"})
+            else:
+                body = initial_body
+                remaining = content_length - len(body)
+                if remaining > 0:
+                    try:
+                        body += await reader.readexactly(remaining)
+                    except asyncio.IncompleteReadError:
+                        body = b""
+                try:
+                    payload = json.loads(body[:content_length])
+                    async with self.source_edit_lock:
+                        result = await asyncio.to_thread(
+                            save_tex_source,
+                            project,
+                            payload.get("path"),
+                            payload.get("content"),
+                            payload.get("revision"),
+                        )
+                except (json.JSONDecodeError, AttributeError):
+                    response = _json_response(400, {"error": "request body must be a JSON object"})
+                except MathpubError as error:
+                    status = {
+                        "MP-GUI-011": 404,
+                        "MP-GUI-012": 409,
+                        "MP-GUI-013": 500,
+                        "MP-GUI-014": 409,
+                    }.get(error.code, 400)
+                    response = _json_response(
+                        status,
+                        {
+                            "error": error.message,
+                            "code": error.code,
+                            "details": error.details,
+                        },
+                    )
+                else:
+                    response = _json_response(200, {"source": result})
+            writer.write(response)
             await writer.drain()
             _close_writer(writer)
             return

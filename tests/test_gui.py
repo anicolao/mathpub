@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -13,6 +14,7 @@ import urllib.request
 
 import pytest
 
+from mathpub.config import find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.onboarding import AgentConfiguration, create_authoring_library
 from mathpub.gui.server import (
@@ -20,6 +22,7 @@ from mathpub.gui.server import (
     _feedback_prompt,
     _publication_output_metadata,
 )
+from mathpub.gui.source_edit import load_tex_source, save_tex_source
 from mathpub.gui.terminal import PTYManager
 from mathpub.scaffold import init_project
 
@@ -193,6 +196,134 @@ def test_create_authoring_library_reports_sanitized_command_failure(tmp_path, mo
         "output": ("stdout:\nevaluated authoring shell\n\nstderr:\nerror: token=[redacted]"),
     }
     assert not (tmp_path / "broken-library").exists()
+
+
+def test_quick_tex_edit_commits_only_revision_matched_source(tmp_path):
+    root = tmp_path / "authoring-library"
+    init_project(root)
+    source = root / "components/demo/prompt.tex"
+    source.parent.mkdir(parents=True)
+    source.write_text("Original wording.\n")
+    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.name", "MathPub Test"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "mathpub-test@example.invalid"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial authoring library"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    (root / "README.md").write_text("An unrelated local change.\n")
+    project = find_project(root)
+
+    loaded = load_tex_source(project, "components/demo/prompt.tex")
+    result = save_tex_source(
+        project,
+        loaded["path"],
+        "Improved wording.\n",
+        loaded["revision"],
+    )
+
+    assert source.read_text() == "Improved wording.\n"
+    assert result["message"] == "Quick edit: components/demo/prompt.tex"
+    assert (
+        result["commit"]
+        == subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+    committed_paths = subprocess.run(
+        ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert committed_paths == ["components/demo/prompt.tex"]
+    assert subprocess.run(
+        ["git", "status", "--short"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines() == [" M README.md"]
+
+    source.write_text("Concurrent agent edit.\n")
+    with pytest.raises(MathpubError, match="source changed after it was opened") as caught:
+        save_tex_source(
+            project,
+            loaded["path"],
+            "Stale browser edit.\n",
+            loaded["revision"],
+        )
+    assert caught.value.code == "MP-GUI-012"
+    assert source.read_text() == "Concurrent agent edit.\n"
+
+
+def test_quick_tex_edit_rejects_sources_outside_authored_roots(tmp_path):
+    root = tmp_path / "authoring-library"
+    init_project(root)
+    outside = root / "private.tex"
+    outside.write_text("Not mapped authored content.\n")
+    project = find_project(root)
+
+    with pytest.raises(MathpubError, match="outside the authored-content roots") as caught:
+        load_tex_source(project, "private.tex")
+    assert caught.value.code == "MP-GUI-010"
+
+
+def test_quick_tex_edit_creates_first_commit_with_fallback_identity(tmp_path, monkeypatch):
+    root = tmp_path / "new-authoring-library"
+    init_project(root)
+    source = root / "components/demo/prompt.tex"
+    source.parent.mkdir(parents=True)
+    source.write_text("First draft.\n")
+    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+    isolated_home = tmp_path / "isolated-home"
+    isolated_home.mkdir()
+    monkeypatch.setenv("HOME", str(isolated_home))
+    project = find_project(root)
+    loaded = load_tex_source(project, "components/demo/prompt.tex")
+
+    saved = save_tex_source(
+        project,
+        loaded["path"],
+        "First quick edit.\n",
+        loaded["revision"],
+    )
+
+    assert len(saved["commit"]) == 40
+    assert (
+        subprocess.run(
+            ["git", "show", "--format=%an <%ae>", "--no-patch", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(isolated_home)},
+        ).stdout.strip()
+        == "MathPub Quick Edit <quick-edit@mathpub.local>"
+    )
+    assert subprocess.run(
+        ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines() == ["components/demo/prompt.tex"]
 
 
 def test_publication_metadata_reports_stale_synctex_build(tmp_path):
