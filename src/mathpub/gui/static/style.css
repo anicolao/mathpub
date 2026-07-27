@@ -339,7 +339,8 @@ body {
 }
 
 .feedback-dialog,
-.library-dialog {
+.library-dialog,
+.source-editor-dialog {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -355,12 +356,14 @@ body {
 }
 
 .feedback-dialog::backdrop,
-.library-dialog::backdrop {
+.library-dialog::backdrop,
+.source-editor-dialog::backdrop {
   background: rgba(2, 6, 23, 0.72);
 }
 
 .feedback-dialog form,
-.library-dialog form {
+.library-dialog form,
+.source-editor-dialog form {
   padding: 20px;
 }
 
@@ -427,7 +430,8 @@ body {
 }
 
 .feedback-dialog label,
-.library-dialog label {
+.library-dialog label,
+.source-editor-dialog label {
   display: block;
   margin-bottom: 7px;
   color: var(--text-main);
@@ -436,7 +440,8 @@ body {
 }
 
 .feedback-dialog textarea,
-.library-dialog input {
+.library-dialog input,
+.source-editor-dialog textarea {
   width: 100%;
   padding: 10px;
   color: var(--text-main);
@@ -453,9 +458,44 @@ body {
 }
 
 .feedback-dialog textarea:focus,
-.library-dialog input:focus {
+.library-dialog input:focus,
+.source-editor-dialog textarea:focus {
   border-color: var(--accent);
   outline: 2px solid rgba(56, 189, 248, 0.2);
+}
+
+.source-editor-dialog {
+  width: min(900px, calc(100vw - 48px));
+}
+
+.source-editor-dialog textarea {
+  min-height: min(52vh, 520px);
+  resize: vertical;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.editor-source {
+  margin: 16px 0 12px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: monospace;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-status {
+  min-height: 1.2em;
+  margin-top: 9px;
+  color: var(--text-muted);
+  font-family: monospace;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+
+.editor-status.error {
+  color: #fca5a5;
 }
 
 .feedback-help {

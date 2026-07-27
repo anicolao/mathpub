@@ -7,6 +7,8 @@ import json
 import math
 import os
 import re
+import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -21,7 +23,7 @@ from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 INCREMENTAL_PREVIEW_BUDGET_MS = 5_000
 
 
-def test_gui_workspace_e2e(update_baselines: bool):
+def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
     if os.environ.get("HOME") == "/homeless-shelter":
         import pytest
 
@@ -34,11 +36,44 @@ def test_gui_workspace_e2e(update_baselines: bool):
     diffs_dir.mkdir(exist_ok=True)
     steps = GUIStepHelper(scenario_dir, update_baselines)
 
+    # Work in an isolated authoring repository so quick-edit commits never touch the checkout.
+    source_project = find_project()
+    workspace_root = tmp_path / "authoring-library"
+    workspace_root.mkdir()
+    for filename in (".gitignore", "mathpub.toml"):
+        shutil.copy2(source_project.root / filename, workspace_root / filename)
+    for directory in ("components", "profiles", "publications"):
+        source_directory = source_project.root / directory
+        if source_directory.is_dir():
+            shutil.copytree(source_directory, workspace_root / directory)
+    subprocess.run(
+        ["git", "init", "-b", "main"],
+        cwd=workspace_root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "MathPub E2E"],
+        cwd=workspace_root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "mathpub-e2e@example.invalid"],
+        cwd=workspace_root,
+        check=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=workspace_root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial authoring library"],
+        cwd=workspace_root,
+        check=True,
+        capture_output=True,
+    )
+
     # Pre-build physics practice PDF so the right pane renders its first page.
-    project = find_project()
+    project = find_project(workspace_root)
     pub_path = project.root / "publications/physics-practice.toml"
-    watched_source = project.root / "components/questions/physics/energy/ramp-speed/prompt.tex"
-    original_source_times = None
+    watched_source = project.root / "components/questions/physics/projectiles/snowball/prompt.tex"
     if pub_path.exists():
         build(project, pub_path, root_seed="2026", variant="A", replace=True)
 
@@ -58,7 +93,12 @@ def test_gui_workspace_e2e(update_baselines: bool):
             )
 
         bound_port = 0
-        server = WorkspaceServer(host="127.0.0.1", port=0, agent_command=[])
+        server = WorkspaceServer(
+            host="127.0.0.1",
+            port=0,
+            project_root=project.root,
+            agent_command=[],
+        )
         server_ready = threading.Event()
         stop_event = None
         loop_ref = []
@@ -363,12 +403,43 @@ def test_gui_workspace_e2e(update_baselines: bool):
 
             steps.verify(page, "003-page-two")
 
-            # 10. Touch an authored component and verify a bounded, page-preserving hot-swap.
-            source_stat = watched_source.stat()
-            original_source_times = (source_stat.st_atime_ns, source_stat.st_mtime_ns)
-            os.utime(
-                watched_source,
-                ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns + 1_000_000_000),
+            # 10. Quick-edit the mapped TeX source, commit only it, and hot-swap the preview.
+            snowball_region = page.locator(
+                '.synctex-region[data-component-id="physics.projectiles.snowball"]'
+            )
+            snowball_region.click()
+            assert feedback_dialog.is_visible()
+            page.locator("#feedback-edit").click()
+            editor_dialog = page.locator("#editor-dialog")
+            assert editor_dialog.is_visible()
+            page.wait_for_function(
+                "document.getElementById('editor-status').textContent === 'Source loaded'"
+            )
+            assert page.locator("#editor-source").text_content() == (
+                "components/questions/physics/projectiles/snowball/prompt.tex"
+            )
+            original_content = page.locator("#editor-content").input_value()
+            assert "Ignore air resistance." in original_content
+            edited_content = original_content.replace(
+                "Ignore air resistance.",
+                "Assume air resistance is negligible.",
+            )
+            page.locator("#editor-content").fill(edited_content)
+            assert page.locator("#editor-save").is_enabled()
+
+            steps.verify(page, "004-quick-tex-editor")
+
+            commit_before = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            page.locator("#editor-save").click()
+            page.wait_for_function(
+                "!document.getElementById('editor-dialog').open",
+                timeout=30_000,
             )
             page.wait_for_function(
                 "document.getElementById('status-build').textContent === 'Rebuilding preview…'",
@@ -391,8 +462,54 @@ def test_gui_workspace_e2e(update_baselines: bool):
             assert page.locator("#pdf-select").input_value() == expected_pdf
             assert page.locator("#page-position").text_content() == "Page 2 of 2"
             assert "page=2" in page.locator("#pdf-preview").get_attribute("src")
+            assert watched_source.read_text() == edited_content
 
-            steps.verify(page, "004-incremental-preview-updated")
+            commit_after = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            assert commit_after != commit_before
+            assert subprocess.run(
+                ["git", "show", "--format=%s", "--no-patch", "HEAD"],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip() == (
+                "Quick edit: components/questions/physics/projectiles/snowball/prompt.tex"
+            )
+            assert subprocess.run(
+                [
+                    "git",
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    "HEAD",
+                ],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines() == [
+                "components/questions/physics/projectiles/snowball/prompt.tex"
+            ]
+            assert (
+                subprocess.run(
+                    ["git", "status", "--short"],
+                    cwd=project.root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+                == ""
+            )
+
+            steps.verify(page, "005-quick-edit-preview-updated")
 
             # 10. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
@@ -418,8 +535,10 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)\n\n"
                 "## Page Two with Page-Specific SyncTeX Mappings\n\n"
                 "![Page Two](./screenshots/003-page-two.png)\n\n"
-                "## Incremental Preview Updated\n\n"
-                "![Incremental Preview](./screenshots/004-incremental-preview-updated.png)\n\n"
+                "## Quick TeX Editor\n\n"
+                "![Quick TeX Editor](./screenshots/004-quick-tex-editor.png)\n\n"
+                "## Quick Edit Committed and Preview Updated\n\n"
+                "![Quick Edit Preview](./screenshots/005-quick-edit-preview-updated.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
@@ -429,7 +548,9 @@ def test_gui_workspace_e2e(update_baselines: bool):
                 "- [x] Clicking a mapped region opens source-aware feedback controls\n"
                 "- [x] Feedback is inserted into the PTY for review without being executed\n"
                 "- [x] Multipage navigation loads page-specific PDF content and mappings\n"
-                "- [x] Authored changes reuse instances and hot-swap the active page "
+                "- [x] A mapped TeX source can be edited directly in the GUI\n"
+                "- [x] Saving commits only that source file in Git\n"
+                "- [x] The committed edit reuses instances and hot-swaps the active page "
                 "within budget\n"
             )
             readme_path.write_text(readme_content)
@@ -437,7 +558,5 @@ def test_gui_workspace_e2e(update_baselines: bool):
         finally:
             if browser.is_connected():
                 browser.close()
-            if original_source_times is not None:
-                os.utime(watched_source, ns=original_source_times)
             if stop_event and loop_ref:
                 loop_ref[0].call_soon_threadsafe(stop_event.set)
