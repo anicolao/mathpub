@@ -22,6 +22,8 @@ FORMAT_PAPERS = ("letter", "a4")
 
 def publication_format_style(publication: dict[str, Any]) -> str:
     """Return the format family needed by one publication."""
+    if publication.get("kind") == "presentation":
+        return "presentation"
     if publication.get("style") == "anna":
         return "anna"
     return "textbook" if publication.get("kind") == "textbook" else "worksheet"
@@ -195,6 +197,8 @@ def find_latex_format(
 ) -> Path | None:
     """Find a compatible precompiled format without creating one implicitly."""
     style = publication_format_style(publication)
+    if style == "presentation":
+        return None
     if style == "anna":
         font_family = "computer-modern"
     paper = "a4" if publication.get("paper") == "a4" else "letter"

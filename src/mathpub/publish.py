@@ -32,6 +32,8 @@ from mathpub.render import (
     compile_pdf,
     component_tex,
     document_tex,
+    marked_source,
+    presentation_tex,
     question_tex,
     textbook_tex,
 )
@@ -219,6 +221,41 @@ def _textbook_chapters(
             if projection == "validation" and (source := practice.get("validation")):
                 pieces.append(_lesson_path(project, publication_path, source).read_text())
         rendered.append("\n".join(pieces))
+    return rendered
+
+
+def _presentation_slides(
+    project: Project,
+    publication_path: Path,
+    publication: dict[str, Any],
+) -> list[str]:
+    """Render mapped Beamer frames from authored presentation fragments."""
+    rendered = []
+    identifiers: set[str] = set()
+    for slide in publication["slides"]:
+        identifier = slide["id"]
+        if identifier in identifiers:
+            raise MathpubError("MP-SRC-013", f"duplicate presentation slide ID: {identifier}")
+        identifiers.add(identifier)
+        source_path = _lesson_path(project, publication_path, slide["source"])
+        options = [name for name in ("plain", "fragile") if slide.get(name)]
+        option_text = f"[{','.join(options)}]" if options else ""
+        title = "" if slide.get("plain") else f"{{{slide['title']}}}"
+        body = marked_source(
+            identifier,
+            "slide",
+            source_path,
+            source_path.read_text(encoding="utf-8"),
+        )
+        rendered.append(
+            "\n".join(
+                (
+                    rf"\begin{{frame}}{option_text}{title}",
+                    body,
+                    r"\end{frame}",
+                )
+            )
+        )
     return rendered
 
 
@@ -706,7 +743,16 @@ def build(
         raise MathpubError("MP-TEX-010", f"unknown font family: {selected_font}", exit_code=3)
     tex_engine = "pdflatex" if selected_font == "computer-modern" else "lualatex"
     catalog = Catalog(project)
-    selected = projections or publication.get("projections", ["student", "solutions"])
+    default_projections = (
+        ["student"] if publication["kind"] == "presentation" else ["student", "solutions"]
+    )
+    selected = projections or publication.get("projections", default_projections)
+    if publication["kind"] == "presentation" and selected != ["student"]:
+        raise MathpubError(
+            "MP-TEX-006",
+            "presentation publications support only the student projection",
+            exit_code=3,
+        )
     build_root = project.root / project.config.get("build_dir", "build")
     destination = build_root / publication["id"] / variant
     cached_questions: dict[str, dict[str, Any]] = {}
@@ -816,6 +862,12 @@ def build(
                     publication,
                     projection,
                     chapters,
+                    selected_font,
+                )
+            elif publication["kind"] == "presentation":
+                source = presentation_tex(
+                    publication,
+                    _presentation_slides(project, publication_path, publication),
                     selected_font,
                 )
             else:
@@ -935,6 +987,12 @@ def build(
                     }
                     for chapter in publication.get("chapters", [])
                     if (practice := chapter.get("practice"))
+                },
+                "presentation_sources": {
+                    slide["id"]: _file_hash(
+                        _lesson_path(project, publication_path, slide["source"])
+                    )
+                    for slide in publication.get("slides", [])
                 },
                 "flake_lock_sha256": _file_hash(project.root / "flake.lock")
                 if (project.root / "flake.lock").is_file()
@@ -1065,6 +1123,10 @@ def reproduce(
             }
             for chapter in publication.get("chapters", [])
             if (practice := chapter.get("practice"))
+        },
+        "presentation_sources": {
+            slide["id"]: _file_hash(_lesson_path(project, publication_path, slide["source"]))
+            for slide in publication.get("slides", [])
         },
         "flake_lock_sha256": _file_hash(project.root / "flake.lock")
         if (project.root / "flake.lock").is_file()

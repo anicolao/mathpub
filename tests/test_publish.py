@@ -41,6 +41,112 @@ def test_lualatex_format_dump_is_reusable(tmp_path):
     assert find_latex_format(project, publication, "libertinus") is None
 
 
+def test_builds_mapped_metropolis_presentation(tmp_path):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication_dir = root / "publications"
+    slide_dir = publication_dir / "credit-scores"
+    slide_dir.mkdir()
+    (slide_dir / "01-learning-goals.tex").write_text(
+        r"""\begin{itemize}
+\item Explain what a credit score summarizes.
+\item Read the major sections of a credit report.
+\end{itemize}
+"""
+    )
+    (slide_dir / "02-key-facts.tex").write_text(
+        r"""Payment history is commonly the largest scoring factor.
+\[
+  \text{utilization}=\frac{\text{reported revolving balances}}
+  {\text{total revolving credit limits}}.
+\]
+"""
+    )
+    (slide_dir / "03-example.tex").write_text(
+        r"""\begin{columns}[T]
+\column{0.55\textwidth}
+A card reports a balance of \$450 and a limit of \$1,500. Find its utilization.
+\[
+  \frac{450}{1500}=0.30=30\%.
+\]
+\column{0.4\textwidth}
+\begin{tikzpicture}[x=3cm,y=0.7cm]
+  \draw[rounded corners] (0,0) rectangle (1,1);
+  \fill[structure.fg] (0,0) rectangle (0.3,1);
+  \node at (0.5,0.5) {30\%};
+\end{tikzpicture}
+\end{columns}
+"""
+    )
+    publication = publication_dir / "credit-scores.toml"
+    publication.write_text(
+        """schema = 1
+id = "consumer-math.credit-scores"
+kind = "presentation"
+title = "Understanding Credit Scores and Credit Reports"
+course = "Consumer Math 101"
+profile = "mathpub.exam"
+theme = "metropolis"
+aspect_ratio = "169"
+font = "libertinus"
+projections = ["student"]
+
+[[slides]]
+id = "learning-goals"
+title = "Learning Goals"
+source = "credit-scores/01-learning-goals.tex"
+
+[[slides]]
+id = "key-facts"
+title = "Key Facts"
+source = "credit-scores/02-key-facts.tex"
+
+[[slides]]
+id = "utilization-example"
+title = "Example and Solution"
+source = "credit-scores/03-example.tex"
+"""
+    )
+
+    result = build(
+        project,
+        publication,
+        root_seed="2026",
+        variant="review",
+        replace=True,
+    )
+
+    edition = root / result["edition"]
+    output = result["outputs"][0]
+    pdf = PdfReader(edition / output["path"])
+    assert len(pdf.pages) == 4
+    title_page = pdf.pages[0].extract_text()
+    assert "Understanding Credit Scores and Credit Reports" in title_page
+    assert "Consumer Math 101" not in title_page
+    generated = (
+        edition / "generated-tex" / "consumer-math.credit-scores-review-student.tex"
+    ).read_text()
+    assert r"\usetheme{metropolis}" in generated
+    assert r"\begin{tikzpicture}" in generated
+    assert "Consumer Math 101" not in generated
+    source_map = json.loads((edition / "generated-tex/source-map.json").read_text())
+    mappings = source_map["projections"]["student"]
+    assert [mapping["component_id"] for mapping in mappings] == [
+        "learning-goals",
+        "key-facts",
+        "utilization-example",
+    ]
+    assert mappings[0]["authored_source"] == ("publications/credit-scores/01-learning-goals.tex")
+    manifest = json.loads((edition / "manifest.json").read_text())
+    assert set(manifest["source"]["presentation_sources"]) == {
+        "learning-goals",
+        "key-facts",
+        "utilization-example",
+    }
+    assert manifest["publication_kind"] == "presentation"
+
+
 def test_single_lesson_filter_preserves_only_requested_content():
     publication = {
         "id": "demo",

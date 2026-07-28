@@ -22,12 +22,26 @@ editorial language and review the resulting PDFs without managing component sche
 TOML, TeX builds, or Nix commands. Treat the rendered student, answer, solution, validation, and
 parent editions as the primary human review surfaces.
 
+This file was generated when the library was created and may contain author customizations. At the
+start of each GUI-launched session, also run `nix run .#mathpub -- agent-guide` to read the
+version-matched framework contract. Follow that runtime guide when this older generated copy lacks
+instructions for a publication kind or command supported by the pinned MathPub version.
+
 At the beginning of a task:
 
 1. inspect the working tree, project catalog, and relevant publications;
-2. clarify the audience, scope, sequence, and desired editions when they would change the result;
-3. search for reviewed components that can be reused before creating new ones; and
-4. propose a bounded outline or change before generating a large body of content.
+2. identify the requested artifact type from the author's language before choosing a publication
+   schema--a presentation, worksheet, test, and textbook are different deliverables;
+3. clarify the audience, scope, sequence, and desired editions when they would change the result;
+4. search for reviewed components that can be reused before creating new ones; and
+5. propose a bounded outline or change before generating a large body of content.
+
+Do not silently substitute one document type for another. Words such as “slides,” “slide deck,”
+“presentation,” “Beamer,” or “Metropolis” require a `presentation` publication, not a textbook.
+Likewise, do not respond to a request for a MathPub publication by compiling an unrelated
+standalone TeX file outside the framework. Preserve concrete editorial constraints--slide order,
+minimum example counts, answer placement, title-page fields, visual requirements, and page or
+frame fit--as acceptance criteria and inspect the built PDF against them.
 
 After editing, run focused checks with explicit seeds, build the smallest useful review projection,
 and tell the author exactly which PDF is ready. Run the complete publication loop before proposing
@@ -105,6 +119,52 @@ Keep answer and solution content out of `prompt.tex`; source boundaries enforce 
 isolation. Parameterized diagrams must derive coordinates from the same canonical parameters as
 the mathematics and validate their measurements with `ctx.check_*`. Do not label student diagrams
 with implementation-scale commentary. Preserve explicit seeds in reports and commits.
+
+## Presentations
+
+MathPub presentations are Beamer publications assembled from mapped, editable slide fragments.
+The framework creates the title frame; it never adds `course` to that frame. Omit `subtitle` and
+`author` when the author asks for a title-only opening. Each later frame has one source file under
+the publication directory:
+
+```toml
+schema = 1
+id = "consumer-math.credit-scores"
+kind = "presentation"
+title = "Understanding Credit Scores and Credit Reports"
+profile = "mathpub.exam"
+theme = "metropolis"
+aspect_ratio = "169"
+projections = ["student"]
+
+[[slides]]
+id = "learning-goals"
+title = "Learning Goals"
+source = "credit-scores/01-learning-goals.tex"
+
+[[slides]]
+id = "key-facts"
+title = "Credit Score Factors"
+source = "credit-scores/02-key-facts.tex"
+```
+
+Slide fragments contain the frame body, not `\begin{frame}` or `\end{frame}`. Use ordinary LaTeX,
+display mathematics, columns, and original TikZ diagrams there. Set `fragile = true` only when a
+frame contains verbatim-like material. Keep every frame legible without shrinking an entire deck:
+split crowded material into additional slides, and place each worked solution on a slide after its
+question. A request for at least five examples needs at least five distinct example/solution
+sequences in the manifest.
+
+Run the normal publication loop:
+
+```console
+nix run .#mathpub -- check publication publications/PRESENTATION.toml --json
+nix run .#mathpub -- build publications/PRESENTATION.toml \
+  --seed 2026 --variant review --projection student --replace --json
+```
+
+Open the resulting PDF in the MathPub preview and inspect every frame for clipping, overflow,
+sequence, title-page constraints, mathematical correctness, and useful original visuals.
 """
 
 PROJECT = """schema = 1

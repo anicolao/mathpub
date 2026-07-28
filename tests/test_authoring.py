@@ -24,6 +24,9 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert "never edit generated files beneath `build/`" in instructions
     assert "locked `nix develop` environment" in instructions
     assert "Do not assume that any program inherited from the\nhost machine exists" in instructions
+    assert "identify the requested artifact type" in instructions
+    assert "`presentation` publication, not a textbook" in instructions
+    assert 'kind = "presentation"' in instructions
 
     code, payload = invoke(
         monkeypatch,
@@ -56,6 +59,16 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     )
     assert code == 0
     assert len(payload["data"]["checked"]) == 4
+
+
+def test_agent_guide_exposes_the_version_matched_publication_contract(capsys):
+    code = main(["agent-guide"])
+    output = capsys.readouterr()
+
+    assert code == 0
+    assert "Operate MathPub on the author's behalf" in output.out
+    assert 'kind = "presentation"' in output.out
+    assert "`presentation` publication, not a textbook" in output.out
 
 
 def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):
@@ -103,6 +116,49 @@ def test_init_rejects_publication_paths_outside_the_content_repository(tmp_path,
 
     assert code == 3
     assert payload["error"]["code"] == "MP-SRC-005"
+
+
+def test_check_presentation_validates_mapped_slide_sources(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "course"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    publication = project / "publications/slides.toml"
+    publication.write_text(
+        """schema = 1
+id = "course.slides"
+kind = "presentation"
+title = "Course Slides"
+profile = "mathpub.exam"
+theme = "metropolis"
+projections = ["student"]
+
+[[slides]]
+id = "goals"
+title = "Learning Goals"
+source = "slides/01-goals.tex"
+"""
+    )
+
+    code, payload = invoke(
+        monkeypatch,
+        capsys,
+        project,
+        ["check", "publication", "publications/slides.toml"],
+    )
+    assert code == 3
+    assert payload["error"]["code"] == "MP-SRC-012"
+
+    source = project / "publications/slides/01-goals.tex"
+    source.parent.mkdir()
+    source.write_text(r"\begin{itemize}\item Learn the idea.\end{itemize}" + "\n")
+    code, payload = invoke(
+        monkeypatch,
+        capsys,
+        project,
+        ["check", "publication", "publications/slides.toml"],
+    )
+    assert code == 0
+    assert payload["data"]["id"] == "course.slides"
 
 
 def test_discovery_is_structured_and_relative(tmp_path, monkeypatch, capsys):

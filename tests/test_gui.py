@@ -16,7 +16,11 @@ import pytest
 
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
-from mathpub.gui.onboarding import AgentConfiguration, create_authoring_library
+from mathpub.gui.onboarding import (
+    AGENT_BOOTSTRAP_PROMPT,
+    AgentConfiguration,
+    create_authoring_library,
+)
 from mathpub.gui.server import (
     WorkspaceServer,
     _feedback_prompt,
@@ -67,6 +71,17 @@ def test_feedback_prompt_is_single_line_and_validated():
         )
         is None
     )
+    assert _feedback_prompt(
+        {
+            "component_id": "learning-goals",
+            "fragment": "slide",
+            "authored_source": "publications/credit/slides/01-goals.tex",
+            "feedback": "Use a more concrete goal.",
+        }
+    ) == (
+        "Review mathpub slide learning-goals "
+        "(slide, publications/credit/slides/01-goals.tex): Use a more concrete goal."
+    )
 
 
 def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch):
@@ -77,6 +92,10 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
         "nix",
         "run",
         "github:anicolao/nix-antigravity",
+        "--",
+        "--dangerously-skip-permissions",
+        "--prompt-interactive",
+        AGENT_BOOTSTRAP_PROMPT,
     )
 
 
@@ -164,6 +183,9 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     assert "locked `nix develop` environment" in instructions
     assert "`gh` and `git`" in instructions
     assert "add its Nixpkgs attribute to `extraPackages`" in instructions
+    assert "`presentation` publication, not a textbook" in instructions
+    assert 'kind = "presentation"' in instructions
+    assert "place each worked solution on a slide after its" in instructions
     flake = (library / "flake.nix").read_text()
     assert "extraPackages = pkgs: with pkgs;" in flake
 

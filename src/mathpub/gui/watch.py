@@ -128,6 +128,13 @@ class IncrementalPreviewWatcher:
     def _prepare_format(self, selection: PreviewSelection) -> dict[str, Any]:
         publication = load_toml(selection.publication_path, "publication")
         style = publication_format_style(publication)
+        if style == "presentation":
+            return {
+                "format": None,
+                "metadata": None,
+                "reused": True,
+                "style": style,
+            }
         font_family = (
             "computer-modern"
             if style == "anna"

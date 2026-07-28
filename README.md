@@ -1,8 +1,9 @@
 # mathpub
 
-`mathpub` is a reproducible publishing system for trustworthy mathematical tests and worksheets.
-Its MVP turns reviewed TeX fragments and deterministic SageMath generators into professional
-student worksheets, compact answer keys, worked solutions, and validation/justification editions.
+`mathpub` is a reproducible publishing system for trustworthy mathematical publications. It turns
+reviewed TeX fragments and deterministic SageMath generators into professional student worksheets,
+tests, textbooks, Beamer presentations, compact answer keys, worked solutions, and
+validation/justification editions.
 
 The project combines:
 
@@ -52,6 +53,17 @@ nix run .#mathpub -- build publications/algebra1-curriculum.toml \
 ```
 
 The manifest records both the font family and selected TeX engine, and `reproduce` preserves them.
+
+Presentation publications use `kind = "presentation"` and mapped slide-body `.tex` fragments.
+MathPub supplies the Beamer frame structure and title frame, supports the Metropolis theme, records
+every slide source in the manifest, and exposes those sources to the GUI's hover, feedback, quick
+edit, and incremental-preview flow. Generated authoring-library instructions include the complete
+manifest shape and tell the agent to preserve requested slide order, example/solution sequencing,
+title-page constraints, original TikZ visuals, and frame fit.
+
+GUI-launched agents read both the library's customizable `AGENTS.md` and the current pinned
+toolchain contract from `nix run .#mathpub -- agent-guide`. This keeps older libraries informed
+about newly supported publication types without overwriting author-owned instructions.
 
 The example publication declares four PDFs: `student`, `answers`, `solutions`, and `validation`.
 The validation edition contains every question, its worked solution, check classification,

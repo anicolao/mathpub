@@ -113,3 +113,51 @@ id = "demo.question"
     assert build_call["incremental"] is True
     assert build_call["projections"] == ["student"]
     assert build_call["lesson_ids"] == ["lesson-one"]
+
+
+def test_preview_watcher_does_not_prepare_a_document_format_for_presentations(tmp_path):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/slides.toml"
+    publication.write_text(
+        """schema = 1
+id = "demo.slides"
+kind = "presentation"
+title = "Demo Slides"
+profile = "mathpub.exam"
+theme = "metropolis"
+projections = ["student"]
+[[slides]]
+id = "goals"
+title = "Learning Goals"
+source = "slides/goals.tex"
+"""
+    )
+
+    def unexpected_format_dump(*_args, **_kwargs):
+        raise AssertionError("presentations must compile through their Beamer preamble")
+
+    watcher = IncrementalPreviewWatcher(
+        project,
+        lambda _event: None,
+        format_dumper=unexpected_format_dump,
+    )
+    selected = _selection(
+        project,
+        {
+            "publication_path": "publications/slides.toml",
+            "root_seed": "2026",
+            "variant": "review",
+            "projection": "student",
+            "font_family": "libertinus",
+            "page": 1,
+        },
+    )
+    assert selected is not None
+    assert watcher.prepare(selected) == {
+        "format": None,
+        "metadata": None,
+        "reused": True,
+        "style": "presentation",
+    }

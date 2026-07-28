@@ -268,11 +268,21 @@ def _marked_source(entry: Entry, fragment: str, rendered: str) -> str:
     _, fragments = _component_metadata(entry)
     source = fragments.get(fragment)
     authored = entry.path / source if source else entry.path / "component.toml"
+    return marked_source(entry.metadata["id"], fragment, authored, rendered)
+
+
+def marked_source(
+    component_id: str,
+    fragment: str,
+    authored_source: Path,
+    rendered: str,
+) -> str:
+    """Mark generated TeX with an arbitrary authored source fragment."""
     marker = json.dumps(
         {
-            "component_id": entry.metadata["id"],
+            "component_id": component_id,
             "fragment": fragment,
-            "authored_source": str(authored),
+            "authored_source": str(authored_source),
         },
         ensure_ascii=True,
         sort_keys=True,
@@ -497,6 +507,37 @@ def document_tex(
 \begin{{questions}}
 {chr(10).join(questions)}
 \end{{questions}}
+\end{{document}}
+"""
+
+
+def presentation_tex(
+    publication: dict[str, Any],
+    slides: list[str],
+    font_family: str,
+) -> str:
+    """Render a Beamer presentation from independently mapped slide fragments."""
+    aspect_ratio = publication.get("aspect_ratio", "169")
+    theme = publication.get("theme", "metropolis")
+    subtitle = publication.get("subtitle", "")
+    author = publication.get("author", "")
+    return rf"""\documentclass[aspectratio={aspect_ratio},11pt]{{beamer}}
+\usetheme{{{theme}}}
+\usefonttheme{{professionalfonts}}
+\usepackage{{amsmath,amssymb,mathtools}}
+{NUMBER_SET_PREAMBLE}
+{font_preamble(font_family)}
+\usepackage[per-mode=symbol]{{siunitx}}
+\usepackage{{tikz,microtype}}
+\title{{{publication["title"]}}}
+\subtitle{{{subtitle}}}
+\author{{{author}}}
+\date{{}}
+\begin{{document}}
+\begin{{frame}}[plain]
+  \titlepage
+\end{{frame}}
+{chr(10).join(slides)}
 \end{{document}}
 """
 
