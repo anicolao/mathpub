@@ -605,6 +605,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "small wording change",
             )
             page.locator("#editor-content").fill(slide_edited)
+            slide_preview_before = page.locator("#pdf-preview").get_attribute("src")
 
             steps.verify(page, "006-presentation-slide-editor")
 
@@ -625,6 +626,11 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 timeout=90_000,
             )
             assert "format: none" in page.locator("#status-build").get_attribute("title")
+            slide_preview_after = page.locator("#pdf-preview").get_attribute("src")
+            assert slide_preview_after != slide_preview_before
+            assert page.locator("#pdf-preview").evaluate(
+                "element => element.complete && element.naturalWidth > 0"
+            )
             page.wait_for_function(
                 "document.getElementById('status-synctex').textContent === 'SyncTeX Ready'"
             )
