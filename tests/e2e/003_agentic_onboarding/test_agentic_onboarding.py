@@ -148,6 +148,8 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             assert "locked `nix develop` environment" in instructions
             assert "`gh` and `git`" in instructions
             assert "extraPackages" in instructions
+            assert "`presentation` publication, not a textbook" in instructions
+            assert 'kind = "presentation"' in instructions
 
             workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
             assert workspace["project"] == "anna-math-library"

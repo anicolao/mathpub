@@ -27,6 +27,7 @@ from mathpub.output import emit
 from mathpub.publish import build, reproduce
 from mathpub.render import validate_fragment_source
 from mathpub.scaffold import (
+    AGENTS,
     COLLECTIONS,
     QUESTION_TEMPLATES,
     init_project,
@@ -59,6 +60,12 @@ def parser() -> argparse.ArgumentParser:
         help="repository-relative publication to validate during nix flake check",
     )
     _json_flag(init)
+
+    agent_guide = commands.add_parser(
+        "agent-guide",
+        help="print the version-matched operating contract for an authoring agent",
+    )
+    _json_flag(agent_guide)
 
     new = commands.add_parser("new", help="create authored source")
     new_types = new.add_subparsers(dest="new_type", required=True)
@@ -267,6 +274,9 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
             mathpub_url=args.mathpub_url,
             publication_paths=args.publication_paths,
         )
+
+    if args.command == "agent-guide":
+        return "agent guide", AGENTS
 
     if args.command == "workspace":
         from mathpub.gui.server import run_workspace_server
@@ -560,6 +570,27 @@ placement = {json.dumps(placement)}
                                     "MP-SRC-012",
                                     f"missing unit-practice source: {practice_path}",
                                 )
+            slide_ids: set[str] = set()
+            for slide in publication.get("slides", []):
+                if slide["id"] in slide_ids:
+                    raise MathpubError(
+                        "MP-SRC-013",
+                        f"duplicate presentation slide ID: {slide['id']}",
+                    )
+                slide_ids.add(slide["id"])
+                slide_path = (path.parent / slide["source"]).resolve()
+                try:
+                    slide_path.relative_to(project.root)
+                except ValueError as error:
+                    raise MathpubError(
+                        "MP-SRC-005",
+                        f"presentation slide source escapes project root: {slide['source']}",
+                    ) from error
+                if not slide_path.is_file():
+                    raise MathpubError(
+                        "MP-SRC-012",
+                        f"missing presentation slide source: {slide_path}",
+                    )
             placements: set[str] = set()
             for chapter in publication.get("component_chapters", []):
                 for lesson in chapter["lessons"]:

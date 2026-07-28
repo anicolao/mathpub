@@ -51,6 +51,7 @@
               pkgs.sage;
           tex = pkgs.texliveSmall.withPackages (ps: with ps; [
             cm-unicode
+            beamertheme-metropolis
             doublestroke
             exam
             enumitem
@@ -63,6 +64,7 @@
             mathtools
             microtype
             mylatexformat
+            pgfopts
             siunitx
             standalone
             unicode-math
@@ -233,6 +235,7 @@
               pkgs.sage;
           tex = pkgs.texliveSmall.withPackages (ps: with ps; [
             cm-unicode
+            beamertheme-metropolis
             doublestroke
             exam
             enumitem
@@ -245,6 +248,7 @@
             mathtools
             microtype
             mylatexformat
+            pgfopts
             siunitx
             standalone
             unicode-math

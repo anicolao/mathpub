@@ -145,7 +145,10 @@ def _feedback_prompt(message: dict[str, object]) -> str | None:
     ):
         return None
 
-    return f"Review mathpub component {component_id} ({fragment}, {authored_source}): {feedback}"
+    source_kind = "slide" if fragment == "slide" else "component"
+    return (
+        f"Review mathpub {source_kind} {component_id} ({fragment}, {authored_source}): {feedback}"
+    )
 
 
 def _publication_output_metadata(

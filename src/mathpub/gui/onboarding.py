@@ -18,6 +18,21 @@ STARTER_PROMPT = (
     "Outline my first book. Ask about the audience, prerequisites, scope, sequence, and desired "
     "editions, then show me the proposed units and dependencies before writing the first section."
 )
+AGENT_BOOTSTRAP_PROMPT = (
+    "Read AGENTS.md and run `nix run .#mathpub -- agent-guide` before doing any work; the runtime "
+    "guide is authoritative if an older repository file differs. This is a MathPub authoring "
+    "library: use the MathPub framework for every requested publication, first identify the "
+    "requested document type, and operate the framework autonomously on the author's behalf."
+)
+DEFAULT_AGENT_COMMAND = (
+    "nix",
+    "run",
+    "github:anicolao/nix-antigravity",
+    "--",
+    "--dangerously-skip-permissions",
+    "--prompt-interactive",
+    AGENT_BOOTSTRAP_PROMPT,
+)
 PROCESS_OUTPUT_LIMIT = 8_000
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 URL_CREDENTIAL_RE = re.compile(r"(https?://)[^/\s@]+@")
@@ -83,14 +98,14 @@ class AgentConfiguration:
 
     @classmethod
     def from_environment(cls) -> AgentConfiguration:
-        raw_command = os.environ.get(
-            "MATHPUB_AGENT_COMMAND",
-            "nix run github:anicolao/nix-antigravity",
-        )
-        try:
-            command = tuple(shlex.split(raw_command))
-        except ValueError:
-            command = ()
+        raw_command = os.environ.get("MATHPUB_AGENT_COMMAND")
+        if raw_command is None:
+            command = DEFAULT_AGENT_COMMAND
+        else:
+            try:
+                command = tuple(shlex.split(raw_command))
+            except ValueError:
+                command = ()
         return cls(
             label=os.environ.get("MATHPUB_AGENT_LABEL", "Antigravity"),
             command=command,

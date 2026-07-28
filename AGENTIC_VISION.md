@@ -415,6 +415,9 @@ Several foundations already exist:
   a documented extension point;
 - a first-book starter prompt and generated agent operating instructions;
 - deterministic PDF builds and multiple projections;
+- first-class mapped Beamer/Metropolis presentations alongside tests, worksheets, and textbooks;
+- autonomous default Antigravity startup with an explicit instruction to load the repository's
+  MathPub operating contract;
 - SyncTeX hover regions and source-map resolution;
 - feedback injection into the terminal without automatic execution;
 - active-preview watching and incremental rebuilds;
