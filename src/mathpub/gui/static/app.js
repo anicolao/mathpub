@@ -167,6 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let editorOriginalContent = "";
   let refreshTimer = null;
   let mappingRequestId = 0;
+  let previewBuildRequestId = 0;
   let currentPage = 1;
   let workspaceState = null;
 
@@ -322,14 +323,19 @@ document.addEventListener("DOMContentLoaded", () => {
       return true;
     }
     if (message.type === "preview-built") {
+      const buildRequestId = ++previewBuildRequestId;
       const cache = message.instance_cache || {};
       const reused =
         (cache.questions_reused || 0) + (cache.components_reused || 0);
-      buildStatus.textContent = "Preview updated";
-      buildStatus.title =
-        `${message.duration_ms} ms; ${reused} instances reused; ` +
-        `format: ${message.format || "none"}`;
-      refreshPublications(message.path);
+      buildStatus.textContent = "Rendering preview…";
+      buildStatus.removeAttribute("title");
+      refreshPublications(message.path).then(() => {
+        if (buildRequestId !== previewBuildRequestId) return;
+        buildStatus.textContent = "Preview updated";
+        buildStatus.title =
+          `${message.duration_ms} ms; ${reused} instances reused; ` +
+          `format: ${message.format || "none"}`;
+      });
       return true;
     }
     if (message.type === "agent-started") {
@@ -590,7 +596,7 @@ document.addEventListener("DOMContentLoaded", () => {
         pdfSelect.value = selectedPath;
         publicationsFingerprint = nextFingerprint;
         if (shouldLoad) {
-          loadPdf(selectedPath, forcePath ? Date.now() : null, !forcePath);
+          await loadPdf(selectedPath, forcePath ? Date.now() : null, !forcePath);
         } else {
           currentPublication = publicationsByPath.get(selectedPath) || null;
           updatePageControls();
@@ -598,7 +604,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } else if (forcePath && publicationsByPath.has(forcePath)) {
         pdfSelect.value = forcePath;
-        loadPdf(forcePath, Date.now(), false);
+        await loadPdf(forcePath, Date.now(), false);
       }
     } catch (e) {
       // Ignore network errors during shutdown
@@ -623,7 +629,7 @@ document.addEventListener("DOMContentLoaded", () => {
     nextPage.disabled = currentPage >= pages;
   }
 
-  function loadPreviewPage(cacheBust = null, notifyWatcher = true) {
+  async function loadPreviewPage(cacheBust = null, notifyWatcher = true) {
     clearMappedRegions();
     updatePageControls();
     if (!currentPublication) {
@@ -631,21 +637,31 @@ document.addEventListener("DOMContentLoaded", () => {
       pdfPlaceholder.style.display = "block";
       return;
     }
+    const previewLoaded = new Promise((resolve) => {
+      const finish = () => {
+        pdfPreview.removeEventListener("load", finish);
+        pdfPreview.removeEventListener("error", finish);
+        resolve();
+      };
+      pdfPreview.addEventListener("load", finish);
+      pdfPreview.addEventListener("error", finish);
+    });
     const version = cacheBust ? `&version=${cacheBust}` : "";
     pdfPreview.src =
       `/api/pdf-preview?path=${encodeURIComponent(pdfSelect.value)}` +
       `&page=${currentPage}${version}`;
     pdfPreview.style.display = "block";
     pdfPlaceholder.style.display = "none";
-    loadMappedRegions();
     if (notifyWatcher) sendPreviewSelection();
+    await previewLoaded;
+    await loadMappedRegions();
   }
 
   function loadPdf(path, cacheBust = null, notifyWatcher = true) {
     const selectionChanged = path !== pdfSelect.value || currentPublication?.path !== path;
     currentPublication = publicationsByPath.get(path) || null;
     if (selectionChanged) currentPage = 1;
-    loadPreviewPage(cacheBust, notifyWatcher);
+    return loadPreviewPage(cacheBust, notifyWatcher);
   }
 
   function showPage(page) {
