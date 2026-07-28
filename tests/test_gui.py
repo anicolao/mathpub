@@ -93,10 +93,45 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
         "run",
         "github:anicolao/nix-antigravity",
         "--",
+        "--new-project",
+        "--sandbox",
         "--dangerously-skip-permissions",
         "--prompt-interactive",
         AGENT_BOOTSTRAP_PROMPT,
     )
+
+
+def test_default_agent_is_confined_to_a_fresh_library_project(tmp_path, monkeypatch):
+    monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
+    (tmp_path / "flake.nix").write_text("{}")
+    configuration = AgentConfiguration.from_environment()
+
+    command = configuration.command_for(tmp_path)
+
+    assert command is not None
+    assert command[:7] == (
+        "nix",
+        "develop",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        "--command",
+        "nix",
+    )
+    agent_arguments = command[7:]
+    assert agent_arguments[:5] == (
+        "run",
+        "github:anicolao/nix-antigravity",
+        "--",
+        "--new-project",
+        "--sandbox",
+    )
+    assert "--dangerously-skip-permissions" in agent_arguments
+    add_dir = agent_arguments.index("--add-dir")
+    assert agent_arguments[add_dir + 1] == str(tmp_path)
+    prompt = agent_arguments[agent_arguments.index("--prompt-interactive") + 1]
+    assert f"The only authoring library for this session is {tmp_path}." in prompt
+    assert "Do not search the home directory" in prompt
 
 
 def test_agent_configuration_requires_an_available_executable():
@@ -186,6 +221,7 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     assert "`presentation` publication, not a textbook" in instructions
     assert 'kind = "presentation"' in instructions
     assert "place each worked solution on a slide after its" in instructions
+    assert "only authoring root for this agent session" in instructions
     flake = (library / "flake.nix").read_text()
     assert "extraPackages = pkgs: with pkgs;" in flake
 

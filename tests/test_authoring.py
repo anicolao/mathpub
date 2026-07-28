@@ -27,6 +27,8 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert "identify the requested artifact type" in instructions
     assert "`presentation` publication, not a textbook" in instructions
     assert 'kind = "presentation"' in instructions
+    assert "only authoring root for this agent session" in instructions
+    assert "Never search\nthe home directory" in instructions
 
     code, payload = invoke(
         monkeypatch,

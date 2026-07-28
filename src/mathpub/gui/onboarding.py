@@ -20,15 +20,17 @@ STARTER_PROMPT = (
 )
 AGENT_BOOTSTRAP_PROMPT = (
     "Read AGENTS.md and run `nix run .#mathpub -- agent-guide` before doing any work; the runtime "
-    "guide is authoritative if an older repository file differs. This is a MathPub authoring "
-    "library: use the MathPub framework for every requested publication, first identify the "
-    "requested document type, and operate the framework autonomously on the author's behalf."
+    "guide is authoritative if an older repository file differs. Use the MathPub framework for "
+    "every requested publication, first identify the requested document type, and operate the "
+    "framework autonomously on the author's behalf."
 )
 DEFAULT_AGENT_COMMAND = (
     "nix",
     "run",
     "github:anicolao/nix-antigravity",
     "--",
+    "--new-project",
+    "--sandbox",
     "--dangerously-skip-permissions",
     "--prompt-interactive",
     AGENT_BOOTSTRAP_PROMPT,
@@ -132,6 +134,21 @@ class AgentConfiguration:
         """Return the agent command inside the project's pinned development shell."""
         if not self.command:
             return None
+        command = self.command
+        if project_root is not None and command == DEFAULT_AGENT_COMMAND:
+            prompt_index = command.index("--prompt-interactive")
+            command = (
+                *command[:prompt_index],
+                "--add-dir",
+                str(project_root),
+                *command[prompt_index:-1],
+                (
+                    f"The only authoring library for this session is {project_root}. "
+                    "Work only inside that directory. Do not search the home directory, inspect "
+                    "other repositories, or request access to paths outside the library. "
+                    f"Start in {project_root}. {AGENT_BOOTSTRAP_PROMPT}"
+                ),
+            )
         if project_root is not None and (project_root / "flake.nix").is_file():
             if shutil.which("nix") is None:
                 return None
@@ -142,9 +159,9 @@ class AgentConfiguration:
                 "--no-warn-dirty",
                 "--quiet",
                 "--command",
-                *self.command,
+                *command,
             )
-        return self.command if self.available else None
+        return command if self.available else None
 
     def shell_command_for(self, project_root: Path | None) -> str | None:
         command = self.command_for(project_root)
