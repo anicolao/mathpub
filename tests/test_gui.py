@@ -16,6 +16,7 @@ import pytest
 
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
+from mathpub.gui.libraries import LibraryHistory, open_authoring_library
 from mathpub.gui.onboarding import (
     AGENT_BOOTSTRAP_PROMPT,
     AgentConfiguration,
@@ -256,6 +257,45 @@ def test_create_authoring_library_reports_sanitized_command_failure(tmp_path, mo
     assert not (tmp_path / "broken-library").exists()
 
 
+def test_existing_and_recent_authoring_libraries_are_validated_and_persisted(
+    tmp_path,
+    monkeypatch,
+):
+    first = tmp_path / "algebra-library"
+    second = tmp_path / "physics-library"
+    init_project(first)
+    init_project(second)
+    history = LibraryHistory(tmp_path / "workspace-state/recent-libraries.json")
+
+    assert open_authoring_library(str(first)).root == first
+    with pytest.raises(MathpubError, match="absolute path"):
+        open_authoring_library("algebra-library")
+    with pytest.raises(MathpubError, match="not a MathPub authoring library"):
+        open_authoring_library(str(tmp_path))
+
+    history.remember(first)
+    history.remember(second)
+    history.remember(first)
+
+    assert history.recent() == [
+        {"name": "algebra-library", "path": str(first)},
+        {"name": "physics-library", "path": str(second)},
+    ]
+    assert json.loads(history.path.read_text()) == {
+        "schema": 1,
+        "libraries": [str(first), str(second)],
+    }
+
+    monkeypatch.chdir(tmp_path)
+    restored = WorkspaceServer(library_history=history)
+    assert restored.project_root == first
+    assert restored._workspace_payload()["recent_libraries"] == history.recent()
+
+    (first / "mathpub.toml").unlink()
+    assert history.most_recent().root == second
+    assert history.recent() == [{"name": "physics-library", "path": str(second)}]
+
+
 def test_quick_tex_edit_commits_only_revision_matched_source(tmp_path):
     root = tmp_path / "authoring-library"
     init_project(root)
@@ -428,8 +468,16 @@ def test_publication_metadata_reports_stale_synctex_build(tmp_path):
 
 def test_workspace_server_http(tmp_path):
     project_root = tmp_path / "workspace-project"
+    other_project_root = tmp_path / "existing-library"
     init_project(project_root)
-    server = WorkspaceServer(host="127.0.0.1", port=8912, project_root=project_root)
+    init_project(other_project_root)
+    history = LibraryHistory(tmp_path / "recent-libraries.json")
+    server = WorkspaceServer(
+        host="127.0.0.1",
+        port=8912,
+        project_root=project_root,
+        library_history=history,
+    )
     server_ready = threading.Event()
     stop_event = None
     loop_ref = []
@@ -467,6 +515,7 @@ def test_workspace_server_http(tmp_path):
         workspace_data = json.loads(req_workspace.read().decode("utf-8"))
         assert workspace_data["project"] == "workspace-project"
         assert workspace_data["root"]
+        assert workspace_data["recent_libraries"] == []
         assert workspace_data["agent"]["label"] == "Antigravity"
         assert workspace_data["agent"]["environment"] == "nix develop"
         assert "Outline my first book" in workspace_data["starter_prompt"]
@@ -482,6 +531,23 @@ def test_workspace_server_http(tmp_path):
         assert req_pubs.status == 200
         pubs_data = json.loads(req_pubs.read().decode("utf-8"))
         assert "publications" in pubs_data
+
+        open_request = urllib.request.Request(
+            "http://127.0.0.1:8912/api/libraries/open",
+            data=json.dumps({"path": str(other_project_root)}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        opened = json.loads(urllib.request.urlopen(open_request).read().decode())
+        assert opened["library"] == {
+            "name": "existing-library",
+            "root": str(other_project_root),
+        }
+        assert opened["workspace"]["root"] == str(other_project_root)
+        assert opened["workspace"]["recent_libraries"] == [
+            {"name": "existing-library", "path": str(other_project_root)}
+        ]
+        assert history.most_recent().root == other_project_root
     finally:
         if stop_event and loop_ref:
             loop_ref[0].call_soon_threadsafe(stop_event.set)

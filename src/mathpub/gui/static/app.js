@@ -131,6 +131,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const editorCancel = document.getElementById("editor-cancel");
   const editorSave = document.getElementById("editor-save");
   const libraryName = document.getElementById("library-name");
+  const openLibrary = document.getElementById("open-library");
+  const openLibraryDialog = document.getElementById("open-library-dialog");
+  const openLibraryForm = document.getElementById("open-library-form");
+  const openLibraryPath = document.getElementById("open-library-path");
+  const openLibraryError = document.getElementById("open-library-error");
+  const openLibraryClose = document.getElementById("open-library-close");
+  const openLibraryCancel = document.getElementById("open-library-cancel");
+  const openLibrarySubmit = document.getElementById("open-library-submit");
+  const recentLibraries = document.getElementById("recent-libraries");
   const createLibrary = document.getElementById("create-library");
   const libraryDialog = document.getElementById("library-dialog");
   const libraryForm = document.getElementById("library-form");
@@ -169,16 +178,17 @@ document.addEventListener("DOMContentLoaded", () => {
       libraryName.textContent = workspaceState.project || "No library open";
       libraryName.title = workspaceState.root || "";
       if (!libraryParent.value) libraryParent.value = workspaceState.default_parent || "";
+      renderRecentLibraries(workspaceState.recent_libraries || []);
 
       const agent = workspaceState.agent || {};
       startAgent.textContent = `Start ${agent.label || "agent"}`;
       startAgent.disabled = !workspaceState.project || agent.available !== true;
       if (!workspaceState.project) {
         agentStatus.textContent = "Create or open a library first";
-        placeholderTitle.textContent = "Create your private authoring library";
+        placeholderTitle.textContent = "Open or create your authoring library";
         placeholderCopy.textContent =
-          "Keep many publications and reusable components together, then let an agent operate " +
-          "MathPub on your behalf.";
+          "Return to a recent library, open another MathPub repository, or create a private " +
+          "library for many publications and reusable components.";
       } else if (agent.available === true) {
         agentStatus.textContent = `${agent.label} ready`;
         placeholderTitle.textContent = "Your authoring agent is ready";
@@ -669,6 +679,75 @@ document.addEventListener("DOMContentLoaded", () => {
     if (details.output) lines.push("", details.output);
     return lines.join("\n");
   }
+
+  function renderRecentLibraries(libraries) {
+    recentLibraries.replaceChildren();
+    libraries.forEach((library) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "recent-library";
+      button.dataset.path = library.path;
+
+      const identity = document.createElement("span");
+      const name = document.createElement("span");
+      name.className = "recent-library-name";
+      name.textContent = library.name;
+      const path = document.createElement("span");
+      path.className = "recent-library-path";
+      path.textContent = library.path;
+      identity.append(name, path);
+
+      const action = document.createElement("span");
+      action.className = "recent-library-action";
+      action.textContent = "Open";
+      button.append(identity, action);
+      button.addEventListener("click", () => openLibraryAt(library.path));
+      recentLibraries.appendChild(button);
+    });
+  }
+
+  async function openLibraryAt(path) {
+    openLibraryError.textContent = "";
+    openLibraryPath.disabled = true;
+    openLibrarySubmit.disabled = true;
+    openLibrarySubmit.textContent = "Opening…";
+    recentLibraries.querySelectorAll("button").forEach((button) => {
+      button.disabled = true;
+    });
+    try {
+      const response = await fetch("/api/libraries/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(libraryFailureMessage(payload, response.status));
+      window.location.reload();
+    } catch (error) {
+      openLibraryError.textContent = error.message;
+      openLibraryPath.disabled = false;
+      openLibrarySubmit.disabled = false;
+      openLibrarySubmit.textContent = "Open library";
+      recentLibraries.querySelectorAll("button").forEach((button) => {
+        button.disabled = false;
+      });
+    }
+  }
+
+  openLibrary.addEventListener("click", () => {
+    openLibraryError.textContent = "";
+    openLibraryPath.value = workspaceState?.root || "";
+    openLibraryDialog.showModal();
+    openLibraryPath.focus();
+    openLibraryPath.select();
+  });
+  openLibraryClose.addEventListener("click", () => openLibraryDialog.close());
+  openLibraryCancel.addEventListener("click", () => openLibraryDialog.close());
+  openLibraryForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!openLibraryForm.reportValidity()) return;
+    openLibraryAt(openLibraryPath.value.trim());
+  });
 
   createLibrary.addEventListener("click", () => {
     libraryError.textContent = "";

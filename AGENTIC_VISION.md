@@ -410,6 +410,8 @@ Several foundations already exist:
 
 - a native GUI with an embedded PTY terminal;
 - project-independent startup and local private authoring-library creation;
+- validated existing-library opening, a persistent recent-library list, and automatic restoration
+  of the most recently used valid library;
 - a configurable one-click agent launcher with executable detection;
 - agent launch through the library's locked Nix environment, including core repository tools and
   a documented extension point;
@@ -427,7 +429,7 @@ Several foundations already exist:
 
 The major missing pieces are:
 
-1. open, clone, recent-library, and richer authoring-library chooser flows;
+1. clone and richer authoring-library chooser flows;
 2. private-remote creation and visibility verification after local library creation;
 3. Antigravity authentication guidance, provider adapters, and resumable session state;
 4. versioned delivery of MathPub instructions and skills into private repositories;
