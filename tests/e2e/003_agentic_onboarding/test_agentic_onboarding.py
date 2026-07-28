@@ -12,8 +12,10 @@ from playwright.sync_api import sync_playwright
 
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
+from mathpub.gui.libraries import LibraryHistory
 from mathpub.gui.onboarding import create_authoring_library
 from mathpub.gui.server import WorkspaceServer
+from mathpub.scaffold import init_project
 from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 
 
@@ -27,6 +29,9 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
     steps = GUIStepHelper(scenario_dir, update_baselines)
     project = find_project()
     library = tmp_path / "anna-math-library"
+    existing_library = tmp_path / "existing-library"
+    init_project(existing_library)
+    history = LibraryHistory(tmp_path / "workspace-state/recent-libraries.json")
     creation_attempts = 0
 
     def fail_once_then_create(parent, name, **kwargs):
@@ -59,6 +64,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
         ],
         mathpub_url=f"path:{project.root}",
         library_creator=fail_once_then_create,
+        library_history=history,
     )
     server_ready = threading.Event()
     stop_event = None
@@ -111,7 +117,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             )
             assert page.locator("#start-agent").is_disabled()
             assert page.locator("#placeholder-title").text_content() == (
-                "Create your private authoring library"
+                "Open or create your authoring library"
             )
 
             page.locator("#create-library").click()
@@ -156,6 +162,9 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
             assert workspace["project"] == "anna-math-library"
             assert workspace["root"] == str(library)
+            assert workspace["recent_libraries"] == [
+                {"name": "anna-math-library", "path": str(library)}
+            ]
             assert workspace["agent"]["available"] is True
             assert workspace["agent"]["environment"] == "nix develop"
 
@@ -185,6 +194,44 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             )
 
             steps.verify(page, "000-private-library-agent-ready")
+
+            page.locator("#open-library").click()
+            open_dialog = page.locator("#open-library-dialog")
+            assert open_dialog.is_visible()
+            assert page.locator("#open-library-title").text_content() == (
+                "Open an authoring library"
+            )
+            recent = page.locator(".recent-library")
+            assert recent.count() == 1
+            assert recent.locator(".recent-library-name").text_content() == ("anna-math-library")
+            assert recent.locator(".recent-library-path").text_content() == str(library)
+
+            recent.locator(".recent-library-path").evaluate(
+                "(element) => { element.textContent = '/authoring-libraries/anna-math-library'; }"
+            )
+            page.locator("#open-library-path").fill("/authoring-libraries/anna-math-library")
+            steps.verify(page, "001-open-recent-library")
+
+            page.locator("#open-library-path").fill(str(existing_library))
+            page.locator("#open-library-submit").click()
+            page.wait_for_function(
+                "document.getElementById('library-name').textContent === 'existing-library'",
+                timeout=30_000,
+            )
+            workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
+            assert workspace["root"] == str(existing_library)
+            assert workspace["recent_libraries"] == [
+                {"name": "existing-library", "path": str(existing_library)},
+                {"name": "anna-math-library", "path": str(library)},
+            ]
+
+            page.locator("#open-library").click()
+            page.locator(f'.recent-library[data-path="{library}"]').click()
+            page.wait_for_function(
+                "document.getElementById('library-name').textContent === 'anna-math-library'",
+                timeout=30_000,
+            )
+            assert history.most_recent().root == library
         finally:
             if browser.is_connected():
                 browser.close()

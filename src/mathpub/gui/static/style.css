@@ -544,6 +544,77 @@ body {
   margin: 7px 0 14px;
 }
 
+.recent-library-section {
+  margin: 0 0 18px;
+}
+
+.recent-library-section h3 {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.recent-libraries {
+  display: grid;
+  gap: 7px;
+}
+
+.recent-library {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--text-main);
+  text-align: left;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.recent-library:hover,
+.recent-library:focus {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.55);
+  outline: none;
+}
+
+.recent-library-name,
+.recent-library-path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-library-name {
+  font-weight: 700;
+}
+
+.recent-library-path {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.recent-library-action {
+  color: var(--accent);
+  font-size: 0.7rem;
+}
+
+.recent-libraries-empty {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.recent-libraries:not(:empty) + .recent-libraries-empty {
+  display: none;
+}
+
 .library-error {
   min-height: 1.2em;
   margin-top: 10px;

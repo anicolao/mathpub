@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 from mathpub.config import Project, find_project
 from mathpub.errors import MathpubError
+from mathpub.gui.libraries import LibraryHistory, open_authoring_library
 from mathpub.gui.onboarding import (
     STARTER_PROMPT,
     AgentConfiguration,
@@ -220,9 +221,11 @@ class WorkspaceServer:
         lock_libraries: bool = True,
         mathpub_url: str = "github:anicolao/mathpub",
         library_creator: Callable[..., dict[str, object]] = create_authoring_library,
+        library_history: LibraryHistory | None = None,
     ) -> None:
         self.host = host
         self.port = port
+        self.library_history = library_history or LibraryHistory.default()
         self.project_root = self._initial_project_root(project_root)
         self.agent = (
             AgentConfiguration.from_environment()
@@ -234,11 +237,13 @@ class WorkspaceServer:
         self.library_creator = library_creator
         self.source_edit_lock = asyncio.Lock()
 
-    @staticmethod
-    def _initial_project_root(project_root: Path | None) -> Path | None:
+    def _initial_project_root(self, project_root: Path | None) -> Path | None:
         try:
             return find_project(project_root).root
         except MathpubError as error:
+            if error.code == "MP-SRC-004" and project_root is None:
+                recent = self.library_history.most_recent()
+                return recent.root if recent is not None else None
             if error.code == "MP-SRC-004":
                 return None
             raise
@@ -258,6 +263,7 @@ class WorkspaceServer:
             "project": project.config["project"] if project is not None else None,
             "root": str(root) if root is not None else None,
             "default_parent": str(root.parent if root is not None else Path.home()),
+            "recent_libraries": self.library_history.recent(),
             "agent": self.agent.payload(root),
             "starter_prompt": STARTER_PROMPT,
         }
@@ -461,11 +467,72 @@ class WorkspaceServer:
                     response = _json_response(500, {"error": str(error)})
                 else:
                     self.project_root = Path(str(result["root"])).resolve()
+                    persistence_warning = None
+                    try:
+                        self.library_history.remember(self.project_root)
+                    except MathpubError as error:
+                        persistence_warning = error.message
                     response = _json_response(
                         201,
                         {
                             "library": result,
                             "workspace": self._workspace_payload(),
+                            "warning": persistence_warning,
+                        },
+                    )
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path == "/api/libraries/open" and method == "POST":
+            content_type = headers.get("content-type", "")
+            try:
+                content_length = int(headers.get("content-length", "0"))
+            except ValueError:
+                content_length = -1
+            if not content_type.lower().startswith("application/json"):
+                response = _json_response(400, {"error": "request body must use application/json"})
+            elif content_length < 0 or content_length > REQUEST_BODY_LIMIT:
+                response = _json_response(400, {"error": "invalid request body length"})
+            else:
+                body = initial_body
+                remaining = content_length - len(body)
+                if remaining > 0:
+                    try:
+                        body += await reader.readexactly(remaining)
+                    except asyncio.IncompleteReadError:
+                        body = b""
+                try:
+                    payload = json.loads(body[:content_length])
+                    project = open_authoring_library(payload.get("path"))
+                except (json.JSONDecodeError, AttributeError):
+                    response = _json_response(400, {"error": "request body must be a JSON object"})
+                except MathpubError as error:
+                    response = _json_response(
+                        400,
+                        {
+                            "error": error.message,
+                            "code": error.code,
+                            "details": error.details,
+                        },
+                    )
+                else:
+                    self.project_root = project.root
+                    persistence_warning = None
+                    try:
+                        self.library_history.remember(project.root)
+                    except MathpubError as error:
+                        persistence_warning = error.message
+                    response = _json_response(
+                        200,
+                        {
+                            "library": {
+                                "name": project.config["project"],
+                                "root": str(project.root),
+                            },
+                            "workspace": self._workspace_payload(),
+                            "warning": persistence_warning,
                         },
                     )
             writer.write(response)

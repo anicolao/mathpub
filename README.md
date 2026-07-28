@@ -107,8 +107,11 @@ mathpub workspace
 
 The workspace can start outside an existing MathPub project. **Create private library** initializes
 a content-only project, a new local `main` Git history, and a pinned flake, then reconnects the
-terminal in that library. The first implementation is deliberately local-only: it does not create
-or push a Git remote.
+terminal in that library. **Open library** lists recent valid libraries and accepts the absolute
+path to any existing folder containing `mathpub.toml`. MathPub stores up to ten recent library
+paths in the user's application-state directory and restores the most recently used valid library
+when it next starts outside a project. Library creation remains local-only: it does not create or
+push a Git remote.
 
 The agent button launches Anna's pinned Antigravity flake with
 `nix run github:anicolao/nix-antigravity` by default. MathPub runs the configured agent through the

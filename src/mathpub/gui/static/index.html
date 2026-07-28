@@ -17,6 +17,9 @@
       <span class="library-name" id="library-name">No library open</span>
     </div>
     <div class="header-status">
+      <button id="open-library" class="header-action" type="button">
+        Open library
+      </button>
       <button id="create-library" class="header-action" type="button">
         Create private library
       </button>
@@ -130,6 +133,60 @@
         <button id="library-cancel" class="button-secondary" type="button">Cancel</button>
         <button id="library-submit" class="button-primary" type="submit">
           Create private library
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog
+    id="open-library-dialog"
+    class="library-dialog"
+    aria-labelledby="open-library-title"
+  >
+    <form id="open-library-form">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Local authoring repositories</span>
+          <h2 id="open-library-title">Open an authoring library</h2>
+        </div>
+        <button
+          id="open-library-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close open-library dialog"
+        >×</button>
+      </div>
+
+      <p class="library-intro">
+        Return to a recent library or enter the absolute path to any existing MathPub library.
+      </p>
+
+      <section id="recent-library-section" class="recent-library-section">
+        <h3>Recent libraries</h3>
+        <div id="recent-libraries" class="recent-libraries"></div>
+        <p id="recent-libraries-empty" class="recent-libraries-empty">
+          No recent libraries yet.
+        </p>
+      </section>
+
+      <label for="open-library-path">Library folder</label>
+      <input
+        id="open-library-path"
+        name="path"
+        type="text"
+        placeholder="/Users/anna/Documents/anna-math-library"
+        required
+      >
+      <p class="feedback-help">
+        Choose the folder containing <code>mathpub.toml</code>. MathPub never searches or opens
+        neighboring repositories.
+      </p>
+      <p id="open-library-error" class="library-error" role="alert"></p>
+
+      <div class="feedback-actions">
+        <button id="open-library-cancel" class="button-secondary" type="button">Cancel</button>
+        <button id="open-library-submit" class="button-primary" type="submit">
+          Open library
         </button>
       </div>
     </form>

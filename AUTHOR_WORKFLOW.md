@@ -319,6 +319,10 @@ When a component changes, MathPub incrementally rebuilds the active projection a
 visible page selected. Hovering mapped PDF content shows its source region; clicking it can send
 focused feedback into the terminal.
 
+Use **Open library** to switch to an existing MathPub repository by its absolute folder path.
+Successfully created or opened libraries appear in the recent-library list, and MathPub restores
+the most recently used valid library when the application is restarted outside another project.
+
 For a faster explicit one-lesson build:
 
 ```console
@@ -402,9 +406,8 @@ Review output changes before committing the updated lock file.
 The current workflow is technically complete, but not yet self-service for a typical author. The
 highest-leverage improvements are:
 
-1. Complete the new **Create private authoring library** flow with open/clone support and optional
-   private-remote creation and visibility verification; the first implementation creates and opens
-   a local Git library.
+1. Extend the local create/open/recent-library flow with clone support and optional private-remote
+   creation and visibility verification.
 2. Extend the new one-click **Start Antigravity** launcher with authentication guidance, resumable
    sessions, provider adapters, and version-matched MathPub skills.
 3. Add agent-facing `new publication`, `new concept`, and `new lesson` commands, with complete
