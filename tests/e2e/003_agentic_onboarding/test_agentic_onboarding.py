@@ -8,6 +8,7 @@ import sys
 import threading
 from pathlib import Path
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from mathpub.config import find_project
@@ -17,6 +18,8 @@ from mathpub.gui.onboarding import create_authoring_library
 from mathpub.gui.server import WorkspaceServer
 from mathpub.scaffold import init_project
 from tests.e2e.helpers.gui_step_helper import GUIStepHelper
+
+AGENT_START_TIMEOUT_MS = int(os.environ.get("MATHPUB_AGENT_E2E_TIMEOUT_MS", "120000"))
 
 
 def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
@@ -173,11 +176,17 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 "document.querySelector('.xterm-rows').textContent.includes('mathpub$')"
             )
             page.locator("#start-agent").click()
-            page.wait_for_function(
-                "document.querySelector('.xterm-rows').textContent.includes("
-                "'Antigravity E2E ready')",
-                timeout=300_000,
-            )
+            try:
+                page.wait_for_function(
+                    "document.querySelector('.xterm-rows').textContent.includes("
+                    "'Antigravity E2E ready')",
+                    timeout=AGENT_START_TIMEOUT_MS,
+                )
+            except PlaywrightTimeoutError as error:
+                terminal_text = page.locator(".xterm-rows").text_content()
+                raise AssertionError(
+                    f"agent did not start; terminal output was:\n{terminal_text}"
+                ) from error
             assert page.locator("#agent-status").text_content() == "Antigravity started"
 
             page.locator("#starter-prompt").click()

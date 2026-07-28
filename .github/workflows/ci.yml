@@ -23,9 +23,22 @@ jobs:
       - name: Nix Flake Check
         run: nix flake check
 
-      - name: Run Test Suite (Unit & E2E Visual Tests)
-        run: |
-          nix develop --command bash -c "PYTHONPATH=\$PWD:\$PWD/src:\$PYTHONPATH pytest tests/"
+  browser-e2e:
+    runs-on: macos-26
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Run Workspace Browser E2E
+        env:
+          MATHPUB_INCREMENTAL_PREVIEW_BUDGET_MS: 10000
+        run: nix develop --command pytest tests/e2e/002_gui_workspace/test_gui_workspace.py
+
+      - name: Run Agent Onboarding Browser E2E
+        run: nix develop --command pytest tests/e2e/003_agentic_onboarding/test_agentic_onboarding.py
 
       - name: Upload Visual Regression Diffs on Failure
         if: failure()

@@ -20,7 +20,7 @@ from mathpub.gui.server import WorkspaceServer
 from mathpub.publish import build
 from tests.e2e.helpers.gui_step_helper import GUIStepHelper
 
-INCREMENTAL_PREVIEW_BUDGET_MS = 6_000
+INCREMENTAL_PREVIEW_BUDGET_MS = int(os.environ.get("MATHPUB_INCREMENTAL_PREVIEW_BUDGET_MS", "6000"))
 
 
 def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
