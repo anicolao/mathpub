@@ -39,6 +39,14 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 
 ![Quick Edit Preview](./screenshots/005-quick-edit-preview-updated.png)
 
+## Presentation Slide Quick Editor
+
+![Presentation Slide Editor](./screenshots/006-presentation-slide-editor.png)
+
+## Presentation Slide Committed and Rebuilt
+
+![Updated Presentation Slide](./screenshots/007-presentation-slide-updated.png)
+
 **Verifications:**
 - [x] Header brand and subtitle render correctly
 - [x] Isolated PTY terminal emulator loads with clean prompt
@@ -51,3 +59,6 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 - [x] A mapped TeX source can be edited directly in the GUI
 - [x] Saving commits only that source file in Git
 - [x] The committed edit reuses instances and hot-swaps the active page within budget
+- [x] A Beamer slide exposes a hoverable source-mapped region
+- [x] Presentation feedback identifies the authored slide fragment
+- [x] A quick slide edit commits only its TeX source and rebuilds the preview

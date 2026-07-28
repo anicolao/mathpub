@@ -8,6 +8,7 @@ from pypdf import PdfReader
 
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
+from mathpub.gui.synctex import spatial_index
 from mathpub.latex_format import dump_latex_format, find_latex_format
 from mathpub.publish import _select_publication_lessons, build, reproduce
 from mathpub.scaffold import init_project, new_question
@@ -138,6 +139,24 @@ source = "credit-scores/03-example.tex"
         "utilization-example",
     ]
     assert mappings[0]["authored_source"] == ("publications/credit-scores/01-learning-goals.tex")
+    for page, component_id in enumerate(
+        ("learning-goals", "key-facts", "utilization-example"),
+        start=2,
+    ):
+        index = spatial_index(
+            root,
+            "consumer-math.credit-scores",
+            "review",
+            "student",
+            page,
+        )
+        assert [(box["component_id"], box["fragment"]) for box in index["boxes"]] == [
+            (component_id, "slide")
+        ]
+        box = index["boxes"][0]
+        assert box["authored_source"].startswith("publications/credit-scores/")
+        assert box["w"] > 0
+        assert box["h"] > 0
     manifest = json.loads((edition / "manifest.json").read_text())
     assert set(manifest["source"]["presentation_sources"]) == {
         "learning-goals",

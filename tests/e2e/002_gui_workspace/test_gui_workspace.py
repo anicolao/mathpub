@@ -46,6 +46,33 @@ def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
         source_directory = source_project.root / directory
         if source_directory.is_dir():
             shutil.copytree(source_directory, workspace_root / directory)
+    presentation_dir = workspace_root / "publications/gui-slide-editing"
+    presentation_dir.mkdir()
+    presentation_source = presentation_dir / "01-editable-slide.tex"
+    presentation_source.write_text(
+        r"""\begin{block}{A directly editable slide}
+Hover this slide to review it, then open its mapped source for a quick wording change.
+\end{block}
+"""
+    )
+    presentation_path = workspace_root / "publications/gui-slide-editing.toml"
+    presentation_path.write_text(
+        """schema = 1
+id = "gui.slide-editing"
+kind = "presentation"
+title = "Presentation Editing"
+profile = "mathpub.exam"
+theme = "metropolis"
+aspect_ratio = "169"
+font = "libertinus"
+projections = ["student"]
+
+[[slides]]
+id = "editable-slide"
+title = "Edit This Slide"
+source = "gui-slide-editing/01-editable-slide.tex"
+"""
+    )
     subprocess.run(
         ["git", "init", "-b", "main"],
         cwd=workspace_root,
@@ -70,10 +97,17 @@ def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
         capture_output=True,
     )
 
-    # Pre-build physics practice PDF so the right pane renders its first page.
+    # Pre-build both document and presentation previews.
     project = find_project(workspace_root)
     pub_path = project.root / "publications/physics-practice.toml"
     watched_source = project.root / "components/questions/physics/projectiles/snowball/prompt.tex"
+    build(
+        project,
+        presentation_path,
+        root_seed="2026",
+        variant="A",
+        replace=True,
+    )
     if pub_path.exists():
         build(project, pub_path, root_seed="2026", variant="A", replace=True)
 
@@ -138,7 +172,12 @@ def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
                 payload["publications"] = [
                     publication
                     for publication in payload["publications"]
-                    if publication["path"].startswith("build/physics.practice/A/")
+                    if publication["path"].startswith(
+                        (
+                            "build/gui.slide-editing/A/",
+                            "build/physics.practice/A/",
+                        )
+                    )
                 ]
                 payload["publications"].append(
                     {
@@ -511,7 +550,121 @@ def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
 
             steps.verify(page, "005-quick-edit-preview-updated")
 
-            # 10. Generate Walkthrough README.md
+            # 11. Hover a mapped Beamer slide and open the same quick editor used by documents.
+            presentation_pdf = "build/gui.slide-editing/A/gui.slide-editing-A-student.pdf"
+            assert page.locator(f'#pdf-select option[value="{presentation_pdf}"]').count() == 1
+            page.select_option("#pdf-select", presentation_pdf)
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 1 of 2'"
+            )
+            page.locator("#page-next").click()
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 2 of 2'"
+            )
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Preview watching'",
+                timeout=30_000,
+            )
+
+            slide_response = page.request.get(
+                f"http://127.0.0.1:{bound_port}/api/synctex/boxes"
+                "?publication_id=gui.slide-editing"
+                "&variant=A"
+                "&projection=student"
+                "&page=2"
+            )
+            assert slide_response.ok
+            slide_boxes = slide_response.json()["boxes"]
+            assert [(box["component_id"], box["fragment"]) for box in slide_boxes] == [
+                ("editable-slide", "slide")
+            ]
+            page.wait_for_function("document.querySelectorAll('.synctex-region').length === 1")
+            slide_region = page.locator('.synctex-region[data-component-id="editable-slide"]')
+            slide_region.hover()
+            assert (
+                slide_region.locator(".synctex-region-label").evaluate(
+                    "element => getComputedStyle(element).opacity"
+                )
+                == "1"
+            )
+            slide_region.click()
+            assert feedback_dialog.is_visible()
+            assert page.locator("#feedback-component").text_content() == "editable-slide"
+            assert page.locator("#feedback-fragment").text_content() == "slide"
+            assert page.locator("#feedback-source").text_content() == (
+                "publications/gui-slide-editing/01-editable-slide.tex"
+            )
+            page.locator("#feedback-edit").click()
+            page.wait_for_function(
+                "document.getElementById('editor-status').textContent === 'Source loaded'"
+            )
+            assert editor_dialog.is_visible()
+            slide_original = page.locator("#editor-content").input_value()
+            slide_edited = slide_original.replace(
+                "quick wording change",
+                "small wording change",
+            )
+            page.locator("#editor-content").fill(slide_edited)
+
+            steps.verify(page, "006-presentation-slide-editor")
+
+            slide_commit_before = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            page.locator("#editor-save").click()
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Rebuilding preview…'",
+                timeout=30_000,
+            )
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Preview updated'",
+                timeout=90_000,
+            )
+            assert "format: none" in page.locator("#status-build").get_attribute("title")
+            page.wait_for_function(
+                "document.getElementById('status-synctex').textContent === 'SyncTeX Ready'"
+            )
+            assert page.locator("#pdf-select").input_value() == presentation_pdf
+            assert page.locator("#page-position").text_content() == "Page 2 of 2"
+            assert presentation_source.read_text() == slide_edited
+            slide_commit_after = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            assert slide_commit_after != slide_commit_before
+            assert subprocess.run(
+                ["git", "show", "--format=%s", "--no-patch", "HEAD"],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip() == ("Quick edit: publications/gui-slide-editing/01-editable-slide.tex")
+            assert subprocess.run(
+                [
+                    "git",
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    "HEAD",
+                ],
+                cwd=project.root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines() == ["publications/gui-slide-editing/01-editable-slide.tex"]
+
+            steps.verify(page, "007-presentation-slide-updated")
+
+            # 12. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
@@ -539,6 +692,12 @@ def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
                 "![Quick TeX Editor](./screenshots/004-quick-tex-editor.png)\n\n"
                 "## Quick Edit Committed and Preview Updated\n\n"
                 "![Quick Edit Preview](./screenshots/005-quick-edit-preview-updated.png)\n\n"
+                "## Presentation Slide Quick Editor\n\n"
+                "![Presentation Slide Editor]"
+                "(./screenshots/006-presentation-slide-editor.png)\n\n"
+                "## Presentation Slide Committed and Rebuilt\n\n"
+                "![Updated Presentation Slide]"
+                "(./screenshots/007-presentation-slide-updated.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
@@ -552,6 +711,9 @@ def test_gui_workspace_e2e(tmp_path: Path, update_baselines: bool):
                 "- [x] Saving commits only that source file in Git\n"
                 "- [x] The committed edit reuses instances and hot-swaps the active page "
                 "within budget\n"
+                "- [x] A Beamer slide exposes a hoverable source-mapped region\n"
+                "- [x] Presentation feedback identifies the authored slide fragment\n"
+                "- [x] A quick slide edit commits only its TeX source and rebuilds the preview\n"
             )
             readme_path.write_text(readme_content)
 

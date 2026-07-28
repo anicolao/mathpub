@@ -241,19 +241,19 @@ def _presentation_slides(
         options = [name for name in ("plain", "fragile") if slide.get(name)]
         option_text = f"[{','.join(options)}]" if options else ""
         title = "" if slide.get("plain") else f"{{{slide['title']}}}"
-        body = marked_source(
-            identifier,
-            "slide",
-            source_path,
-            source_path.read_text(encoding="utf-8"),
+        frame = "\n".join(
+            (
+                rf"\begin{{frame}}{option_text}{title}",
+                source_path.read_text(encoding="utf-8"),
+                r"\end{frame}",
+            )
         )
         rendered.append(
-            "\n".join(
-                (
-                    rf"\begin{{frame}}{option_text}{title}",
-                    body,
-                    r"\end{frame}",
-                )
+            marked_source(
+                identifier,
+                "slide",
+                source_path,
+                frame,
             )
         )
     return rendered
