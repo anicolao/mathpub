@@ -26,6 +26,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
     scenario_dir = Path(__file__).parent
     steps = GUIStepHelper(scenario_dir, update_baselines)
     project = find_project()
+    library = tmp_path / "anna-math-library"
     creation_attempts = 0
 
     def fail_once_then_create(parent, name, **kwargs):
@@ -51,8 +52,10 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
         agent_command=[
             "sh",
             "-c",
-            'test "$MATHPUB_AUTHORING_ENV" = 1 && command -v gh >/dev/null '
-            '&& printf "\\033cAntigravity E2E %s\\n" ready',
+            'test "$MATHPUB_AUTHORING_ENV" = 1 && test "$PWD" = "$1" '
+            '&& command -v gh >/dev/null && printf "\\033cAntigravity E2E %s\\n" ready',
+            "mathpub-agent-e2e",
+            str(library),
         ],
         mathpub_url=f"path:{project.root}",
         library_creator=fail_once_then_create,
@@ -138,7 +141,6 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 "document.getElementById('library-name').textContent === 'anna-math-library'",
                 timeout=30_000,
             )
-            library = tmp_path / "anna-math-library"
             assert (library / "mathpub.toml").is_file()
             assert (library / "flake.lock").is_file()
             assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"

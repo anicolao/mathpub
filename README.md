@@ -63,7 +63,10 @@ title-page constraints, original TikZ visuals, and frame fit.
 
 GUI-launched agents read both the library's customizable `AGENTS.md` and the current pinned
 toolchain contract from `nix run .#mathpub -- agent-guide`. This keeps older libraries informed
-about newly supported publication types without overwriting author-owned instructions.
+about newly supported publication types without overwriting author-owned instructions. The
+default Antigravity launcher creates a fresh project, adds only the active authoring library as a
+workspace directory, and combines automatic tool approval with Antigravity's terminal sandbox;
+it does not rely on Antigravity's internal scratch directory or remembered project selection.
 
 The example publication declares four PDFs: `student`, `answers`, `solutions`, and `validation`.
 The validation edition contains every question, its worked solution, check classification,

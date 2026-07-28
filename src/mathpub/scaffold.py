@@ -15,6 +15,11 @@ from the public mathpub tooling repository. Do not copy private content into the
 This repository is an authoring library and may contain many related publications that reuse one
 reviewed component catalog; do not assume that one repository represents one book.
 
+The repository containing this file is the only authoring root for this agent session. Never search
+the home directory for another `AGENTS.md`, inspect sibling repositories, or create publication
+source outside this repository. The GUI supplies this root to Antigravity as its sole added
+workspace directory and enables Antigravity's terminal sandbox.
+
 ## Agent role
 
 Operate MathPub on the author's behalf. The author should be able to direct the work in ordinary
