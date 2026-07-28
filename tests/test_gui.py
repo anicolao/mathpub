@@ -32,7 +32,8 @@ from mathpub.gui.terminal import PTYManager
 from mathpub.scaffold import init_project
 
 
-def test_pty_manager_lifecycle():
+def test_pty_manager_lifecycle(monkeypatch):
+    monkeypatch.delenv("PYTHONPATH", raising=False)
     pty = PTYManager(command=["echo", "mathpub-pty-test"])
     pty.start(rows=24, cols=80)
     assert pty.master_fd is not None

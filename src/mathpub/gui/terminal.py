@@ -9,6 +9,7 @@ import pty
 import struct
 import sys
 import termios
+from pathlib import Path
 
 
 class PTYManager:
@@ -52,13 +53,13 @@ class PTYManager:
         # deadlock on locks held by another thread, so use posix_spawn to start a
         # fresh helper interpreter before performing session/PTY setup.
         os.set_inheritable(slave_fd, True)
+        helper = Path(__file__).with_name("_pty_child.py")
         try:
             pid = os.posix_spawn(
                 sys.executable,
                 [
                     sys.executable,
-                    "-m",
-                    "mathpub.gui._pty_child",
+                    str(helper),
                     str(slave_fd),
                     self.cwd,
                     *self.command,
