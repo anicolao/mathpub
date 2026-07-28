@@ -74,12 +74,27 @@
             version = "0.1.0";
             pyproject = true;
             src = mathpubSource;
+            # Authoring libraries consume this package from their dev shell. Keep
+            # validation in mathpub-tests so entering that shell never runs tests.
+            doCheck = false;
             build-system = [ pythonPackages.hatchling ];
             dependencies = [
               pythonPackages.jsonschema
               pythonPackages.numpy
               pythonPackages.pypdf
             ];
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            postInstall = ''
+              wrapProgram $out/bin/mathpub \
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
+              makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
+                --add-flags "workspace"
+            '';
+            pythonImportsCheck = [ "mathpub" ];
+          };
+          mathpub-tests = mathpub.overridePythonAttrs (_old: {
+            pname = "mathpub-tests";
+            doCheck = true;
             nativeCheckInputs = [
               pkgs.git
               pkgs.nix
@@ -95,16 +110,8 @@
               export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
               export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
             '';
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-            postInstall = ''
-              wrapProgram $out/bin/mathpub \
-                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
-              makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
-                --add-flags "workspace"
-            '';
-            pythonImportsCheck = [ "mathpub" ];
             pytestFlags = [ "tests" ];
-          };
+          });
           guiBuildInputs = pkgs.lib.optionals pkgs.stdenv.isLinux [
             pkgs.glib
             pkgs.gtk3
@@ -193,7 +200,7 @@
               };
         in
         {
-          inherit mathpub mathpub-gui mathpub-gui-e2e;
+          inherit mathpub mathpub-gui mathpub-gui-e2e mathpub-tests;
           default = mathpub;
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           inherit tauri-driver;
@@ -267,6 +274,8 @@
               pkgs.ripgrep
               pkgs.rustc
               pkgs.rustfmt
+              pkgs.python312Packages.pillow
+              pkgs.python312Packages.playwright
               pkgs.python312Packages.pytest
               pkgs.python312Packages.ruff
               pkgs.poppler-utils
@@ -289,6 +298,7 @@
         in
         {
           package = package;
+          tests = self.packages.${system}.mathpub-tests;
           gui = self.packages.${system}.mathpub-gui;
           formatting = pkgs.runCommand "mathpub-formatting"
             {

@@ -7,6 +7,7 @@ import fcntl
 import os
 import pty
 import struct
+import sys
 import termios
 
 
@@ -36,38 +37,45 @@ class PTYManager:
 
         self.set_size(rows, cols)
 
-        pid = os.fork()
-        if pid == 0:  # Child process
-            os.close(master_fd)
-            os.setsid()
+        env = dict(os.environ)
+        env.pop("PROMPT_COMMAND", None)
+        env.pop("ENV", None)
+        env.pop("BASH_ENV", None)
+        env["TERM"] = "xterm-256color"
+        env["COLORTERM"] = "truecolor"
+        env["PS1"] = "mathpub$ "
+        env["PROMPT"] = "mathpub$ "
+        env["ZDOTDIR"] = "/nonexistent"
+        env["HISTFILE"] = "/dev/null"
 
-            with contextlib.suppress(Exception):
-                fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
-
-            os.dup2(slave_fd, 0)
-            os.dup2(slave_fd, 1)
-            os.dup2(slave_fd, 2)
-            if slave_fd > 2:
-                os.close(slave_fd)
-
-            os.chdir(self.cwd)
-            env = dict(os.environ)
-            env.pop("PROMPT_COMMAND", None)
-            env.pop("ENV", None)
-            env.pop("BASH_ENV", None)
-            env["TERM"] = "xterm-256color"
-            env["COLORTERM"] = "truecolor"
-            env["PS1"] = "mathpub$ "
-            env["PROMPT"] = "mathpub$ "
-            env["ZDOTDIR"] = "/nonexistent"
-            env["HISTFILE"] = "/dev/null"
-            os.execvpe(self.command[0], self.command, env)
-        else:  # Parent process
+        # The workspace server is multithreaded. Running Python after os.fork() can
+        # deadlock on locks held by another thread, so use posix_spawn to start a
+        # fresh helper interpreter before performing session/PTY setup.
+        os.set_inheritable(slave_fd, True)
+        try:
+            pid = os.posix_spawn(
+                sys.executable,
+                [
+                    sys.executable,
+                    "-m",
+                    "mathpub.gui._pty_child",
+                    str(slave_fd),
+                    self.cwd,
+                    *self.command,
+                ],
+                env,
+            )
+        except Exception:
             os.close(slave_fd)
-            self.pid = pid
-            # Make master_fd non-blocking
-            flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-            fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            os.close(master_fd)
+            self.master_fd = None
+            raise
+
+        os.close(slave_fd)
+        self.pid = pid
+        # Make master_fd non-blocking
+        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
     def read(self, max_bytes: int = 4096) -> bytes:
         """Read output bytes from the PTY master_fd without blocking."""
