@@ -38,8 +38,11 @@ def test_pty_manager_lifecycle():
     assert pty.master_fd is not None
     assert pty.pid is not None
 
-    time.sleep(0.2)
-    output = pty.read(4096)
+    deadline = time.monotonic() + 5.0
+    output = b""
+    while b"mathpub-pty-test" not in output and time.monotonic() < deadline:
+        output += pty.read(4096)
+        time.sleep(0.02)
     assert b"mathpub-pty-test" in output
 
     pty.set_size(rows=40, cols=120)
