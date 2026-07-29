@@ -68,6 +68,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
         mathpub_url=f"path:{project.root}",
         library_creator=fail_once_then_create,
         library_history=history,
+        build_version="0.1.0 (e2e0000)",
     )
     server_ready = threading.Event()
     stop_event = None
@@ -164,6 +165,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
 
             workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
             assert workspace["project"] == "anna-math-library"
+            assert workspace["version"] == "0.1.0 (e2e0000)"
             assert workspace["root"] == str(library)
             assert workspace["recent_libraries"] == [
                 {"name": "anna-math-library", "path": str(library)}

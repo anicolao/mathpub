@@ -49,6 +49,7 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 
 **Verifications:**
 - [x] Header brand and subtitle render correctly
+- [x] The package version and build Git revision are visible
 - [x] Isolated PTY terminal emulator loads with clean prompt
 - [x] PDF dropdown loads and displays the rendered first page
 - [x] Hovering reveals one clickable mapped region without a prior toggle
@@ -62,3 +63,4 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 - [x] A Beamer slide exposes a hoverable source-mapped region
 - [x] Presentation feedback identifies the authored slide fragment
 - [x] A quick slide edit commits only its TeX source and rebuilds the preview
+- [x] The selected built PDF can be opened in the native viewer

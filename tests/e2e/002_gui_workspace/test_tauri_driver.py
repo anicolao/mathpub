@@ -165,7 +165,9 @@ def test_packaged_tauri_workspace_launches_and_renders():
         client = WebDriverClient(application)
 
         _wait_for_text(client, ".logo", "mathpub")
+        _wait_for_text(client, "#app-version", "0.1.0 (", contains=True)
         _wait_for_text(client, ".subtitle", "Interactive Workspace", contains=True)
+        _wait_for_text(client, "#open-native-preview", "Open in Preview")
         _wait_for_text(client, "#status-terminal", "PTY Connected")
         _wait_for_text(client, "#page-position", "Page 1 of 2")
         dimensions = _wait_for_preview(client)

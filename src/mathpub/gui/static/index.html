@@ -13,6 +13,7 @@
   <header class="app-header">
     <div class="header-brand">
       <span class="logo">mathpub</span>
+      <span class="app-version" id="app-version">0.1.0</span>
       <span class="subtitle">Interactive Workspace</span>
       <span class="library-name" id="library-name">No library open</span>
     </div>
@@ -64,6 +65,12 @@
             aria-pressed="false"
             disabled
           >Show mapped regions</button>
+          <button
+            id="open-native-preview"
+            class="preview-action"
+            type="button"
+            disabled
+          >Open in Preview</button>
           <select id="pdf-select" class="pdf-select">
             <option value="">-- Select Built PDF --</option>
           </select>

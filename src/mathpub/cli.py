@@ -12,7 +12,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from mathpub import __version__
+from mathpub import display_version
 from mathpub.catalog import Catalog
 from mathpub.config import find_project, load_toml, relative, schema_enum
 from mathpub.errors import MathpubError
@@ -42,7 +42,7 @@ def _json_flag(parser: argparse.ArgumentParser) -> None:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="mathpub", description=__doc__)
-    result.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    result.add_argument("--version", action="version", version=f"%(prog)s {display_version()}")
     commands = result.add_subparsers(dest="command", required=True)
 
     init = commands.add_parser("init", help="create a complete mathpub project")
