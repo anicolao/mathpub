@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import urllib.request
+from urllib.error import HTTPError
 
 import pytest
 
@@ -25,6 +26,7 @@ from mathpub.gui.onboarding import (
 from mathpub.gui.server import (
     WorkspaceServer,
     _feedback_prompt,
+    _open_pdf_in_preview,
     _publication_output_metadata,
 )
 from mathpub.gui.source_edit import load_tex_source, save_tex_source
@@ -49,6 +51,31 @@ def test_pty_manager_lifecycle(monkeypatch):
     pty.set_size(rows=40, cols=120)
     pty.close()
     assert not pty.is_alive()
+
+
+def test_native_preview_opener_uses_macos_launch_services(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "publication.pdf"
+    pdf_path.write_bytes(b"%PDF-1.7\n")
+    calls = []
+
+    def record(command, **kwargs):
+        calls.append((command, kwargs))
+
+    monkeypatch.setattr("mathpub.gui.server.subprocess.run", record)
+
+    _open_pdf_in_preview(pdf_path)
+
+    assert calls == [
+        (
+            ["/usr/bin/open", "-a", "Preview", str(pdf_path)],
+            {
+                "check": True,
+                "capture_output": True,
+                "text": True,
+                "timeout": 10,
+            },
+        )
+    ]
 
 
 def test_feedback_prompt_is_single_line_and_validated():
@@ -476,11 +503,17 @@ def test_workspace_server_http(tmp_path):
     init_project(project_root)
     init_project(other_project_root)
     history = LibraryHistory(tmp_path / "recent-libraries.json")
+    preview_pdf = project_root / "build/example.pdf"
+    preview_pdf.parent.mkdir()
+    preview_pdf.write_bytes(b"%PDF-1.7\n")
+    opened_pdfs = []
     server = WorkspaceServer(
         host="127.0.0.1",
         port=8912,
         project_root=project_root,
         library_history=history,
+        build_version="0.1.0 (8aafec7)",
+        native_preview_opener=opened_pdfs.append,
     )
     server_ready = threading.Event()
     stop_event = None
@@ -513,6 +546,7 @@ def test_workspace_server_http(tmp_path):
         assert req.status == 200
         data = json.loads(req.read().decode("utf-8"))
         assert data["status"] == "ok"
+        assert data["version"] == "0.1.0 (8aafec7)"
 
         req_workspace = urllib.request.urlopen("http://127.0.0.1:8912/api/workspace")
         assert req_workspace.status == 200
@@ -520,6 +554,11 @@ def test_workspace_server_http(tmp_path):
         assert workspace_data["project"] == "workspace-project"
         assert workspace_data["root"]
         assert workspace_data["recent_libraries"] == []
+        assert workspace_data["version"] == "0.1.0 (8aafec7)"
+        assert workspace_data["native_pdf_viewer"] == {
+            "available": True,
+            "label": "Preview",
+        }
         assert workspace_data["agent"]["label"] == "Antigravity"
         assert workspace_data["agent"]["environment"] == "nix develop"
         assert "Outline my first book" in workspace_data["starter_prompt"]
@@ -535,6 +574,26 @@ def test_workspace_server_http(tmp_path):
         assert req_pubs.status == 200
         pubs_data = json.loads(req_pubs.read().decode("utf-8"))
         assert "publications" in pubs_data
+
+        preview_request = urllib.request.Request(
+            "http://127.0.0.1:8912/api/pdf/open",
+            data=json.dumps({"path": "build/example.pdf"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        preview_result = json.loads(urllib.request.urlopen(preview_request).read().decode())
+        assert preview_result == {"opened": "build/example.pdf", "viewer": "Preview"}
+        assert opened_pdfs == [preview_pdf.resolve()]
+
+        invalid_preview_request = urllib.request.Request(
+            "http://127.0.0.1:8912/api/pdf/open",
+            data=json.dumps({"path": "../outside.pdf"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with pytest.raises(HTTPError) as invalid_preview:
+            urllib.request.urlopen(invalid_preview_request)
+        assert invalid_preview.value.code == 404
 
         open_request = urllib.request.Request(
             "http://127.0.0.1:8912/api/libraries/open",

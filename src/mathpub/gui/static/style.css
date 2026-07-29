@@ -56,6 +56,12 @@ body {
   padding-left: 8px;
 }
 
+.app-version {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
 .library-name {
   max-width: 190px;
   overflow: hidden;
@@ -201,7 +207,8 @@ body {
   cursor: not-allowed;
 }
 
-.mapped-regions-toggle {
+.mapped-regions-toggle,
+.preview-action {
   background: rgba(56, 189, 248, 0.12);
   color: var(--accent);
   border: 1px solid rgba(56, 189, 248, 0.45);
@@ -214,11 +221,13 @@ body {
 }
 
 .mapped-regions-toggle:hover:not(:disabled),
+.preview-action:hover:not(:disabled),
 .mapped-regions-toggle[aria-pressed="true"] {
   background: rgba(56, 189, 248, 0.28);
 }
 
-.mapped-regions-toggle:disabled {
+.mapped-regions-toggle:disabled,
+.preview-action:disabled {
   color: var(--text-muted);
   border-color: var(--border);
   background: transparent;
@@ -234,6 +243,7 @@ body {
   font-size: 0.75rem;
   font-family: monospace;
   max-width: 280px;
+  min-width: 0;
 }
 
 .pane-resizer {

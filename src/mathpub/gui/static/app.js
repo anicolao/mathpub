@@ -109,6 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const previousPage = document.getElementById("page-previous");
   const nextPage = document.getElementById("page-next");
   const pagePosition = document.getElementById("page-position");
+  const openNativePreview = document.getElementById("open-native-preview");
   const mappedRegionsToggle = document.getElementById("mapped-regions-toggle");
   const synctexOverlay = document.getElementById("synctex-overlay");
   const synctexStatus = document.getElementById("status-synctex");
@@ -130,6 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const editorClose = document.getElementById("editor-close");
   const editorCancel = document.getElementById("editor-cancel");
   const editorSave = document.getElementById("editor-save");
+  const appVersion = document.getElementById("app-version");
   const libraryName = document.getElementById("library-name");
   const openLibrary = document.getElementById("open-library");
   const openLibraryDialog = document.getElementById("open-library-dialog");
@@ -176,6 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/api/workspace");
       if (!response.ok) throw new Error(`Workspace request failed: ${response.status}`);
       workspaceState = await response.json();
+      appVersion.textContent = workspaceState.version || "unknown build";
       libraryName.textContent = workspaceState.project || "No library open";
       libraryName.title = workspaceState.root || "";
       if (!libraryParent.value) libraryParent.value = workspaceState.default_parent || "";
@@ -202,6 +205,7 @@ document.addEventListener("DOMContentLoaded", () => {
         placeholderCopy.textContent =
           "Configure an authoring agent or use the terminal to build a publication.";
       }
+      updatePageControls();
     } catch (error) {
       agentStatus.textContent = "Workspace unavailable";
       agentStatus.title = error.message;
@@ -617,16 +621,24 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updatePageControls() {
+    const nativeViewer = workspaceState?.native_pdf_viewer || {};
     if (!currentPublication) {
       pagePosition.textContent = "Page 0 of 0";
       previousPage.disabled = true;
       nextPage.disabled = true;
+      openNativePreview.disabled = true;
+      openNativePreview.title = "Select a built PDF first";
       return;
     }
     const pages = pageCount();
     pagePosition.textContent = `Page ${currentPage} of ${pages}`;
     previousPage.disabled = currentPage <= 1;
     nextPage.disabled = currentPage >= pages;
+    openNativePreview.disabled = nativeViewer.available !== true;
+    openNativePreview.title =
+      nativeViewer.available === true
+        ? `Open ${currentPublication.name || "this PDF"} in ${nativeViewer.label || "Preview"}`
+        : "The native Preview application is available only on macOS";
   }
 
   async function loadPreviewPage(cacheBust = null, notifyWatcher = true) {
@@ -678,6 +690,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   previousPage.addEventListener("click", () => showPage(currentPage - 1));
   nextPage.addEventListener("click", () => showPage(currentPage + 1));
+  openNativePreview.addEventListener("click", async () => {
+    if (!currentPublication || openNativePreview.disabled) return;
+    openNativePreview.disabled = true;
+    openNativePreview.textContent = "Opening…";
+    buildStatus.textContent = "Opening in Preview…";
+    buildStatus.removeAttribute("title");
+    try {
+      const response = await fetch("/api/pdf/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: currentPublication.path })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Preview request failed: ${response.status}`);
+      }
+      buildStatus.textContent = "Opened in Preview";
+      buildStatus.title = currentPublication.path;
+    } catch (error) {
+      buildStatus.textContent = "Preview open failed";
+      buildStatus.title = error.message;
+    } finally {
+      openNativePreview.textContent = "Open in Preview";
+      updatePageControls();
+    }
+  });
 
   mappedRegionsToggle.addEventListener("click", () => {
     setMappedRegionsVisible(!mappedRegionsVisible);

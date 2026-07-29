@@ -12,11 +12,13 @@ import re
 import shlex
 import struct
 import subprocess
+import sys
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from mathpub import display_version
 from mathpub.config import Project, find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.libraries import LibraryHistory, open_authoring_library
@@ -124,6 +126,23 @@ def _json_response(status: int, payload: dict[str, object]) -> bytes:
     ).encode() + body
 
 
+def _open_pdf_in_preview(pdf_path: Path) -> None:
+    """Ask macOS Launch Services to open one PDF in Preview."""
+    subprocess.run(
+        ["/usr/bin/open", "-a", "Preview", str(pdf_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+def _default_native_preview_opener() -> Callable[[Path], None] | None:
+    if sys.platform == "darwin" and Path("/usr/bin/open").is_file():
+        return _open_pdf_in_preview
+    return None
+
+
 def _feedback_prompt(message: dict[str, object]) -> str | None:
     """Convert validated element feedback into one safe terminal input line."""
     fields = ("component_id", "fragment", "authored_source", "feedback")
@@ -224,6 +243,8 @@ class WorkspaceServer:
         mathpub_url: str = "github:anicolao/mathpub",
         library_creator: Callable[..., dict[str, object]] = create_authoring_library,
         library_history: LibraryHistory | None = None,
+        build_version: str | None = None,
+        native_preview_opener: Callable[[Path], None] | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -237,6 +258,8 @@ class WorkspaceServer:
         self.lock_libraries = lock_libraries
         self.mathpub_url = mathpub_url
         self.library_creator = library_creator
+        self.build_version = build_version or display_version()
+        self.native_preview_opener = native_preview_opener or _default_native_preview_opener()
         self.source_edit_lock = asyncio.Lock()
 
     def _initial_project_root(self, project_root: Path | None) -> Path | None:
@@ -268,6 +291,11 @@ class WorkspaceServer:
             "recent_libraries": self.library_history.recent(),
             "agent": self.agent.payload(root),
             "starter_prompt": STARTER_PROMPT,
+            "version": self.build_version,
+            "native_pdf_viewer": {
+                "available": self.native_preview_opener is not None,
+                "label": "Preview",
+            },
         }
 
     async def handle_client(
@@ -325,7 +353,7 @@ class WorkspaceServer:
 
         # Handle HTTP API & Static File Requests
         if path == "/api/health":
-            body = json.dumps({"status": "ok", "version": "0.1.0"}).encode()
+            body = json.dumps({"status": "ok", "version": self.build_version}).encode()
             response = (
                 f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
                 f"Content-Length: {len(body)}\r\n\r\n"
@@ -337,6 +365,68 @@ class WorkspaceServer:
 
         if path == "/api/workspace":
             writer.write(_json_response(200, self._workspace_payload()))
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path == "/api/pdf/open" and method == "POST":
+            project = self._project()
+            content_type = headers.get("content-type", "")
+            try:
+                content_length = int(headers.get("content-length", "0"))
+            except ValueError:
+                content_length = -1
+            if project is None:
+                response = _json_response(404, {"error": "no authoring library is open"})
+            elif not content_type.lower().startswith("application/json"):
+                response = _json_response(400, {"error": "request body must use application/json"})
+            elif content_length < 0 or content_length > REQUEST_BODY_LIMIT:
+                response = _json_response(400, {"error": "invalid request body length"})
+            elif self.native_preview_opener is None:
+                response = _json_response(
+                    400,
+                    {"error": "the native Preview application is available only on macOS"},
+                )
+            else:
+                body = initial_body
+                remaining = content_length - len(body)
+                if remaining > 0:
+                    try:
+                        body += await reader.readexactly(remaining)
+                    except asyncio.IncompleteReadError:
+                        body = b""
+                try:
+                    payload = json.loads(body[:content_length])
+                    pdf_rel_path = payload.get("path")
+                except (json.JSONDecodeError, AttributeError):
+                    pdf_rel_path = None
+                if not isinstance(pdf_rel_path, str) or not pdf_rel_path:
+                    response = _json_response(400, {"error": "PDF path must be a non-empty string"})
+                else:
+                    target_pdf = (project.root / pdf_rel_path).resolve()
+                    if (
+                        not target_pdf.is_relative_to(project.root)
+                        or target_pdf.suffix.lower() != ".pdf"
+                        or not target_pdf.is_file()
+                    ):
+                        response = _json_response(
+                            404,
+                            {"error": "PDF does not exist in the current authoring library"},
+                        )
+                    else:
+                        try:
+                            await asyncio.to_thread(self.native_preview_opener, target_pdf)
+                        except (OSError, subprocess.SubprocessError) as error:
+                            response = _json_response(
+                                500,
+                                {"error": f"could not open PDF in Preview: {error}"},
+                            )
+                        else:
+                            response = _json_response(
+                                200,
+                                {"opened": pdf_rel_path, "viewer": "Preview"},
+                            )
+            writer.write(response)
             await writer.drain()
             _close_writer(writer)
             return

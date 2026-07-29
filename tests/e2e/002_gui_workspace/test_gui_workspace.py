@@ -127,11 +127,14 @@ source = "gui-slide-editing/01-editable-slide.tex"
             )
 
         bound_port = 0
+        opened_pdfs = []
         server = WorkspaceServer(
             host="127.0.0.1",
             port=0,
             project_root=project.root,
             agent_command=[],
+            build_version="0.1.0 (e2e0000)",
+            native_preview_opener=opened_pdfs.append,
         )
         server_ready = threading.Event()
         stop_event = None
@@ -205,6 +208,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
 
             # 1. Verify Header Elements
             assert page.locator(".logo").text_content() == "mathpub"
+            assert page.locator("#app-version").text_content() == "0.1.0 (e2e0000)"
             assert "Interactive Workspace" in page.locator(".subtitle").text_content()
 
             # 2. Verify Left Terminal Pane & xterm Container
@@ -673,7 +677,14 @@ source = "gui-slide-editing/01-editable-slide.tex"
 
             steps.verify(page, "007-presentation-slide-updated")
 
-            # 12. Generate Walkthrough README.md
+            # 12. Open the selected built PDF in the native viewer.
+            page.locator("#open-native-preview").click()
+            page.wait_for_function(
+                "document.getElementById('status-build').textContent === 'Opened in Preview'"
+            )
+            assert opened_pdfs == [(project.root / presentation_pdf).resolve()]
+
+            # 13. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
                 "# E2E Visual Verification: Interactive GUI Workspace\n\n"
@@ -709,6 +720,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "(./screenshots/007-presentation-slide-updated.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
+                "- [x] The package version and build Git revision are visible\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
                 "- [x] PDF dropdown loads and displays the rendered first page\n"
                 "- [x] Hovering reveals one clickable mapped region without a prior toggle\n"
@@ -723,6 +735,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "- [x] A Beamer slide exposes a hoverable source-mapped region\n"
                 "- [x] Presentation feedback identifies the authored slide fragment\n"
                 "- [x] A quick slide edit commits only its TeX source and rebuilds the preview\n"
+                "- [x] The selected built PDF can be opened in the native viewer\n"
             )
             readme_path.write_text(readme_content)
 

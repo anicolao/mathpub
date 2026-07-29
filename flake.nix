@@ -8,6 +8,11 @@
       supportedSystems = [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       pkgsFor = system: import nixpkgs { inherit system; };
+      version = "0.1.0";
+      buildRevision =
+        if self ? shortRev then self.shortRev
+        else if self ? dirtyShortRev then self.dirtyShortRev
+        else "unknown";
     in
     {
       packages = forAllSystems (system:
@@ -71,7 +76,7 @@
           ]);
           mathpub = pythonPackages.buildPythonApplication {
             pname = "mathpub";
-            version = "0.1.0";
+            inherit version;
             pyproject = true;
             src = mathpubSource;
             # Authoring libraries consume this package from their dev shell. Keep
@@ -86,6 +91,7 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/mathpub \
+                --set MATHPUB_BUILD_REVISION ${buildRevision} \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
               makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
                 --add-flags "workspace"
@@ -123,7 +129,7 @@
           ];
           mathpub-gui-unwrapped = pkgs.rustPlatform.buildRustPackage {
             pname = "mathpub-gui";
-            version = "0.1.0";
+            inherit version;
             src = guiSource;
             postUnpack = ''
               sourceRoot="$sourceRoot/src-tauri"
@@ -140,7 +146,7 @@
             '';
           };
           mathpub-gui = pkgs.symlinkJoin {
-            name = "mathpub-gui-0.1.0";
+            name = "mathpub-gui-${version}";
             paths = [ mathpub-gui-unwrapped ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
