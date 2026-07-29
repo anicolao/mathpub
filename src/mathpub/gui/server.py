@@ -46,6 +46,8 @@ HTTP_REASONS = {
 FEEDBACK_LIMIT = 2000
 REQUEST_BODY_LIMIT = 16_384
 SOURCE_REQUEST_BODY_LIMIT = SOURCE_EDIT_LIMIT * 2 + 16_384
+# Two device pixels per 96-DPI CSS reference pixel keeps previews sharp on HiDPI displays.
+PDF_PREVIEW_DPI = 192
 
 
 def _websocket_accept_key(sec_key: str) -> str:
@@ -673,7 +675,7 @@ class WorkspaceServer:
                                 "-l",
                                 str(page_number),
                                 "-r",
-                                "96",
+                                str(PDF_PREVIEW_DPI),
                                 str(target_pdf),
                                 "-",
                             ],

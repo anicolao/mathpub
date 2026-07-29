@@ -245,6 +245,9 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "document.getElementById('status-build').textContent === 'Preview watching'"
             )
             assert page.locator("#pdf-preview").is_visible()
+            assert page.locator("#pdf-preview").evaluate(
+                "preview => ({width: preview.naturalWidth, height: preview.naturalHeight})"
+            ) == {"width": 1632, "height": 2112}
             assert page.locator("#page-position").text_content() == "Page 1 of 2"
             assert page.locator("#page-previous").is_disabled()
             assert page.locator("#page-next").is_enabled()
