@@ -151,7 +151,8 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
               makeWrapper ${mathpub-gui-unwrapped}/bin/MathPub $out/bin/mathpub-gui \
-                --set MATHPUB_GUI_BACKEND ${mathpub}/bin/mathpub
+                --set MATHPUB_GUI_BACKEND ${mathpub}/bin/mathpub \
+                --set MATHPUB_BUILD_REVISION ${buildRevision}
             '';
             passthru.unwrapped = mathpub-gui-unwrapped;
           };
