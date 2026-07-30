@@ -6,10 +6,68 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::menu::{AboutMetadata, Menu, MenuItemKind, PredefinedMenuItem};
+use tauri::{AppHandle, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 const BACKEND_HOST: &str = "127.0.0.1";
 const BACKEND_READY_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn display_version(revision: Option<&str>) -> String {
+    match revision.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(revision) => format!("{} ({revision})", env!("CARGO_PKG_VERSION")),
+        None => env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+fn runtime_display_version() -> String {
+    let revision = env::var("MATHPUB_BUILD_REVISION").ok();
+    display_version(revision.as_deref())
+}
+
+fn about_metadata<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {
+    AboutMetadata {
+        name: Some(app.package_info().name.clone()),
+        version: Some(runtime_display_version()),
+        copyright: app.config().bundle.copyright.clone(),
+        authors: app
+            .config()
+            .bundle
+            .publisher
+            .clone()
+            .map(|publisher| vec![publisher]),
+        ..Default::default()
+    }
+}
+
+fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let menu = Menu::default(app)?;
+    let submenu_name = if cfg!(target_os = "macos") {
+        app.package_info().name.as_str()
+    } else {
+        "Help"
+    };
+    let about_submenu = menu
+        .items()?
+        .into_iter()
+        .find_map(|item| match item {
+            MenuItemKind::Submenu(submenu)
+                if submenu.text().is_ok_and(|text| text == submenu_name) =>
+            {
+                Some(submenu)
+            }
+            _ => None,
+        })
+        .ok_or_else(|| io::Error::other("Tauri default About submenu was not found"))?;
+    let default_about = about_submenu
+        .remove_at(0)?
+        .ok_or_else(|| io::Error::other("Tauri default About item was not found"))?;
+    if !matches!(default_about, MenuItemKind::Predefined(_)) {
+        return Err(io::Error::other("Tauri default About item has an unexpected type").into());
+    }
+    let about = PredefinedMenuItem::about(app, None, Some(about_metadata(app)))?;
+    about_submenu.insert(&about, 0)?;
+    Ok(menu)
+}
 
 fn reserve_port() -> io::Result<u16> {
     let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))?;
@@ -83,6 +141,7 @@ fn main() {
         .expect("workspace URL should be valid");
 
     let app = tauri::Builder::default()
+        .menu(app_menu)
         .setup(move |app| {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(workspace_url))
                 .title("MathPub Interactive Workspace")
@@ -111,6 +170,17 @@ mod tests {
     #[test]
     fn reserves_an_ephemeral_local_port() {
         assert_ne!(reserve_port().unwrap(), 0);
+    }
+
+    #[test]
+    fn display_version_includes_build_revision() {
+        assert_eq!(display_version(Some("970c980")), "0.1.0 (970c980)");
+        assert_eq!(
+            display_version(Some(" 970c980-dirty ")),
+            "0.1.0 (970c980-dirty)"
+        );
+        assert_eq!(display_version(None), "0.1.0");
+        assert_eq!(display_version(Some("  ")), "0.1.0");
     }
 
     #[test]
