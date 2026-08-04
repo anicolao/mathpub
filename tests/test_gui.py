@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.request
 from urllib.error import HTTPError
+from urllib.parse import quote
 
 import pytest
 
@@ -23,6 +24,7 @@ from mathpub.gui.onboarding import (
     AgentConfiguration,
     create_authoring_library,
 )
+from mathpub.gui.reference_import import import_reference
 from mathpub.gui.server import (
     WorkspaceServer,
     _feedback_prompt,
@@ -402,6 +404,73 @@ def test_quick_tex_edit_commits_only_revision_matched_source(tmp_path):
     assert source.read_text() == "Concurrent agent edit.\n"
 
 
+def test_reference_import_commits_only_selected_binary_file(tmp_path):
+    root = tmp_path / "authoring-library"
+    init_project(root)
+    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "MathPub Test"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "mathpub-test@example.invalid"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial authoring library"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    (root / "README.md").write_text("An unrelated local change.\n")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    project = find_project(root)
+    content = b"%PDF-1.7\n\x00author reference fixture\n"
+
+    result = import_reference(project, "course outline.pdf", content)
+
+    imported = root / "reference/course outline.pdf"
+    assert imported.read_bytes() == content
+    assert result["path"] == "reference/course outline.pdf"
+    assert result["size"] == len(content)
+    assert result["message"] == "Import reference: reference/course outline.pdf"
+    assert len(result["commit"]) == 40
+    committed_paths = subprocess.run(
+        ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert committed_paths == ["reference/course outline.pdf"]
+    assert subprocess.run(
+        ["git", "status", "--short"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines() == ["M  README.md"]
+
+    head = result["commit"]
+    with pytest.raises(MathpubError, match="reference already exists") as duplicate:
+        import_reference(project, "course outline.pdf", b"replacement")
+    assert duplicate.value.code == "MP-GUI-016"
+    assert imported.read_bytes() == content
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        == head
+    )
+
+    with pytest.raises(MathpubError, match="filename is invalid"):
+        import_reference(project, "../outside.txt", b"outside")
+    assert not (root / "outside.txt").exists()
+
+
 def test_quick_tex_edit_rejects_sources_outside_authored_roots(tmp_path):
     root = tmp_path / "authoring-library"
     init_project(root)
@@ -502,6 +571,23 @@ def test_workspace_server_http(tmp_path):
     other_project_root = tmp_path / "existing-library"
     init_project(project_root)
     init_project(other_project_root)
+    subprocess.run(["git", "init", "-b", "main"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=project_root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=MathPub Test",
+            "-c",
+            "user.email=test@mathpub.local",
+            "commit",
+            "-m",
+            "Initial library",
+        ],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    )
     history = LibraryHistory(tmp_path / "recent-libraries.json")
     preview_pdf = project_root / "build/example.pdf"
     preview_pdf.parent.mkdir()
@@ -584,6 +670,27 @@ def test_workspace_server_http(tmp_path):
         preview_result = json.loads(urllib.request.urlopen(preview_request).read().decode())
         assert preview_result == {"opened": "build/example.pdf", "viewer": "Preview"}
         assert opened_pdfs == [preview_pdf.resolve()]
+
+        reference_content = b"Reference lesson sequence\n"
+        reference_request = urllib.request.Request(
+            f"http://127.0.0.1:8912/api/references?filename={quote('course outline.txt')}",
+            data=reference_content,
+            headers={"Content-Type": "application/octet-stream"},
+            method="POST",
+        )
+        imported_reference = json.loads(urllib.request.urlopen(reference_request).read().decode())[
+            "reference"
+        ]
+        assert imported_reference["path"] == "reference/course outline.txt"
+        assert imported_reference["size"] == len(reference_content)
+        assert (project_root / imported_reference["path"]).read_bytes() == reference_content
+        assert subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines() == ["reference/course outline.txt"]
 
         invalid_preview_request = urllib.request.Request(
             "http://127.0.0.1:8912/api/pdf/open",

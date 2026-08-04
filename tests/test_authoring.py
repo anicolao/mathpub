@@ -29,6 +29,8 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert 'kind = "presentation"' in instructions
     assert "only authoring root for this agent session" in instructions
     assert "Never search\nthe home directory" in instructions
+    assert "Files the author imports through the MathPub GUI" in instructions
+    assert "`pdftotext reference/FILE.pdf -`" in instructions
 
     code, payload = invoke(
         monkeypatch,
@@ -71,6 +73,7 @@ def test_agent_guide_exposes_the_version_matched_publication_contract(capsys):
     assert "Operate MathPub on the author's behalf" in output.out
     assert 'kind = "presentation"' in output.out
     assert "`presentation` publication, not a textbook" in output.out
+    assert "list that directory and inspect the\nlikely files" in output.out
 
 
 def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):

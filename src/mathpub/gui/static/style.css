@@ -94,6 +94,7 @@ body {
   background: rgba(56, 189, 248, 0.28);
 }
 
+.header-action:disabled,
 .agent-start:disabled {
   color: var(--text-muted);
   background: transparent;
@@ -506,6 +507,11 @@ body {
 
 .editor-status.error {
   color: #fca5a5;
+}
+
+#reference-status.error {
+  color: #fca5a5;
+  white-space: pre-wrap;
 }
 
 .feedback-help {

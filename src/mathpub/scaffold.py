@@ -53,6 +53,19 @@ and tell the author exactly which PDF is ready. Run the complete publication loo
 a commit or release. Never commit, push, publish, or change repository visibility without the
 author's approval.
 
+## Reference material
+
+Files the author imports through the MathPub GUI are committed beneath `reference/`. At the start
+of a task, and whenever the author mentions supplied material, list that directory and inspect the
+likely files before outlining or drafting. Refer to files by their repository-relative paths so
+the author can tell which source informed the work. Plain text can be read directly; use
+`pdftotext reference/FILE.pdf -` for imported PDFs.
+
+Reference files are evidence and editorial source material, not generated MathPub components. Do
+not edit, rename, replace, or remove them unless the author explicitly asks. When adapting their
+content, preserve the author's constraints, distinguish direct source claims from your own
+inferences, and flag material that appears ambiguous, outdated, or inconsistent.
+
 ## Tooling rules
 
 Use only the programs supplied by this repository's Nix flake. The MathPub GUI launches its
@@ -66,7 +79,8 @@ The default authoring environment guarantees:
 - `mathpub`, the publication CLI;
 - `nix`, for the pinned environment and flake applications;
 - `gh` and `git`, for repository work that the author has approved; and
-- `jq` and `rg`, for inspecting structured output and searching authored source.
+- `jq` and `rg`, for inspecting structured output and searching authored source; and
+- `pdftotext`, for reading PDF files imported beneath `reference/`.
 
 MathPub itself invokes its Nix-provided Sage, TeX, and PDF utilities. Prefer the MathPub CLI over
 calling those implementation tools directly. Do not assume that any program inherited from the

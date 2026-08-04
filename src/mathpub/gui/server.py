@@ -27,6 +27,7 @@ from mathpub.gui.onboarding import (
     AgentConfiguration,
     create_authoring_library,
 )
+from mathpub.gui.reference_import import REFERENCE_IMPORT_LIMIT, import_reference
 from mathpub.gui.source_edit import SOURCE_EDIT_LIMIT, load_tex_source, save_tex_source
 from mathpub.gui.synctex import SyncTeXError, spatial_index
 from mathpub.gui.terminal import PTYManager
@@ -260,7 +261,7 @@ class WorkspaceServer:
         self.library_creator = library_creator
         self.build_version = build_version or display_version()
         self.native_preview_opener = native_preview_opener or _default_native_preview_opener()
-        self.source_edit_lock = asyncio.Lock()
+        self.repository_edit_lock = asyncio.Lock()
 
     def _initial_project_root(self, project_root: Path | None) -> Path | None:
         try:
@@ -432,6 +433,61 @@ class WorkspaceServer:
             return
 
         parsed_path = urlparse(path)
+        if parsed_path.path == "/api/references" and method == "POST":
+            project = self._project()
+            content_type = headers.get("content-type", "")
+            try:
+                content_length = int(headers.get("content-length", "0"))
+            except ValueError:
+                content_length = -1
+            if project is None:
+                response = _json_response(404, {"error": "no authoring library is open"})
+            elif not content_type.lower().startswith("application/octet-stream"):
+                response = _json_response(
+                    400, {"error": "reference upload must use application/octet-stream"}
+                )
+            elif content_length <= 0:
+                response = _json_response(400, {"error": "reference file is empty"})
+            elif content_length > REFERENCE_IMPORT_LIMIT:
+                response = _json_response(413, {"error": "reference file is too large"})
+            else:
+                body = initial_body
+                remaining = content_length - len(body)
+                if remaining > 0:
+                    try:
+                        body += await reader.readexactly(remaining)
+                    except asyncio.IncompleteReadError:
+                        body = b""
+                filename = parse_qs(parsed_path.query).get("filename", [""])[0]
+                try:
+                    async with self.repository_edit_lock:
+                        result = await asyncio.to_thread(
+                            import_reference,
+                            project,
+                            filename,
+                            body[:content_length],
+                        )
+                except MathpubError as error:
+                    status = {
+                        "MP-GUI-016": 409,
+                        "MP-GUI-017": 500,
+                        "MP-GUI-018": 500,
+                    }.get(error.code, 400)
+                    response = _json_response(
+                        status,
+                        {
+                            "error": error.message,
+                            "code": error.code,
+                            "details": error.details,
+                        },
+                    )
+                else:
+                    response = _json_response(201, {"reference": result})
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
         if parsed_path.path == "/api/source" and method == "GET":
             project = self._project()
             if project is None:
@@ -482,7 +538,7 @@ class WorkspaceServer:
                         body = b""
                 try:
                     payload = json.loads(body[:content_length])
-                    async with self.source_edit_lock:
+                    async with self.repository_edit_lock:
                         result = await asyncio.to_thread(
                             save_tex_source,
                             project,

@@ -323,6 +323,11 @@ Use **Open library** to switch to an existing MathPub repository by its absolute
 Successfully created or opened libraries appear in the recent-library list, and MathPub restores
 the most recently used valid library when the application is restarted outside another project.
 
+Use **Import reference** to select source material such as notes, outlines, datasets, or PDFs.
+MathPub copies and commits the file as `reference/<filename>` in the active library. You can then
+refer to it naturally in an agent prompt—for example, “Use `reference/course-outline.pdf` to plan
+the units for this book.” The agent's environment includes `pdftotext` for reading imported PDFs.
+
 For a faster explicit one-lesson build:
 
 ```console

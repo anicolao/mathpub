@@ -24,6 +24,10 @@
       <button id="create-library" class="header-action" type="button">
         Create private library
       </button>
+      <button id="import-reference" class="header-action" type="button" disabled>
+        Import reference
+      </button>
+      <input id="reference-file" type="file" hidden>
       <span class="badge badge-success" id="status-terminal">PTY Connected</span>
       <span class="badge badge-info" id="status-build">Preview idle</span>
       <span class="badge badge-info" id="status-synctex">Loading mappings…</span>
@@ -195,6 +199,30 @@
         <button id="open-library-submit" class="button-primary" type="submit">
           Open library
         </button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="reference-dialog" class="library-dialog" aria-labelledby="reference-title">
+    <form method="dialog">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Author-provided source material</span>
+          <h2 id="reference-title">Import reference</h2>
+        </div>
+        <button
+          id="reference-close"
+          class="feedback-close"
+          type="submit"
+          aria-label="Close reference dialog"
+        >×</button>
+      </div>
+
+      <p id="reference-status" class="library-intro" role="status" aria-live="polite"></p>
+      <p id="reference-path" class="editor-source"></p>
+
+      <div class="feedback-actions">
+        <button class="button-primary" type="submit">Close</button>
       </div>
     </form>
   </dialog>

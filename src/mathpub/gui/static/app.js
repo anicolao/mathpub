@@ -143,6 +143,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const openLibrarySubmit = document.getElementById("open-library-submit");
   const recentLibraries = document.getElementById("recent-libraries");
   const createLibrary = document.getElementById("create-library");
+  const importReference = document.getElementById("import-reference");
+  const referenceFile = document.getElementById("reference-file");
+  const referenceDialog = document.getElementById("reference-dialog");
+  const referenceTitle = document.getElementById("reference-title");
+  const referenceStatus = document.getElementById("reference-status");
+  const referencePath = document.getElementById("reference-path");
   const libraryDialog = document.getElementById("library-dialog");
   const libraryForm = document.getElementById("library-form");
   const libraryParent = document.getElementById("library-parent");
@@ -181,6 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
       appVersion.textContent = workspaceState.version || "unknown build";
       libraryName.textContent = workspaceState.project || "No library open";
       libraryName.title = workspaceState.root || "";
+      importReference.disabled = !workspaceState.project;
       if (!libraryParent.value) libraryParent.value = workspaceState.default_parent || "";
       renderRecentLibraries(workspaceState.recent_libraries || []);
 
@@ -833,6 +840,49 @@ document.addEventListener("DOMContentLoaded", () => {
       libraryError.textContent = error.message;
       librarySubmit.disabled = false;
       librarySubmit.textContent = "Create private library";
+    }
+  });
+
+  importReference.addEventListener("click", () => {
+    if (importReference.disabled) return;
+    referenceFile.value = "";
+    referenceFile.click();
+  });
+  referenceFile.addEventListener("change", async () => {
+    const file = referenceFile.files?.[0];
+    if (!file) return;
+
+    referenceTitle.textContent = "Importing reference";
+    referenceStatus.classList.remove("error");
+    referenceStatus.textContent = `Copying and committing ${file.name}…`;
+    referencePath.textContent = "";
+    referenceDialog.showModal();
+    importReference.disabled = true;
+    try {
+      const response = await fetch(
+        `/api/references?filename=${encodeURIComponent(file.name)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: file
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(sourceFailureMessage(payload, response.status));
+      const imported = payload.reference;
+      referenceTitle.textContent = "Reference imported";
+      referenceStatus.textContent =
+        "The file is committed in this library. You can now mention it in prompts to the agent.";
+      referencePath.textContent = imported.path;
+      referencePath.title = imported.commit ? `Git commit ${imported.commit.slice(0, 12)}` : "";
+    } catch (error) {
+      referenceTitle.textContent = "Reference import failed";
+      referenceStatus.classList.add("error");
+      referenceStatus.textContent = error.message;
+      referencePath.textContent = file.name;
+    } finally {
+      referenceFile.value = "";
+      importReference.disabled = !workspaceState?.project;
     }
   });
 
