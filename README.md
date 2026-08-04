@@ -113,10 +113,16 @@ paths in the user's application-state directory and restores the most recently u
 when it next starts outside a project. Library creation remains local-only: it does not create or
 push a Git remote.
 
+**Import reference** opens a file picker and copies the selected file into
+`reference/<filename>` in the active library. MathPub commits only that imported file, leaving any
+other author or agent changes untouched. The agent starts in the library's locked environment and
+is instructed to inspect `reference/` whenever the author mentions supplied material; PDF
+references can be read with the included `pdftotext` tool.
+
 The agent button launches Anna's pinned Antigravity flake with
 `nix run github:anicolao/nix-antigravity` by default. MathPub runs the configured agent through the
 authoring library's locked `nix develop` environment, which guarantees `mathpub`, `nix`, `gh`,
-`git`, `jq`, and `rg`. Repository-specific tools can be added with the generated flake's
+`git`, `jq`, `rg`, and `pdftotext`. Repository-specific tools can be added with the generated flake's
 `extraPackages` function. Configure another executable or label without rebuilding MathPub:
 
 ```console

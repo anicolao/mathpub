@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -61,7 +62,10 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             "sh",
             "-c",
             'test "$MATHPUB_AUTHORING_ENV" = 1 && test "$PWD" = "$1" '
-            '&& command -v gh >/dev/null && printf "\\033cAntigravity E2E %s\\n" ready',
+            "&& command -v gh >/dev/null "
+            "&& command -v pdftotext >/dev/null "
+            '&& grep -q "Use the worked examples" reference/course-outline.txt '
+            '&& printf "\\033cAntigravity E2E %s\\n" ready',
             "mathpub-agent-e2e",
             str(library),
         ],
@@ -162,6 +166,8 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             assert "extraPackages" in instructions
             assert "`presentation` publication, not a textbook" in instructions
             assert 'kind = "presentation"' in instructions
+            assert "Files the author imports through the MathPub GUI" in instructions
+            assert "pdftotext reference/FILE.pdf" in instructions
 
             workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
             assert workspace["project"] == "anna-math-library"
@@ -172,6 +178,63 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             ]
             assert workspace["agent"]["available"] is True
             assert workspace["agent"]["environment"] == "nix develop"
+
+            head_before_import = subprocess.run(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=library,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            assert head_before_import.returncode != 0
+            reference_content = b"Use the worked examples when planning the new book.\n"
+            assert page.locator("#import-reference").is_enabled()
+            with page.expect_file_chooser() as chooser:
+                page.locator("#import-reference").click()
+            chooser.value.set_files(
+                {
+                    "name": "course-outline.txt",
+                    "mimeType": "text/plain",
+                    "buffer": reference_content,
+                }
+            )
+            page.wait_for_function(
+                "document.getElementById('reference-title').textContent === 'Reference imported'"
+            )
+            assert page.locator("#reference-dialog").is_visible()
+            assert page.locator("#reference-status").text_content() == (
+                "The file is committed in this library. You can now mention it in prompts "
+                "to the agent."
+            )
+            assert page.locator("#reference-path").text_content() == (
+                "reference/course-outline.txt"
+            )
+            assert (library / "reference/course-outline.txt").read_bytes() == reference_content
+            commit_after_import = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=library,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            assert len(commit_after_import) == 40
+            assert subprocess.run(
+                [
+                    "git",
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    "HEAD",
+                ],
+                cwd=library,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines() == ["reference/course-outline.txt"]
+            steps.verify(page, "000-reference-imported")
+            page.locator("#reference-dialog .button-primary").click()
 
             page.wait_for_function(
                 "!document.getElementById('start-agent').disabled && "

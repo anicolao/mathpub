@@ -343,6 +343,7 @@
                   pkgs.git
                   pkgs.jq
                   pkgs.nix
+                  pkgs.poppler-utils
                   pkgs.ripgrep
                 ] ++ extraPackages pkgs;
                 MATHPUB_AUTHORING_ENV = "1";
