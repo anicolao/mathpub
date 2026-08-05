@@ -285,6 +285,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 "(element) => { element.textContent = '/authoring-libraries/anna-math-library'; }"
             )
             page.locator("#open-library-path").fill("/authoring-libraries/anna-math-library")
+            page.mouse.move(640, 600)
             steps.verify(page, "001-open-recent-library")
 
             page.locator("#open-library-path").fill(str(existing_library))
