@@ -233,6 +233,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 capture_output=True,
                 text=True,
             ).stdout.splitlines() == ["reference/course-outline.txt"]
+            page.mouse.move(640, 600)
             steps.verify(page, "000-reference-imported")
             page.locator("#reference-dialog .button-primary").click()
 
