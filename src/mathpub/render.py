@@ -11,6 +11,7 @@ from typing import Any
 
 from mathpub.catalog import Entry
 from mathpub.errors import MathpubError, timeout_transcript
+from mathpub.styles import publication_style_base
 
 LOOKUP = re.compile(r"\\mp(value|parameter|derived)\{([a-z][a-z0-9_]*)\}")
 
@@ -546,7 +547,7 @@ def textbook_tex(
     publication: dict[str, Any], projection: str, chapters: list[str], font_family: str
 ) -> str:
     """Render a hierarchical textbook while preserving answer projection boundaries."""
-    if publication.get("style") == "anna":
+    if publication_style_base(publication) == "anna":
         return anna_textbook_tex(publication, projection, chapters)
     paper = "a4paper" if publication.get("paper") == "a4" else "letterpaper"
     projection_label = {
@@ -558,7 +559,7 @@ def textbook_tex(
     }[projection]
     title = publication["title"]
     author = publication.get("author", "")
-    anna_style = publication.get("style") == "anna"
+    anna_style = publication_style_base(publication) == "anna"
     document_class = "article" if anna_style else "book"
     opening = (
         ""
@@ -572,7 +573,7 @@ def textbook_tex(
 \tableofcontents
 \mainmatter"""
     )
-    return rf"""\documentclass[11pt,{paper}]{{{document_class}}}
+    source = rf"""\documentclass[11pt,{paper}]{{{document_class}}}
 \usepackage[margin=0.85in]{{geometry}}
 \usepackage{{amsmath,amssymb,mathtools}}
 {NUMBER_SET_PREAMBLE}
@@ -617,12 +618,22 @@ def textbook_tex(
 {chr(10).join(chapters)}
 \end{{document}}
 """
+    return _apply_style_preamble(source, publication)
+
+
+def _apply_style_preamble(source: str, publication: dict[str, Any]) -> str:
+    """Insert resolved library style TeX after framework definitions."""
+    preamble = publication.get("_mathpub_style_preamble", "").strip()
+    if not preamble:
+        return source
+    marker = r"\begin{document}"
+    return source.replace(marker, f"% Library style customization\n{preamble}\n{marker}", 1)
 
 
 def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: list[str]) -> str:
     """Render Anna's compact Computer Modern workbook design."""
     paper = "a4paper" if publication.get("paper") == "a4" else "letterpaper"
-    return rf"""\documentclass[12pt,{paper}]{{article}}
+    source = rf"""\documentclass[12pt,{paper}]{{article}}
 \usepackage[margin=1in,headheight=0pt,headsep=0pt]{{geometry}}
 \usepackage{{amsmath,amssymb,mathtools}}
 {NUMBER_SET_PREAMBLE}
@@ -721,6 +732,7 @@ def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: li
 {chr(10).join(chapters)}
 \end{{document}}
 """
+    return _apply_style_preamble(source, publication)
 
 
 def compile_pdf(

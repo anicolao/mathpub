@@ -4,6 +4,7 @@ question_roots = ["questions"]
 component_roots = ["components"]
 publication_roots = ["publications"]
 profile_roots = ["profiles"]
+style_roots = ["styles"]
 build_dir = "build"
 default_profile = "mathpub.exam"
 

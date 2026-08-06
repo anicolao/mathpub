@@ -37,6 +37,7 @@ from mathpub.render import (
     question_tex,
     textbook_tex,
 )
+from mathpub.styles import prepare_publication_style, publication_style_base
 
 
 def _generated_source_map(project: Project, tex_path: Path, source: str) -> list[dict[str, Any]]:
@@ -376,13 +377,13 @@ def _component_book_chapters(
             phase=phase,
             workspace=workspace,
             response=response,
-            style=publication.get("style", "mathpub"),
+            style=publication_style_base(publication),
             emphasize_answer=emphasize_answer,
         )
 
     rendered_chapters = []
     for chapter in publication["component_chapters"]:
-        anna_style = publication.get("style") == "anna"
+        anna_style = publication_style_base(publication) == "anna"
         chapter_parts = [] if anna_style else [rf"\chapter{{{chapter['title']}}}"]
         if introduction := chapter.get("introduction"):
             chapter_parts.append(introduction)
@@ -735,7 +736,12 @@ def build(
         load_toml(publication_path, "publication"),
         lesson_ids,
     )
-    anna_style = publication.get("style") == "anna"
+    resolved_style = prepare_publication_style(project, publication)
+    if resolved_style.source == "library" and publication["kind"] != "textbook":
+        raise MathpubError(
+            "MP-STYLE-004", "library-defined styles currently support textbook publications"
+        )
+    anna_style = publication_style_base(publication) == "anna"
     selected_font = font_family or (
         "computer-modern" if anna_style else publication.get("font", "libertinus")
     )
@@ -913,7 +919,7 @@ def build(
                     **_inspect_pdf(
                         final_pdf,
                         publication["component_chapters"][0]["lessons"][0]["title"]
-                        if publication.get("style") == "anna"
+                        if publication_style_base(publication) == "anna"
                         else publication["title"],
                     ),
                 }
@@ -930,6 +936,8 @@ def build(
             "publication_id": publication["id"],
             "publication_path": relative(project, publication_path),
             "publication_kind": publication["kind"],
+            "publication_style": resolved_style.identifier,
+            "style_base": resolved_style.base,
             "variant": variant,
             "root_seed": str(root_seed),
             "font_family": selected_font,
@@ -943,6 +951,7 @@ def build(
             "source": {
                 **_git_source(project),
                 "publication_sha256": _file_hash(publication_path),
+                "style_sources": resolved_style.source_hashes(project),
                 "question_sources": {
                     entry.metadata["id"]: _source_hash(entry) for entry, _, _ in ordered
                 },
@@ -1082,9 +1091,11 @@ def reproduce(
         load_toml(publication_path, "publication"),
         manifest.get("lesson_ids"),
     )
+    resolved_style = prepare_publication_style(project, publication)
     catalog = Catalog(project)
     current_source = {
         "publication_sha256": _file_hash(publication_path),
+        "style_sources": resolved_style.source_hashes(project),
         "question_sources": {
             question["id"]: _source_hash(catalog.get("question", question["id"]))
             for question in manifest["questions"]
@@ -1132,6 +1143,8 @@ def reproduce(
         if (project.root / "flake.lock").is_file()
         else None,
     }
+    if "style_sources" not in manifest["source"]:
+        current_source.pop("style_sources")
     mismatches = {}
     for key, value in current_source.items():
         if manifest["source"].get(key) != value:

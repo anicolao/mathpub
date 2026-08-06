@@ -161,3 +161,54 @@ source = "slides/goals.tex"
         "reused": True,
         "style": "presentation",
     }
+
+
+def test_preview_watcher_tracks_library_style_sources(tmp_path):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/demo.toml"
+    publication.write_text(
+        """schema = 1
+id = "demo"
+kind = "worksheet"
+title = "Demo"
+profile = "mathpub.exam"
+projections = ["student"]
+[[sections]]
+title = "Demo"
+questions = []
+"""
+    )
+    style_directory = root / "styles/house"
+    style_directory.mkdir(parents=True)
+    metadata = style_directory / "style.toml"
+    metadata.write_text(
+        """schema = 1
+id = "house"
+title = "House"
+description = "The library house style."
+extends = "mathpub"
+tex = "style.tex"
+"""
+    )
+    tex = style_directory / "style.tex"
+    tex.write_text("\\geometry{margin=1in}\n")
+    selected = _selection(
+        project,
+        {
+            "publication_path": "publications/demo.toml",
+            "root_seed": "2026",
+            "variant": "A",
+            "projection": "student",
+            "font_family": "libertinus",
+            "page": 1,
+        },
+    )
+    assert selected is not None
+    watcher = IncrementalPreviewWatcher(project, lambda _event: None)
+
+    snapshot = watcher._source_snapshot(selected)
+
+    assert metadata in snapshot
+    assert tex in snapshot

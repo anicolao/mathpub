@@ -13,6 +13,7 @@ from typing import Any
 from mathpub.config import Project, relative
 from mathpub.errors import MathpubError
 from mathpub.render import anna_textbook_tex, document_tex, textbook_tex
+from mathpub.styles import publication_style_base
 
 FORMAT_SCHEMA = 1
 FORMAT_STYLES = ("worksheet", "textbook", "anna")
@@ -24,7 +25,7 @@ def publication_format_style(publication: dict[str, Any]) -> str:
     """Return the format family needed by one publication."""
     if publication.get("kind") == "presentation":
         return "presentation"
-    if publication.get("style") == "anna":
+    if publication_style_base(publication) == "anna":
         return "anna"
     return "textbook" if publication.get("kind") == "textbook" else "worksheet"
 

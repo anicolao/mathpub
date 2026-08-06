@@ -156,18 +156,13 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 timeout=30_000,
             )
             assert (library / "mathpub.toml").is_file()
+            assert (library / "styles").is_dir()
             assert (library / "flake.lock").is_file()
             assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"
             instructions = (library / "AGENTS.md").read_text()
-            assert "Operate MathPub on the author's behalf" in instructions
-            assert "many related publications" in instructions
-            assert "locked `nix develop` environment" in instructions
-            assert "`gh` and `git`" in instructions
-            assert "extraPackages" in instructions
-            assert "`presentation` publication, not a textbook" in instructions
-            assert 'kind = "presentation"' in instructions
-            assert "Files the author imports through the MathPub GUI" in instructions
-            assert "pdftotext reference/FILE.pdf" in instructions
+            assert "nix run .#mathpub -- capabilities" in instructions
+            assert "version-matched framework contract" in instructions
+            assert "locked `nix develop` environment" not in instructions
 
             workspace = page.request.get(f"http://127.0.0.1:{bound_port}/api/workspace").json()
             assert workspace["project"] == "anna-math-library"

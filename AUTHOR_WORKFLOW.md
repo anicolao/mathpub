@@ -60,7 +60,7 @@ nix develop
 ```
 
 The first command creates `mathpub.toml`, `flake.nix`, `AGENTS.md`, `.gitignore`, and empty
-`components/`, `publications/`, and `profiles/` directories. `flake.lock` then pins the exact
+`components/`, `publications/`, `profiles/`, and `styles/` directories. `flake.lock` then pins the exact
 MathPub and Nixpkgs revisions used by the book.
 
 The `--publication` option registers the future book with `nix flake check`. Do not run that check
@@ -72,7 +72,7 @@ Initialize a private history after inspecting the generated files:
 ```console
 git init -b main
 git add AGENTS.md README.md .gitignore flake.nix flake.lock mathpub.toml \
-  components publications profiles
+  components publications profiles styles
 git status --short
 git commit -m "Initialize MathPub book"
 ```
@@ -235,6 +235,25 @@ directions = "Answer each question and explain how you know."
 id = "algebra.variables.identify"
 placement = "foundations.variables.question-1"
 ```
+
+The agent should discover document-wide styles from the running framework and active library:
+
+```console
+nix run .#mathpub -- list styles --json
+nix run .#mathpub -- show style anna --json
+```
+
+If an imported reference calls for a different house design, create a reusable library style
+instead of repeatedly patching generated TeX or lesson fragments:
+
+```console
+nix run .#mathpub -- new style anna-house --extends anna --json
+```
+
+Edit `styles/anna-house/style.tex` to load packages or redefine inherited layout commands, validate
+the publication, and set `style = "anna-house"`. Styles are committed library source and can be
+shared by every related publication in the repository. They currently customize textbook
+publications; Beamer presentations continue to use their `theme` setting.
 
 This asks MathPub to produce:
 

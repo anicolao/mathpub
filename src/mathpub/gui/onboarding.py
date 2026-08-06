@@ -19,8 +19,8 @@ STARTER_PROMPT = (
     "editions, then show me the proposed units and dependencies before writing the first section."
 )
 AGENT_BOOTSTRAP_PROMPT = (
-    "Read AGENTS.md and run `nix run .#mathpub -- agent-guide` before doing any work; the runtime "
-    "guide is authoritative if an older repository file differs. Use the MathPub framework for "
+    "Read AGENTS.md and run `nix run .#mathpub -- capabilities` before doing any work; the runtime "
+    "contract is authoritative if an older repository file differs. Use the MathPub framework for "
     "every requested publication, first identify the requested document type, and operate the "
     "framework autonomously on the author's behalf."
 )

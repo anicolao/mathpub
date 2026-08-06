@@ -54,6 +54,11 @@ nix run .#mathpub -- build publications/algebra1-curriculum.toml \
 
 The manifest records both the font family and selected TeX engine, and `reproduce` preserves them.
 
+Publication-wide textbook styles are discoverable with `mathpub list styles`. MathPub supplies the
+built-in `mathpub` and `anna` styles, and a library can scaffold a versioned TeX customization with
+`mathpub new style STYLE_ID --extends anna`. Library styles may inherit other styles and are
+selected with `style = "STYLE_ID"` in a textbook publication.
+
 Presentation publications use `kind = "presentation"` and mapped slide-body `.tex` fragments.
 MathPub supplies the Beamer frame structure and title frame, supports the Metropolis theme, records
 every slide source in the manifest, and exposes those sources to the GUI's hover, feedback, quick
@@ -61,9 +66,10 @@ edit, and incremental-preview flow. Generated authoring-library instructions inc
 manifest shape and tell the agent to preserve requested slide order, example/solution sequencing,
 title-page constraints, original TikZ visuals, and frame fit.
 
-GUI-launched agents read both the library's customizable `AGENTS.md` and the current pinned
-toolchain contract from `nix run .#mathpub -- agent-guide`. This keeps older libraries informed
-about newly supported publication types without overwriting author-owned instructions. The
+GUI-launched agents read a small, stable bootstrap in the library's customizable `AGENTS.md`, then
+discover the current pinned framework contract and library extensions by running
+`nix run .#mathpub -- capabilities`. This keeps older libraries informed about newly supported
+publication types and styles without copying a framework manual into author-owned instructions. The
 default Antigravity launcher creates a fresh project, adds only the active authoring library as a
 workspace directory, and combines automatic tool approval with Antigravity's terminal sandbox;
 it does not rely on Antigravity's internal scratch directory or remembered project selection.
@@ -77,6 +83,9 @@ Useful authoring commands include:
 
 ```console
 nix run .#mathpub -- list components --json
+nix run .#mathpub -- capabilities --json
+nix run .#mathpub -- list styles --json
+nix run .#mathpub -- new style my-series --extends anna --json
 nix run .#mathpub -- show component physics.energy.ramp-speed --json
 nix run .#mathpub -- check component physics.energy.ramp-speed --seeds 20 --json
 nix run .#mathpub -- check component physics.energy.ramp-speed --exhaustive --json
@@ -171,8 +180,9 @@ agentic onboarding implementation, see [GUI_DESIGN.md](GUI_DESIGN.md),
 [GUI_IMPLEMENTATION_PLAN.md](GUI_IMPLEMENTATION_PLAN.md), and
 [AGENTIC_VISION.md](AGENTIC_VISION.md).
 
-The repository’s [AGENTS.md](AGENTS.md) is the operational interface for Codex CLI and other LLM
-harnesses. `mathpub init` generates equivalent instructions. New source is scaffolded beneath the
+The repository’s [AGENTS.md](AGENTS.md) contains project-specific instructions for Codex CLI and
+other LLM harnesses. Authoring libraries get a stable bootstrap that delegates framework guidance
+to `mathpub capabilities`. New source is scaffolded beneath the
 component root with singular persisted kinds and plural collection directories; `new component`
 provides complete objective, misconception, teaching-tip, cohesive or structured example, and
 question templates.

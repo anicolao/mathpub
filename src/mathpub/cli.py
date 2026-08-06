@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from mathpub import display_version
+from mathpub.capabilities import capability_data, framework_guide
 from mathpub.catalog import Catalog
 from mathpub.config import find_project, load_toml, relative, schema_enum
 from mathpub.errors import MathpubError
@@ -27,13 +28,14 @@ from mathpub.output import emit
 from mathpub.publish import build, reproduce
 from mathpub.render import validate_fragment_source
 from mathpub.scaffold import (
-    AGENTS,
     COLLECTIONS,
     QUESTION_TEMPLATES,
     init_project,
     new_component,
     new_question,
+    new_style,
 )
+from mathpub.styles import StyleCatalog
 
 
 def _json_flag(parser: argparse.ArgumentParser) -> None:
@@ -63,9 +65,15 @@ def parser() -> argparse.ArgumentParser:
 
     agent_guide = commands.add_parser(
         "agent-guide",
-        help="print the version-matched operating contract for an authoring agent",
+        help="compatibility alias for capabilities",
     )
     _json_flag(agent_guide)
+
+    capabilities = commands.add_parser(
+        "capabilities",
+        help="discover the version-matched framework contract and library extensions",
+    )
+    _json_flag(capabilities)
 
     new = commands.add_parser("new", help="create authored source")
     new_types = new.add_subparsers(dest="new_type", required=True)
@@ -85,15 +93,23 @@ def parser() -> argparse.ArgumentParser:
     component.add_argument("--title")
     _json_flag(component)
 
+    style = new_types.add_parser("style")
+    style.add_argument("identifier")
+    style.add_argument("--extends", default="mathpub")
+    style.add_argument("--title")
+    _json_flag(style)
+
     list_parser = commands.add_parser("list", help="discover project content")
     list_parser.add_argument(
-        "content", choices=("questions", "components", "publications", "profiles")
+        "content", choices=("questions", "components", "publications", "profiles", "styles")
     )
     list_parser.add_argument("--kind", choices=schema_enum("component", "kind"))
     _json_flag(list_parser)
 
     show = commands.add_parser("show", help="inspect a catalog entry")
-    show.add_argument("content", choices=("question", "component", "publication", "profile"))
+    show.add_argument(
+        "content", choices=("question", "component", "publication", "profile", "style")
+    )
     show.add_argument("identifier")
     _json_flag(show)
 
@@ -118,7 +134,7 @@ def parser() -> argparse.ArgumentParser:
         choices=("student", "answers", "solutions", "validation"),
         help="projection to render; omit to render all four",
     )
-    preview.add_argument("--style", choices=("mathpub", "anna"), default="mathpub")
+    preview.add_argument("--style", default="mathpub")
     preview.add_argument(
         "--font", choices=("concrete", "libertinus", "computer-modern"), default=None
     )
@@ -275,9 +291,6 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
             publication_paths=args.publication_paths,
         )
 
-    if args.command == "agent-guide":
-        return "agent guide", AGENTS
-
     if args.command == "workspace":
         from mathpub.gui.server import run_workspace_server
 
@@ -290,6 +303,9 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
         return "workspace", {"host": args.host, "port": args.port}
 
     project = find_project()
+    if args.command in {"agent-guide", "capabilities"}:
+        data = capability_data(project) if args.as_json else framework_guide(project)
+        return "capabilities", data
     if args.command == "dump-format":
         return "dump-format", dump_latex_format(
             project,
@@ -308,17 +324,25 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
                 args.concepts,
                 title=args.title,
             )
-        return "new component", new_component(
+        if args.new_type == "component":
+            return "new component", new_component(
+                project,
+                args.identifier,
+                args.kind,
+                concepts=args.concepts,
+                title=args.title,
+                template=args.template,
+                form=args.form,
+            )
+        return "new style", new_style(
             project,
             args.identifier,
-            args.kind,
-            concepts=args.concepts,
+            extends=args.extends,
             title=args.title,
-            template=args.template,
-            form=args.form,
         )
 
     catalog = Catalog(project)
+    styles = StyleCatalog(project)
     if args.command == "clean":
         build_root = project.root / project.config.get("build_dir", "build")
         target = build_root / args.edition if args.edition else build_root
@@ -423,13 +447,19 @@ placement = {json.dumps(placement)}
             allow_different_toolchain=args.allow_different_toolchain,
         )
     if args.command == "list":
-        data = [entry.summary(project) for entry in catalog.entries(args.content).values()]
+        data = (
+            [entry.summary(project) for entry in styles.entries()]
+            if args.content == "styles"
+            else [entry.summary(project) for entry in catalog.entries(args.content).values()]
+        )
         if args.kind:
             if args.content != "components":
                 raise MathpubError("MP-CLI-004", "--kind is only valid with list components")
             data = [entry for entry in data if entry["kind"] == args.kind]
         return f"list {args.content}", data
     if args.command == "show":
+        if args.content == "style":
+            return "show style", styles.resolve(args.identifier).detail(project)
         entry = catalog.get(args.content, args.identifier)
         return f"show {args.content}", _entry_data(project, entry)
     if args.command == "inspect":
@@ -523,6 +553,12 @@ placement = {json.dumps(placement)}
             path = Path(args.target)
             path = path if path.is_absolute() else project.root / path
             publication = load_toml(path, "publication")
+            resolved_style = styles.for_publication(publication)
+            if resolved_style.source == "library" and publication["kind"] != "textbook":
+                raise MathpubError(
+                    "MP-STYLE-004",
+                    "library-defined styles currently support textbook publications",
+                )
             for section in publication.get("sections", []):
                 for question in section["questions"]:
                     catalog.get("question", question["id"])
@@ -622,12 +658,20 @@ placement = {json.dumps(placement)}
             _validate_files(project, entry)
         for entry in catalog.components.values():
             _validate_files(project, entry)
+        for entry in catalog.publications.values():
+            resolved_style = styles.for_publication(entry.metadata)
+            if resolved_style.source == "library" and entry.metadata["kind"] != "textbook":
+                raise MathpubError(
+                    "MP-STYLE-004",
+                    "library-defined styles currently support textbook publications",
+                )
         return "check project", {
             "project": project.config["project"],
             "questions": len(catalog.entries("questions")),
             "components": len(catalog.components),
             "publications": len(catalog.publications),
             "profiles": len(catalog.profiles),
+            "styles": len(styles.entries()),
         }
     raise AssertionError(f"unhandled command: {args.command}")
 

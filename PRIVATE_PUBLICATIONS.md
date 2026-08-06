@@ -58,7 +58,7 @@ Initialize a new history and inspect exactly what will be committed:
 ```console
 git init -b main
 git add AGENTS.md README.md .gitignore flake.nix flake.lock mathpub.toml \
-  components publications profiles
+  components publications profiles styles
 git status --short
 git commit -m "Initialize private mathpub publication"
 nix develop -c gh repo create OWNER/private-math-book \
