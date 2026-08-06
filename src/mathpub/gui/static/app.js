@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ws.onopen = () => {
     document.getElementById("status-terminal").textContent = "PTY Connected";
+    updateDictationAvailability();
     sendResize();
     sendPreviewSelection();
   };
@@ -51,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ws.onclose = () => {
     document.getElementById("status-terminal").textContent = "PTY Disconnected";
     document.getElementById("status-terminal").className = "badge";
+    updateDictationAvailability();
     term.write("\r\n\x1b[31m[mathpub workspace] Connection closed.\x1b[0m\r\n");
   };
 
@@ -159,6 +161,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const librarySubmit = document.getElementById("library-submit");
   const startAgent = document.getElementById("start-agent");
   const agentStatus = document.getElementById("agent-status");
+  const dictatePrompt = document.getElementById("dictate-prompt");
+  const dictationDialog = document.getElementById("dictation-dialog");
+  const dictationForm = document.getElementById("dictation-form");
+  const dictationText = document.getElementById("dictation-text");
+  const dictationClose = document.getElementById("dictation-close");
+  const dictationCancel = document.getElementById("dictation-cancel");
   const starterPrompt = document.getElementById("starter-prompt");
   const placeholderTitle = document.getElementById("placeholder-title");
   const placeholderCopy = document.getElementById("placeholder-copy");
@@ -179,6 +187,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentPage = 1;
   let workspaceState = null;
 
+  function updateDictationAvailability() {
+    dictatePrompt.disabled = !workspaceState?.project || ws.readyState !== WebSocket.OPEN;
+  }
+
   async function refreshWorkspace() {
     try {
       const response = await fetch("/api/workspace");
@@ -194,6 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const agent = workspaceState.agent || {};
       startAgent.textContent = `Start ${agent.label || "agent"}`;
       startAgent.disabled = !workspaceState.project || agent.available !== true;
+      updateDictationAvailability();
       if (!workspaceState.project) {
         agentStatus.textContent = "Create or open a library first";
         placeholderTitle.textContent = "Open or create your authoring library";
@@ -891,6 +904,29 @@ document.addEventListener("DOMContentLoaded", () => {
     startAgent.disabled = true;
     agentStatus.textContent = "Starting agent…";
     ws.send(JSON.stringify({ type: "start-agent" }));
+  });
+
+  function closeDictationDialog() {
+    dictationDialog.close();
+  }
+
+  dictatePrompt.addEventListener("click", () => {
+    if (dictatePrompt.disabled) return;
+    dictationText.value = "";
+    dictationDialog.showModal();
+    dictationText.focus();
+  });
+  dictationClose.addEventListener("click", closeDictationDialog);
+  dictationCancel.addEventListener("click", closeDictationDialog);
+  dictationForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const prompt = dictationText.value.trim().replace(/\s*[\r\n]+\s*/g, " ");
+    if (!prompt) return;
+    ws.send(JSON.stringify({ type: "input", data: prompt }));
+    dictationDialog.close();
+    dictationText.value = "";
+    term.focus();
   });
 
   starterPrompt.addEventListener("click", () => {

@@ -41,6 +41,13 @@
         <h2>Authoring Agent</h2>
         <div class="agent-controls">
           <span class="pane-tag" id="agent-status">Checking agent…</span>
+          <button
+            id="dictate-prompt"
+            class="agent-start"
+            type="button"
+            title="Compose a prompt with macOS Dictation"
+            disabled
+          >Dictate prompt</button>
           <button id="start-agent" class="agent-start" type="button" disabled>
             Start Antigravity
           </button>
@@ -223,6 +230,47 @@
 
       <div class="feedback-actions">
         <button class="button-primary" type="submit">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dictation-dialog" class="feedback-dialog" aria-labelledby="dictation-title">
+    <form id="dictation-form">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">macOS voice input</span>
+          <h2 id="dictation-title">Dictate a prompt</h2>
+        </div>
+        <button
+          id="dictation-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close dictation prompt"
+        >×</button>
+      </div>
+
+      <p class="library-intro">
+        The field below is a standard text field that works with macOS Dictation.
+      </p>
+      <label for="dictation-text">Prompt for the authoring agent</label>
+      <textarea
+        id="dictation-text"
+        name="prompt"
+        rows="8"
+        maxlength="8000"
+        placeholder="Press your Mac’s Microphone key or configured Dictation shortcut, then speak."
+        required
+      ></textarea>
+      <p class="feedback-help">
+        Review the transcript, then insert it into the terminal. MathPub will not press Return,
+        so you can make a final check before sending it to the agent.
+      </p>
+
+      <div class="feedback-actions">
+        <button id="dictation-cancel" class="button-secondary" type="button">Cancel</button>
+        <button id="dictation-insert" class="button-primary" type="submit">
+          Insert into terminal
+        </button>
       </div>
     </form>
   </dialog>
