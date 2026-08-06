@@ -244,18 +244,12 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
         "mathpub.toml",
         "profiles",
         "publications",
+        "styles",
     }
     instructions = (library / "AGENTS.md").read_text()
-    assert "many related publications" in instructions
-    assert "Operate MathPub on the author's behalf" in instructions
-    assert "student, answer, solution, validation, and\nparent editions" in instructions
-    assert "locked `nix develop` environment" in instructions
-    assert "`gh` and `git`" in instructions
-    assert "add its Nixpkgs attribute to `extraPackages`" in instructions
-    assert "`presentation` publication, not a textbook" in instructions
-    assert 'kind = "presentation"' in instructions
-    assert "place each worked solution on a slide after its" in instructions
-    assert "only authoring root for this agent session" in instructions
+    assert "nix run .#mathpub -- capabilities" in instructions
+    assert "version-matched framework contract" in instructions
+    assert "locked `nix develop` environment" not in instructions
     flake = (library / "flake.nix").read_text()
     assert "extraPackages = pkgs: with pkgs;" in flake
 

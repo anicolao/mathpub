@@ -9,6 +9,7 @@
     "component_roots": {"type": "array", "items": {"type": "string"}},
     "publication_roots": {"type": "array", "items": {"type": "string"}},
     "profile_roots": {"type": "array", "items": {"type": "string"}},
+    "style_roots": {"type": "array", "items": {"type": "string"}},
     "build_dir": {"type": "string"},
     "default_profile": {"type": "string"},
     "generation": {"type": "object"},

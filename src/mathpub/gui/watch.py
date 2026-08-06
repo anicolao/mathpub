@@ -14,6 +14,7 @@ from typing import Any
 from mathpub.config import Project, load_toml
 from mathpub.latex_format import dump_latex_format, publication_format_style
 from mathpub.publish import build
+from mathpub.styles import prepare_publication_style
 
 WATCHED_SUFFIXES = {".json", ".py", ".sage", ".tex", ".toml"}
 PROJECTIONS = {"student", "answers", "solutions", "validation", "parent"}
@@ -118,6 +119,13 @@ class IncrementalPreviewWatcher:
                     for path in root.rglob("*")
                     if path.is_file() and path.suffix in WATCHED_SUFFIXES
                 )
+        for root in self.project.style_roots:
+            if root.exists():
+                paths.extend(
+                    path
+                    for path in root.rglob("*")
+                    if path.is_file() and path.suffix in WATCHED_SUFFIXES
+                )
         snapshot = {}
         for path in paths:
             with contextlib.suppress(OSError):
@@ -127,6 +135,7 @@ class IncrementalPreviewWatcher:
 
     def _prepare_format(self, selection: PreviewSelection) -> dict[str, Any]:
         publication = load_toml(selection.publication_path, "publication")
+        prepare_publication_style(self.project, publication)
         style = publication_format_style(publication)
         if style == "presentation":
             return {

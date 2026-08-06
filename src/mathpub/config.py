@@ -48,6 +48,10 @@ class Project:
         return [self.root / path for path in self.config.get("profile_roots", ["profiles"])]
 
     @property
+    def style_roots(self) -> list[Path]:
+        return [self.root / path for path in self.config.get("style_roots", ["styles"])]
+
+    @property
     def publication_roots(self) -> list[Path]:
         return [self.root / path for path in self.config.get("publication_roots", ["publications"])]
 

@@ -5,10 +5,27 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mathpub.config import ID_PATTERN, Project
+from mathpub.config import ID_PATTERN, Project, relative
 from mathpub.errors import MathpubError
+from mathpub.styles import StyleCatalog
 
-AGENTS = r"""# Working with mathpub
+AGENTS = r"""# Working with MathPub
+
+Before doing any work, run:
+
+```console
+nix run .#mathpub -- capabilities
+```
+
+Follow that version-matched framework contract. It describes the available publication types,
+styles, authoring commands, validation workflow, and Nix-provided tools. Run it again after the
+library updates its pinned MathPub input so newly added framework capabilities are discovered.
+
+Add only library-specific author or editorial instructions below this line; do not copy the
+framework contract into this file.
+"""
+
+FRAMEWORK_GUIDE = r"""# Working with mathpub
 
 This is a publication-content repository. Its authored components and publications are separate
 from the public mathpub tooling repository. Do not copy private content into the tooling checkout.
@@ -27,10 +44,10 @@ editorial language and review the resulting PDFs without managing component sche
 TOML, TeX builds, or Nix commands. Treat the rendered student, answer, solution, validation, and
 parent editions as the primary human review surfaces.
 
-This file was generated when the library was created and may contain author customizations. At the
-start of each GUI-launched session, also run `nix run .#mathpub -- agent-guide` to read the
-version-matched framework contract. Follow that runtime guide when this older generated copy lacks
-instructions for a publication kind or command supported by the pinned MathPub version.
+This contract comes from the MathPub version pinned by the library. Run
+`nix run .#mathpub -- capabilities` at the start of each session and after updating the pinned
+MathPub input. The runtime output is authoritative for framework behavior; keep only
+library-specific author or editorial instructions in `AGENTS.md`.
 
 At the beginning of a task:
 
@@ -192,6 +209,7 @@ question_roots = []
 component_roots = ["components"]
 publication_roots = ["publications"]
 profile_roots = ["profiles"]
+style_roots = ["styles"]
 build_dir = "build"
 default_profile = "mathpub.exam"
 
@@ -231,6 +249,13 @@ nix run .#mathpub -- check project --json
 ```
 
 Add publication paths to `publicationPaths` in `flake.nix` so `nix flake check` validates them.
+Discover the framework capabilities and available styles before authoring:
+
+```console
+nix run .#mathpub -- capabilities
+nix run .#mathpub -- list styles --json
+```
+
 Build a publication with an explicit seed and variant:
 
 ```console
@@ -269,6 +294,16 @@ DEFAULT_TITLES = {
 }
 
 QUESTION_TEMPLATES = ("fixed", "numeric", "symbolic", "tikz")
+
+STYLE_TEX = r"""% This file is inserted immediately before \begin{document}, after the
+% built-in style named by `extends`. Load additional packages and redefine
+% framework commands here. Do not add \documentclass or a document environment.
+
+% Example customizations:
+% \usepackage{helvet}
+% \renewcommand{\familydefault}{\sfdefault}
+% \geometry{margin=1in}
+"""
 
 GENERATORS = {
     "numeric": r"""from mathpub.question import generator
@@ -397,7 +432,7 @@ def init_project(
         _write_new(root / ".gitignore", CONTENT_GITIGNORE)
     if not (root / "README.md").exists():
         _write_new(root / "README.md", CONTENT_README.format(title=root.name))
-    for child in ("components", "publications", "profiles"):
+    for child in ("components", "publications", "profiles", "styles"):
         (root / child).mkdir(exist_ok=True)
     return {
         "root": str(root),
@@ -573,3 +608,40 @@ def new_question(
     )
     result["template"] = template
     return result
+
+
+def new_style(
+    project: Project,
+    identifier: str,
+    *,
+    extends: str = "mathpub",
+    title: str | None = None,
+) -> dict[str, str]:
+    """Create a library-owned TeX customization that inherits an existing style."""
+    if not ID_PATTERN.fullmatch(identifier):
+        raise MathpubError("MP-SRC-006", f"invalid style ID: {identifier}")
+    if not ID_PATTERN.fullmatch(extends):
+        raise MathpubError("MP-SRC-006", f"invalid parent style ID: {extends}")
+    catalog = StyleCatalog(project)
+    catalog.resolve(extends)
+    if identifier in {entry.identifier for entry in catalog.entries()}:
+        raise MathpubError("MP-SRC-007", f"duplicate style ID: {identifier}")
+    directory = project.style_roots[0] / Path(*identifier.split("."))
+    display_title = title or _default_title(identifier, "style")
+    metadata = (
+        "schema = 1\n"
+        f"id = {json.dumps(identifier)}\n"
+        f"title = {json.dumps(display_title)}\n"
+        f"description = {json.dumps(f'A library-defined style based on {extends}.')}\n"
+        f"extends = {json.dumps(extends)}\n"
+        'tex = "style.tex"\n'
+    )
+    _write_new(directory / "style.toml", metadata)
+    _write_new(directory / "style.tex", STYLE_TEX)
+    return {
+        "id": identifier,
+        "extends": extends,
+        "path": relative(project, directory),
+        "metadata": relative(project, directory / "style.toml"),
+        "tex": relative(project, directory / "style.tex"),
+    }

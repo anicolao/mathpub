@@ -268,8 +268,11 @@ Every supported agent session needs a versioned operating contract.
 
 ### Repository instructions
 
-`mathpub init` already generates `AGENTS.md`, but the agentic workflow requires it to explain more
-than command syntax. It should tell the agent:
+`mathpub init` generates a deliberately small `AGENTS.md` bootstrap. It tells every agent to run
+`nix run .#mathpub -- capabilities`; the pinned framework then reports its current contract,
+including library-defined styles. This lets an older library discover new engine features without
+copying an obsolete framework manual into author-owned instructions. The runtime contract tells
+the agent:
 
 - this repository is a reusable authoring library containing many publications;
 - the PDF is the primary human review surface;

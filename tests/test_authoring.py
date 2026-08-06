@@ -21,16 +21,11 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert payload["status"] == "ok"
     assert (project / "mathpub.toml").is_file()
     instructions = (project / "AGENTS.md").read_text()
-    assert "never edit generated files beneath `build/`" in instructions
-    assert "locked `nix develop` environment" in instructions
-    assert "Do not assume that any program inherited from the\nhost machine exists" in instructions
-    assert "identify the requested artifact type" in instructions
-    assert "`presentation` publication, not a textbook" in instructions
-    assert 'kind = "presentation"' in instructions
-    assert "only authoring root for this agent session" in instructions
-    assert "Never search\nthe home directory" in instructions
-    assert "Files the author imports through the MathPub GUI" in instructions
-    assert "`pdftotext reference/FILE.pdf -`" in instructions
+    assert "nix run .#mathpub -- capabilities" in instructions
+    assert "version-matched framework contract" in instructions
+    assert "locked `nix develop` environment" not in instructions
+    assert "presentation" not in instructions
+    assert (project / "styles").is_dir()
 
     code, payload = invoke(
         monkeypatch,
@@ -65,8 +60,8 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert len(payload["data"]["checked"]) == 4
 
 
-def test_agent_guide_exposes_the_version_matched_publication_contract(capsys):
-    code = main(["agent-guide"])
+def test_capabilities_expose_the_version_matched_publication_contract(capsys):
+    code = main(["capabilities"])
     output = capsys.readouterr()
 
     assert code == 0
@@ -74,6 +69,13 @@ def test_agent_guide_exposes_the_version_matched_publication_contract(capsys):
     assert 'kind = "presentation"' in output.out
     assert "`presentation` publication, not a textbook" in output.out
     assert "list that directory and inspect the\nlikely files" in output.out
+    assert "## Publication styles" in output.out
+    assert "`mathpub` (built-in, base `mathpub`)" in output.out
+    assert "new style my-series --extends anna" in output.out
+
+    code = main(["agent-guide"])
+    assert code == 0
+    assert "## Publication styles" in capsys.readouterr().out
 
 
 def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):
@@ -101,10 +103,7 @@ def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):
     assert "mathpub.lib.mkPublicationProject" in flake
     assert "private publication source" in (project / "README.md").read_text()
     assert "/build/" in (project / ".gitignore").read_text()
-    assert (
-        "Do not copy private content into the tooling checkout"
-        in (project / "AGENTS.md").read_text()
-    )
+    assert "nix run .#mathpub -- capabilities" in (project / "AGENTS.md").read_text()
 
 
 def test_init_rejects_publication_paths_outside_the_content_repository(tmp_path, capsys):
@@ -186,8 +185,7 @@ def test_component_scaffolds_are_complete_and_canonical(tmp_path, monkeypatch, c
     assert main(["init", str(project)]) == 0
     capsys.readouterr()
     instructions = (project / "AGENTS.md").read_text()
-    assert "Persisted component kinds are singular" in instructions
-    assert "check component QUESTION_ID" in instructions
+    assert "nix run .#mathpub -- capabilities" in instructions
     assert not (project / "questions").exists()
 
     cases = (
