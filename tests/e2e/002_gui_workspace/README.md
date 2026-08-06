@@ -11,6 +11,10 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 
 ![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)
 
+## macOS Dictation Prompt
+
+![Dictation Prompt](./screenshots/000-dictation-prompt.png)
+
 ## Hovered SyncTeX Region
 
 ![Hovered Region](./screenshots/001-hovered-region-visible.png)
@@ -51,6 +55,7 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 - [x] Header brand and subtitle render correctly
 - [x] The package version and build Git revision are visible
 - [x] Isolated PTY terminal emulator loads with clean prompt
+- [x] macOS Dictation receives a focused standard text field and inserts without executing
 - [x] PDF dropdown loads and displays the rendered first page
 - [x] Hovering reveals one clickable mapped region without a prior toggle
 - [x] Mapped component regions align with their rendered PDF content

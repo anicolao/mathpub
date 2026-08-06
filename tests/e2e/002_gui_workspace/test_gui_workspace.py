@@ -291,6 +291,27 @@ source = "gui-slide-editing/01-editable-slide.tex"
             # 4. Capture & Verify Baseline Screenshot (Strict 0-Pixel Tolerance via WebKit)
             steps.verify(page, "000-initial-workspace-load")
 
+            # Dictation uses a regular focused textarea, then inserts without executing.
+            assert page.locator("#dictate-prompt").is_enabled()
+            page.locator("#dictate-prompt").click()
+            dictation_dialog = page.locator("#dictation-dialog")
+            dictation_text = page.locator("#dictation-text")
+            assert dictation_dialog.is_visible()
+            assert dictation_text.evaluate("element => element === document.activeElement")
+            steps.verify(page, "000-dictation-prompt")
+            dictated_prompt = "Outline a short lesson about equivalent fractions. Include examples."
+            dictation_text.fill(
+                "Outline a short lesson about equivalent fractions.\nInclude examples."
+            )
+            page.locator("#dictation-insert").click()
+            assert not dictation_dialog.is_visible()
+            page.wait_for_function(
+                """prompt => document.querySelector('.xterm-rows').textContent.includes(prompt)""",
+                arg=dictated_prompt,
+            )
+            assert "command not found" not in page.locator(".xterm-rows").text_content()
+            page.keyboard.press("Control+U")
+
             # 5. Hover and click a mapped region without first revealing every region.
             toggle = page.locator("#mapped-regions-toggle")
             assert toggle.is_enabled()
@@ -698,6 +719,8 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "`build/e2e/tauri-driver.png`.\n\n"
                 "## Initial Workspace Load (WebKit / Safari Engine)\n\n"
                 "![Initial Workspace Load](./screenshots/000-initial-workspace-load.png)\n\n"
+                "## macOS Dictation Prompt\n\n"
+                "![Dictation Prompt](./screenshots/000-dictation-prompt.png)\n\n"
                 "## Hovered SyncTeX Region\n\n"
                 "![Hovered Region](./screenshots/001-hovered-region-visible.png)\n\n"
                 "## SyncTeX Mapped Regions\n\n"
@@ -722,6 +745,8 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] The package version and build Git revision are visible\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
+                "- [x] macOS Dictation receives a focused standard text field and inserts "
+                "without executing\n"
                 "- [x] PDF dropdown loads and displays the rendered first page\n"
                 "- [x] Hovering reveals one clickable mapped region without a prior toggle\n"
                 "- [x] Mapped component regions align with their rendered PDF content\n"
