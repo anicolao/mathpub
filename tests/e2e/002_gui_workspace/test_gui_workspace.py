@@ -298,6 +298,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
             dictation_text = page.locator("#dictation-text")
             assert dictation_dialog.is_visible()
             assert dictation_text.evaluate("element => element === document.activeElement")
+            assert "⌘⇧D" in dictation_dialog.text_content()
             steps.verify(page, "000-dictation-prompt")
             dictated_prompt = "Outline a short lesson about equivalent fractions. Include examples."
             dictation_text.fill(
@@ -421,6 +422,10 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert page.locator("#feedback-text").evaluate(
                 "element => element === document.activeElement"
             )
+            assert page.locator("#feedback-text").evaluate(
+                "element => element.tagName === 'TEXTAREA' && !element.disabled"
+            )
+            assert "⌘⇧D" in feedback_dialog.text_content()
 
             steps.verify(page, "002-element-feedback-dialog")
 
@@ -482,6 +487,10 @@ source = "gui-slide-editing/01-editable-slide.tex"
             page.wait_for_function(
                 "document.getElementById('editor-status').textContent === 'Source loaded'"
             )
+            assert page.locator("#editor-content").evaluate(
+                "element => element === document.activeElement"
+            )
+            assert "⌘⇧D" in editor_dialog.text_content()
             assert page.locator("#editor-source").text_content() == (
                 "components/questions/physics/projectiles/snowball/prompt.tex"
             )
@@ -745,8 +754,9 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] The package version and build Git revision are visible\n"
                 "- [x] Isolated PTY terminal emulator loads with clean prompt\n"
-                "- [x] macOS Dictation receives a focused standard text field and inserts "
-                "without executing\n"
+                "- [x] macOS Dictation has a visible shortcut in every focused authoring "
+                "text field\n"
+                "- [x] Dictated terminal prompts insert without executing\n"
                 "- [x] PDF dropdown loads and displays the rendered first page\n"
                 "- [x] Hovering reveals one clickable mapped region without a prior toggle\n"
                 "- [x] Mapped component regions align with their rendered PDF content\n"

@@ -55,7 +55,8 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 - [x] Header brand and subtitle render correctly
 - [x] The package version and build Git revision are visible
 - [x] Isolated PTY terminal emulator loads with clean prompt
-- [x] macOS Dictation receives a focused standard text field and inserts without executing
+- [x] macOS Dictation has a visible shortcut in every focused authoring text field
+- [x] Dictated terminal prompts insert without executing
 - [x] PDF dropdown loads and displays the rendered first page
 - [x] Hovering reveals one clickable mapped region without a prior toggle
 - [x] Mapped component regions align with their rendered PDF content

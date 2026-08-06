@@ -141,16 +141,29 @@
               pkgs.wrapGAppsHook3
             ];
             buildInputs = guiBuildInputs;
-            postInstall = ''
-              mv $out/bin/mathpub-gui $out/bin/MathPub
-            '';
+            postInstall =
+              if pkgs.stdenv.isDarwin then ''
+                mkdir -p $out/Applications/MathPub.app/Contents/MacOS
+                mkdir -p $out/Applications/MathPub.app/Contents/Resources
+                mv $out/bin/mathpub-gui $out/Applications/MathPub.app/Contents/MacOS/MathPub
+                rmdir $out/bin
+                cp Info.plist $out/Applications/MathPub.app/Contents/Info.plist
+                cp icons/icon.icns $out/Applications/MathPub.app/Contents/Resources/icon.icns
+              '' else ''
+                mv $out/bin/mathpub-gui $out/bin/MathPub
+              '';
           };
           mathpub-gui = pkgs.symlinkJoin {
             name = "mathpub-gui-${version}";
             paths = [ mathpub-gui-unwrapped ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
-              makeWrapper ${mathpub-gui-unwrapped}/bin/MathPub $out/bin/mathpub-gui \
+              makeWrapper ${
+                if pkgs.stdenv.isDarwin then
+                  "${mathpub-gui-unwrapped}/Applications/MathPub.app/Contents/MacOS/MathPub"
+                else
+                  "${mathpub-gui-unwrapped}/bin/MathPub"
+              } $out/bin/mathpub-gui \
                 --set MATHPUB_GUI_BACKEND ${mathpub}/bin/mathpub \
                 --set MATHPUB_BUILD_REVISION ${buildRevision}
             '';
