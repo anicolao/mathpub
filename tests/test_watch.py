@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 from mathpub.config import find_project
 from mathpub.gui.watch import IncrementalPreviewWatcher, _selection
@@ -83,7 +84,7 @@ id = "demo.question"
             builder=fake_builder,
             format_dumper=fake_format_dumper,
         )
-        selected = watcher.select(
+        selected = await watcher.select(
             {
                 "publication_path": "publications/demo.toml",
                 "root_seed": "2026",
@@ -212,3 +213,105 @@ tex = "style.tex"
 
     assert metadata in snapshot
     assert tex in snapshot
+
+
+def test_preview_watcher_does_not_scan_unrelated_catalog_for_presentations(tmp_path):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/slides.toml"
+    publication.write_text(
+        """schema = 1
+id = "demo.slides"
+kind = "presentation"
+title = "Demo Slides"
+profile = "mathpub.exam"
+theme = "metropolis"
+projections = ["student"]
+[[slides]]
+id = "goals"
+title = "Learning Goals"
+source = "slides/goals.tex"
+"""
+    )
+    slide = root / "publications/slides/goals.tex"
+    slide.parent.mkdir(parents=True)
+    slide.write_text("Goals")
+    unrelated = root / "components/unrelated/component.toml"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_text("unrelated")
+    selected = _selection(
+        project,
+        {
+            "publication_path": "publications/slides.toml",
+            "root_seed": "2026",
+            "variant": "A",
+            "projection": "student",
+            "font_family": "libertinus",
+            "page": 1,
+        },
+    )
+    assert selected is not None
+    watcher = IncrementalPreviewWatcher(project, lambda _event: None)
+
+    snapshot = watcher._source_snapshot(selected)
+
+    assert publication in snapshot
+    assert slide in snapshot
+    assert unrelated not in snapshot
+
+
+def test_preview_watcher_scans_without_blocking_terminal_event_loop(tmp_path, monkeypatch):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/demo.toml"
+    publication.write_text("fixture")
+    watcher = IncrementalPreviewWatcher(
+        project,
+        lambda _event: None,
+        poll_interval=0.01,
+    )
+    message = {
+        "publication_path": "publications/demo.toml",
+        "root_seed": "2026",
+        "variant": "A",
+        "projection": "student",
+        "font_family": "libertinus",
+        "page": 1,
+    }
+    scan_started = threading.Event()
+    release_scan = threading.Event()
+    scan_finished = threading.Event()
+
+    async def exercise():
+        selected = await watcher.select(message)
+        assert selected is not None
+        original_snapshot = watcher._source_snapshot
+
+        def slow_snapshot(selection):
+            scan_started.set()
+            release_scan.wait(timeout=1.0)
+            result = original_snapshot(selection)
+            scan_finished.set()
+            return result
+
+        monkeypatch.setattr(watcher, "_source_snapshot", slow_snapshot)
+        fallback_release = threading.Timer(0.3, release_scan.set)
+        fallback_release.start()
+        try:
+            for _ in range(100):
+                if scan_started.is_set():
+                    break
+                await asyncio.sleep(0.005)
+            assert scan_started.is_set()
+
+            # This coroutine remains schedulable while the filesystem scan is blocked.
+            await asyncio.sleep(0.01)
+            assert not scan_finished.is_set()
+        finally:
+            release_scan.set()
+            fallback_release.cancel()
+            await watcher.close()
+
+    asyncio.run(exercise())

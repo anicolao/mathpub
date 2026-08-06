@@ -27,6 +27,7 @@ from mathpub.gui.onboarding import (
 from mathpub.gui.reference_import import import_reference
 from mathpub.gui.server import (
     WorkspaceServer,
+    _decode_ws_frames,
     _feedback_prompt,
     _open_pdf_in_preview,
     _publication_output_metadata,
@@ -34,6 +35,35 @@ from mathpub.gui.server import (
 from mathpub.gui.source_edit import load_tex_source, save_tex_source
 from mathpub.gui.terminal import PTYManager
 from mathpub.scaffold import init_project
+
+
+def _masked_client_frame(payload: str) -> bytes:
+    encoded = payload.encode()
+    assert len(encoded) <= 125
+    mask = bytes((0x12, 0x34, 0x56, 0x78))
+    masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(encoded))
+    return bytes((0x81, 0x80 | len(encoded))) + mask + masked
+
+
+def test_websocket_decoder_preserves_coalesced_and_fragmented_input_frames():
+    first_payload = json.dumps({"type": "input", "data": "a"})
+    second_payload = json.dumps({"type": "input", "data": "b"})
+    first = _masked_client_frame(first_payload)
+    second = _masked_client_frame(second_payload)
+
+    coalesced = bytearray(first + second)
+    assert _decode_ws_frames(coalesced) == [
+        (0x1, first_payload),
+        (0x1, second_payload),
+    ]
+    assert coalesced == bytearray()
+
+    fragmented = bytearray(first[:10])
+    assert _decode_ws_frames(fragmented) == []
+    assert fragmented == bytearray(first[:10])
+    fragmented.extend(first[10:])
+    assert _decode_ws_frames(fragmented) == [(0x1, first_payload)]
+    assert fragmented == bytearray()
 
 
 def test_pty_manager_lifecycle(monkeypatch):
