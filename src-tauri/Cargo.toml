@@ -13,6 +13,10 @@ tauri-build = { version = "2.5", features = [] }
 [dependencies]
 tauri = { version = "2.9", features = [] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSApplication", "NSResponder"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

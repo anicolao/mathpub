@@ -6,11 +6,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tauri::menu::{AboutMetadata, Menu, MenuItemKind, PredefinedMenuItem};
+use tauri::menu::{AboutMetadata, Menu, MenuItem, MenuItemKind, PredefinedMenuItem};
 use tauri::{AppHandle, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 const BACKEND_HOST: &str = "127.0.0.1";
 const BACKEND_READY_TIMEOUT: Duration = Duration::from_secs(30);
+const START_DICTATION_MENU_ID: &str = "start-dictation";
+const START_DICTATION_ACCELERATOR: &str = "CmdOrCtrl+Shift+D";
 
 fn display_version(revision: Option<&str>) -> String {
     match revision.map(str::trim).filter(|value| !value.is_empty()) {
@@ -66,7 +68,47 @@ fn app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     }
     let about = PredefinedMenuItem::about(app, None, Some(about_metadata(app)))?;
     about_submenu.insert(&about, 0)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let edit_submenu = menu
+            .items()?
+            .into_iter()
+            .find_map(|item| match item {
+                MenuItemKind::Submenu(submenu)
+                    if submenu.text().is_ok_and(|text| text == "Edit") =>
+                {
+                    Some(submenu)
+                }
+                _ => None,
+            })
+            .ok_or_else(|| io::Error::other("Tauri default Edit submenu was not found"))?;
+        let separator = PredefinedMenuItem::separator(app)?;
+        let start_dictation = MenuItem::with_id(
+            app,
+            START_DICTATION_MENU_ID,
+            "Start Dictation…",
+            true,
+            Some(START_DICTATION_ACCELERATOR),
+        )?;
+        edit_submenu.append(&separator)?;
+        edit_submenu.append(&start_dictation)?;
+    }
     Ok(menu)
+}
+
+#[cfg(target_os = "macos")]
+fn start_dictation() -> bool {
+    use objc2::{sel, MainThreadMarker};
+    use objc2_app_kit::NSApplication;
+
+    let Some(main_thread) = MainThreadMarker::new() else {
+        return false;
+    };
+    let application = NSApplication::sharedApplication(main_thread);
+    // AppKit resolves a nil target through the current first-responder chain, so
+    // dictation is delivered to whichever WebKit textarea currently has focus.
+    unsafe { application.sendAction_to_from(sel!(startDictation:), None, None) }
 }
 
 fn reserve_port() -> io::Result<u16> {
@@ -142,6 +184,12 @@ fn main() {
 
     let app = tauri::Builder::default()
         .menu(app_menu)
+        .on_menu_event(|_app, event| {
+            if event.id().as_ref() == START_DICTATION_MENU_ID {
+                #[cfg(target_os = "macos")]
+                let _ = start_dictation();
+            }
+        })
         .setup(move |app| {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(workspace_url))
                 .title("MathPub Interactive Workspace")
@@ -201,5 +249,19 @@ mod tests {
                 "--no-browser"
             ]
         );
+    }
+
+    #[test]
+    fn dictation_has_a_native_menu_identity_and_shortcut() {
+        assert_eq!(START_DICTATION_MENU_ID, "start-dictation");
+        assert_eq!(START_DICTATION_ACCELERATOR, "CmdOrCtrl+Shift+D");
+    }
+
+    #[test]
+    fn macos_bundle_declares_voice_input_usage() {
+        let info_plist = include_str!("../Info.plist");
+        assert!(info_plist.contains("<key>NSMicrophoneUsageDescription</key>"));
+        assert!(info_plist.contains("<key>NSSpeechRecognitionUsageDescription</key>"));
+        assert!(info_plist.contains("<string>org.mathpub.workspace</string>"));
     }
 }
