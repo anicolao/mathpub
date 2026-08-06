@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import re
 import time
+import tomllib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -91,12 +93,20 @@ class IncrementalPreviewWatcher:
         self.format_dumper = format_dumper
         self.selection: PreviewSelection | None = None
         self._snapshot: dict[Path, tuple[int, int]] = {}
+        self._selection_revision = 0
+        self._snapshot_revision = 0
         self._task: asyncio.Task[None] | None = None
 
-    def select(self, message: dict[str, object]) -> PreviewSelection | None:
+    async def select(self, message: dict[str, object]) -> PreviewSelection | None:
         selected = _selection(self.project, message)
+        self._selection_revision += 1
+        revision = self._selection_revision
         self.selection = selected
-        self._snapshot = self._source_snapshot(selected)
+        snapshot = await asyncio.to_thread(self._source_snapshot, selected)
+        if revision != self._selection_revision:
+            return selected
+        self._snapshot = snapshot
+        self._snapshot_revision = revision
         if selected is not None and self._task is None:
             self._task = asyncio.create_task(self._run())
         return selected
@@ -107,31 +117,33 @@ class IncrementalPreviewWatcher:
     ) -> dict[Path, tuple[int, int]]:
         if selection is None:
             return {}
-        paths = [
-            path
-            for path in selection.publication_path.parent.rglob("*")
-            if path.is_file() and path.suffix in WATCHED_SUFFIXES
-        ]
-        for root in (*self.project.question_roots, *self.project.component_roots):
-            if root.exists():
-                paths.extend(
-                    path
-                    for path in root.rglob("*")
-                    if path.is_file() and path.suffix in WATCHED_SUFFIXES
-                )
-        for root in self.project.style_roots:
-            if root.exists():
-                paths.extend(
-                    path
-                    for path in root.rglob("*")
-                    if path.is_file() and path.suffix in WATCHED_SUFFIXES
-                )
-        snapshot = {}
-        for path in paths:
-            with contextlib.suppress(OSError):
-                stat = path.stat()
-                snapshot[path] = (stat.st_mtime_ns, stat.st_size)
+        roots = [selection.publication_path.parent, *self.project.style_roots]
+        if self._publication_uses_catalog_sources(selection.publication_path):
+            roots.extend((*self.project.question_roots, *self.project.component_roots))
+
+        snapshot: dict[Path, tuple[int, int]] = {}
+        for root in roots:
+            if not root.exists():
+                continue
+            for directory, _, filenames in os.walk(root):
+                for filename in filenames:
+                    if Path(filename).suffix not in WATCHED_SUFFIXES:
+                        continue
+                    path = Path(directory) / filename
+                    with contextlib.suppress(OSError):
+                        stat = path.stat()
+                        snapshot[path] = (stat.st_mtime_ns, stat.st_size)
         return snapshot
+
+    @staticmethod
+    def _publication_uses_catalog_sources(publication_path: Path) -> bool:
+        """Whether a publication can depend on entries outside its source directory."""
+        try:
+            publication = tomllib.loads(publication_path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            # Stay conservative while an author is midway through an invalid edit.
+            return True
+        return "sections" in publication or "component_chapters" in publication
 
     def _prepare_format(self, selection: PreviewSelection) -> dict[str, Any]:
         publication = load_toml(selection.publication_path, "publication")
@@ -180,8 +192,14 @@ class IncrementalPreviewWatcher:
         while True:
             await asyncio.sleep(self.poll_interval)
             selection = self.selection
-            current = self._source_snapshot(selection)
-            if selection is None or current == self._snapshot:
+            revision = self._selection_revision
+            current = await asyncio.to_thread(self._source_snapshot, selection)
+            if (
+                selection is None
+                or revision != self._selection_revision
+                or revision != self._snapshot_revision
+                or current == self._snapshot
+            ):
                 continue
             self._snapshot = current
             started = time.monotonic()

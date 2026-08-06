@@ -58,7 +58,7 @@ def _websocket_accept_key(sec_key: str) -> str:
     return base64.b64encode(hashlib.sha1(combined).digest()).decode()
 
 
-def _decode_ws_frame(data: bytes) -> tuple[int, str | bytes] | None:
+def _decode_ws_frame(data: bytes | bytearray) -> tuple[int, str | bytes, int] | None:
     if len(data) < 2:
         return None
     byte1, byte2 = data[0], data[1]
@@ -83,14 +83,30 @@ def _decode_ws_frame(data: bytes) -> tuple[int, str | bytes] | None:
             return None
         masks = data[offset : offset + 4]
         offset += 4
-        raw_payload = data[offset : offset + payload_len]
+        payload_end = offset + payload_len
+        if len(data) < payload_end:
+            return None
+        raw_payload = data[offset:payload_end]
         payload = bytes(b ^ masks[i % 4] for i, b in enumerate(raw_payload))
     else:
-        payload = data[offset : offset + payload_len]
+        payload_end = offset + payload_len
+        if len(data) < payload_end:
+            return None
+        payload = bytes(data[offset:payload_end])
 
     if opcode == 0x1:  # Text frame
-        return opcode, payload.decode(errors="replace")
-    return opcode, payload
+        return opcode, payload.decode(errors="replace"), payload_end
+    return opcode, payload, payload_end
+
+
+def _decode_ws_frames(buffer: bytearray) -> list[tuple[int, str | bytes]]:
+    """Remove and return every complete WebSocket frame currently buffered."""
+    frames = []
+    while decoded := _decode_ws_frame(buffer):
+        opcode, payload, consumed = decoded
+        del buffer[:consumed]
+        frames.append((opcode, payload))
+    return frames
 
 
 def _encode_ws_frame(data: str | bytes, opcode: int = 0x1) -> bytes:
@@ -942,16 +958,16 @@ class WorkspaceServer:
                     await asyncio.sleep(0.02)
 
         async def read_ws_to_pty() -> None:
+            frame_buffer = bytearray()
             while pty.is_alive():
                 try:
                     data = await reader.read(4096)
                     if not data:
                         break
-                    decoded = _decode_ws_frame(data)
-                    if decoded:
-                        opcode, payload = decoded
+                    frame_buffer.extend(data)
+                    for opcode, payload in _decode_ws_frames(frame_buffer):
                         if opcode == 0x8:  # Close frame
-                            break
+                            return
                         if isinstance(payload, str):
                             try:
                                 msg = json.loads(payload)
@@ -991,7 +1007,9 @@ class WorkspaceServer:
                                     await send_event({"type": "starter-prompt-inserted"})
                                     continue
                                 if msg.get("type") == "watch-preview":
-                                    selection = watcher.select(msg) if watcher is not None else None
+                                    selection = (
+                                        await watcher.select(msg) if watcher is not None else None
+                                    )
                                     preparation_error = None
                                     if selection is not None:
                                         try:
