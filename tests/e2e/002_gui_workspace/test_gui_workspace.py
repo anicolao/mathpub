@@ -299,6 +299,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert dictation_dialog.is_visible()
             assert dictation_text.evaluate("element => element === document.activeElement")
             assert "⌘⇧D" in dictation_dialog.text_content()
+            page.mouse.move(0, 0)
             steps.verify(page, "000-dictation-prompt")
             dictated_prompt = "Outline a short lesson about equivalent fractions. Include examples."
             dictation_text.fill(
