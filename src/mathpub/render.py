@@ -522,6 +522,10 @@ def presentation_tex(
     theme = publication.get("theme", "metropolis")
     subtitle = publication.get("subtitle", "")
     author = publication.get("author", "")
+    subtitle_tex = (
+        r"\vspace{0.6em}{\usebeamerfont{subtitle}\insertsubtitle\par}" if subtitle else ""
+    )
+    author_tex = r"\vspace{1.5em}{\usebeamerfont{author}\insertauthor\par}" if author else ""
     return rf"""\documentclass[aspectratio={aspect_ratio},11pt]{{beamer}}
 \usetheme{{{theme}}}
 \usefonttheme{{professionalfonts}}
@@ -536,7 +540,12 @@ def presentation_tex(
 \date{{}}
 \begin{{document}}
 \begin{{frame}}[plain]
-  \titlepage
+  \centering
+  \vfill
+  {{\usebeamerfont{{title}}\usebeamercolor[fg]{{title}}\inserttitle\par}}
+  {subtitle_tex}
+  {author_tex}
+  \vfill
 \end{{frame}}
 {chr(10).join(slides)}
 \end{{document}}
@@ -649,7 +658,7 @@ def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: li
 \newsavebox{{\annabox}}
 \newenvironment{{annaboxenv}}[1]{{%
   \def\annaboxtitle{{#1}}%
-  \begin{{lrbox}}{{\annabox}}\begin{{minipage}}{{0.935\linewidth}}\vspace{{8pt}}
+  \begin{{lrbox}}{{\annabox}}\begin{{minipage}}{{0.92\linewidth}}\vspace{{8pt}}
   \setlength{{\parindent}}{{0pt}}}}
   {{\vspace{{1pt}}\end{{minipage}}\end{{lrbox}}%
   \par\medskip\noindent\begin{{tikzpicture}}
@@ -668,7 +677,7 @@ def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: li
 \newsavebox{{\annawarningbox}}
 \newenvironment{{annamistakes}}[1]{{%
   \def\annawarningtitle{{#1}}%
-  \begin{{lrbox}}{{\annawarningbox}}\begin{{minipage}}{{0.935\linewidth}}
+  \begin{{lrbox}}{{\annawarningbox}}\begin{{minipage}}{{0.92\linewidth}}
   \vspace{{19pt}}\setlength{{\parindent}}{{0pt}}}}
   {{\end{{minipage}}\end{{lrbox}}%
   \par\medskip\noindent\begin{{tikzpicture}}
@@ -685,7 +694,7 @@ def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: li
 \newsavebox{{\annatipsbox}}
 \newenvironment{{annatips}}[1]{{%
   \def\annatipstitle{{#1}}%
-  \begin{{lrbox}}{{\annatipsbox}}\begin{{minipage}}{{0.935\linewidth}}
+  \begin{{lrbox}}{{\annatipsbox}}\begin{{minipage}}{{0.92\linewidth}}
   \vspace{{4pt}}\setlength{{\parindent}}{{0pt}}}}
   {{\vspace{{1pt}}\end{{minipage}}\end{{lrbox}}%
   \par\medskip\noindent\begin{{tikzpicture}}
@@ -733,6 +742,77 @@ def anna_textbook_tex(publication: dict[str, Any], projection: str, chapters: li
 \end{{document}}
 """
     return _apply_style_preamble(source, publication)
+
+
+_OVERFULL_BOX = re.compile(
+    r"Overfull \\(?P<axis>[hv])box "
+    r"\((?P<amount>[0-9]+(?:\.[0-9]+)?)pt too (?P<extent>wide|high)\)"
+    r"(?P<context>[^\r\n]*)"
+)
+
+
+def _layout_overflows(transcript: str) -> list[dict[str, Any]]:
+    """Extract and de-duplicate TeX boxes that can cross a page boundary."""
+    overflows: list[dict[str, Any]] = []
+    seen: set[tuple[object, ...]] = set()
+    for match in _OVERFULL_BOX.finditer(transcript):
+        context = match.group("context").strip()
+        line_match = re.search(r"at lines? (\d+)(?:--(\d+))?", context)
+        page_match = re.search(r"\\output is active \[(\d+)\]", context)
+        item: dict[str, Any] = {
+            "axis": "horizontal" if match.group("axis") == "h" else "vertical",
+            "amount_pt": float(match.group("amount")),
+            "extent": match.group("extent"),
+        }
+        if line_match:
+            item["generated_start_line"] = int(line_match.group(1))
+            item["generated_end_line"] = int(line_match.group(2) or line_match.group(1))
+        if page_match:
+            item["page"] = int(page_match.group(1))
+        key = (
+            item["axis"],
+            item["amount_pt"],
+            item.get("generated_start_line"),
+            item.get("generated_end_line"),
+            item.get("page"),
+        )
+        if key not in seen:
+            seen.add(key)
+            overflows.append(item)
+    return overflows
+
+
+def _source_diagnostic_details(
+    tex_path: Path,
+    generated_line: int | None,
+    source_map: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """Attach generated context and its authored component when a line is known."""
+    if generated_line is None:
+        return {}
+    lines = tex_path.read_text(encoding="utf-8").splitlines()
+    start = max(0, generated_line - 3)
+    end = min(len(lines), generated_line + 2)
+    details: dict[str, Any] = {
+        "excerpt": [{"line": index + 1, "text": lines[index]} for index in range(start, end)]
+    }
+    matching = next(
+        (
+            item
+            for item in source_map or []
+            if item["generated_start_line"] <= generated_line <= item["generated_end_line"]
+        ),
+        None,
+    )
+    if matching:
+        details.update(
+            {
+                "component_id": matching["component_id"],
+                "fragment": matching["fragment"],
+                "authored_source": matching["authored_source"],
+            }
+        )
+    return details
 
 
 def compile_pdf(
@@ -838,7 +918,13 @@ def compile_pdf(
             details=details,
         ) from error
     transcript = "\n".join(process.stdout + "\n" + process.stderr for process in processes)
-    process = processes[-1]
+    engine_log_path = output_dir / f"{tex_path.stem}.log"
+    engine_log = ""
+    if engine_log_path.is_file():
+        engine_log = engine_log_path.read_text(encoding="utf-8", errors="replace")
+        if engine_log and engine_log not in transcript:
+            transcript = f"{transcript}\n\nTeX engine log:\n{engine_log}"
+    final_diagnostics = engine_log or transcript
     log_path.write_text(transcript, encoding="utf-8")
     pdf_path = output_dir / f"{tex_path.stem}.pdf"
     if any(item.returncode for item in processes) or not pdf_path.is_file():
@@ -865,29 +951,7 @@ def compile_pdf(
         }
         if source_map_file:
             details["source_map"] = source_map_file
-        if generated_line is not None:
-            lines = tex_path.read_text(encoding="utf-8").splitlines()
-            start = max(0, generated_line - 3)
-            end = min(len(lines), generated_line + 2)
-            details["excerpt"] = [
-                {"line": index + 1, "text": lines[index]} for index in range(start, end)
-            ]
-            matching = next(
-                (
-                    item
-                    for item in source_map or []
-                    if item["generated_start_line"] <= generated_line <= item["generated_end_line"]
-                ),
-                None,
-            )
-            if matching:
-                details.update(
-                    {
-                        "component_id": matching["component_id"],
-                        "fragment": matching["fragment"],
-                        "authored_source": matching["authored_source"],
-                    }
-                )
+        details.update(_source_diagnostic_details(tex_path, generated_line, source_map))
         location = details.get("authored_source", details["generated_source"])
         line_label = f" (generated line {generated_line})" if generated_line else ""
         raise MathpubError(
@@ -897,7 +961,41 @@ def compile_pdf(
             exit_code=6,
             details=details,
         )
+    overflows = _layout_overflows(final_diagnostics)
+    if overflows:
+        first = overflows[0]
+        generated_line = first.get("generated_start_line")
+        diagnostic = (
+            f"{first['axis']} box is {first['amount_pt']:g}pt too {first['extent']}; "
+            "content may be clipped by the page"
+        )
+        details = {
+            "engine": tex_engine,
+            "projection": projection,
+            "generated_source": generated_source or str(tex_path),
+            "generated_line": generated_line,
+            "diagnostic": diagnostic,
+            "layout_overflows": overflows,
+            "remediation": (
+                "Reflow, resize, or split the reported content and rebuild. Do not accept or "
+                "present a PDF while any overfull box remains."
+            ),
+            "log": str(log_path),
+        }
+        if source_map_file:
+            details["source_map"] = source_map_file
+        details.update(_source_diagnostic_details(tex_path, generated_line, source_map))
+        location = details.get("authored_source", details["generated_source"])
+        line_label = f" (generated line {generated_line})" if generated_line else ""
+        raise MathpubError(
+            "MP-TEX-016",
+            f"TeX layout overflow in {projection or 'unknown projection'} at "
+            f"{location}{line_label}: {diagnostic}. Reflow or split the content, then rebuild; "
+            f"see {log_path}",
+            exit_code=6,
+            details=details,
+        )
     normal_text_fallbacks = ("using `T1/cmr/m/n' instead", "using `OT1/cmr/m/n' instead")
-    if any(warning in process.stdout for warning in normal_text_fallbacks):
+    if any(warning in final_diagnostics for warning in normal_text_fallbacks):
         raise MathpubError("MP-TEX-009", f"font substitution detected; see {log_path}", exit_code=6)
     return pdf_path, log_path

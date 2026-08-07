@@ -156,6 +156,21 @@ isolation. Parameterized diagrams must derive coordinates from the same canonica
 the mathematics and validate their measurements with `ctx.check_*`. Do not label student diagrams
 with implementation-scale commentary. Preserve explicit seeds in reports and commits.
 
+## Textbooks and reviewable source
+
+Textbooks must use `[[component_chapters]]`. Never create the legacy `[[chapters]]` form or point a
+book at free-standing lesson `.tex` files: those files bypass component source mapping, so the
+author cannot reliably select, edit, or comment on the rendered passage in the review workspace.
+Put every reviewable passage in a catalog component, then assemble lessons with `include`, `derive`,
+and `problem_set` blocks. `check publication` and `build` reject raw `[[chapters]]` books with a
+migration explanation.
+
+Treat every TeX overfull box as a showstopper. MathPub turns `Overfull \\hbox` and
+`Overfull \\vbox` diagnostics into build errors because they can put content outside the printable
+page or frame. Use the reported component, fragment, generated line, and excerpt to reflow, resize,
+or split the content, then rebuild. Never present a PDF for review while a layout-overflow error
+remains.
+
 ## Presentations
 
 MathPub presentations are Beamer publications assembled from mapped, editable slide fragments.

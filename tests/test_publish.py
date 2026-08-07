@@ -352,38 +352,10 @@ placement = "review.fixed"
     assert mismatch.value.code == "MP-REPRO-001"
 
 
-def test_builds_textbook_lessons_with_isolated_answer_projections(tmp_path):
+def test_build_rejects_raw_tex_textbook_before_creating_an_edition(tmp_path):
     root = tmp_path / "project"
     init_project(root)
     project = find_project(root)
-    lessons = root / "publications" / "lessons" / "variables"
-    lessons.mkdir(parents=True)
-    (lessons / "content.tex").write_text(
-        r"\keyidea{A variable represents a number.}"
-        r"\begin{workedexample}Solve $x+2=5$, so $x=3$.\end{workedexample}"
-    )
-    (lessons / "exercises.tex").write_text(r"\begin{exercises}\item Solve $x+4=9$.\end{exercises}")
-    (lessons / "answers.tex").write_text(
-        r"\begin{lessonanswers}{Short answers}\item $x=5$.\end{lessonanswers}"
-    )
-    (lessons / "solutions.tex").write_text(
-        r"\begin{lessonanswers}{Worked solutions}\item Subtract $4$: $x=5$.\end{lessonanswers}"
-    )
-    (lessons / "self-assessment.tex").write_text(
-        r"\subsection*{Self-Assessment}Explain how subtraction preserves equality."
-    )
-    practice = root / "publications" / "lessons" / "practice"
-    practice.mkdir()
-    (practice / "exercises.tex").write_text(r"\begin{exercises}\item Solve $2x=8$.\end{exercises}")
-    (practice / "self-assessment.tex").write_text(
-        r"\subsection*{Unit Self-Assessment}Rate your equation-solving evidence."
-    )
-    (practice / "answers.tex").write_text(
-        r"\begin{lessonanswers}{Practice answers}\item $x=4$.\end{lessonanswers}"
-    )
-    (practice / "solutions.tex").write_text(
-        r"\begin{lessonanswers}{Practice solutions}\item Divide by $2$: $x=4$.\end{lessonanswers}"
-    )
     publication = root / "publications" / "algebra.toml"
     publication.write_text(
         """schema = 1
@@ -391,57 +363,21 @@ id = "algebra.textbook"
 kind = "textbook"
 title = "Algebra"
 profile = "mathpub.exam"
-projections = ["student", "answers", "solutions", "validation"]
 [[chapters]]
 title = "Foundations"
-[chapters.practice]
-id = "foundations-practice"
-title = "Foundations Practice"
-exercises = "lessons/practice/exercises.tex"
-self_assessment = "lessons/practice/self-assessment.tex"
-answers = "lessons/practice/answers.tex"
-solutions = "lessons/practice/solutions.tex"
 [[chapters.lessons]]
 id = "variables"
 title = "Variables"
-objectives = ["Interpret variables."]
 content = "lessons/variables/content.tex"
 exercises = "lessons/variables/exercises.tex"
-self_assessment = "lessons/variables/self-assessment.tex"
 answers = "lessons/variables/answers.tex"
 solutions = "lessons/variables/solutions.tex"
 """
     )
 
-    result = build(project, publication, root_seed="42", variant="review")
-    edition = root / result["edition"]
-    student = next((edition / "generated-tex").glob("*-student.tex")).read_text()
-    answers = next((edition / "generated-tex").glob("*-answers.tex")).read_text()
-    solutions = next((edition / "generated-tex").glob("*-solutions.tex")).read_text()
-    assert "x=5" not in student
-    assert "Short answers" in answers
-    assert "Worked solutions" in solutions
-    assert "Self-Assessment" in student
-    assert "Unit Self-Assessment" in student
-    assert "Practice solutions" in solutions
-    assert len(PdfReader(next(edition.glob("*-student.pdf"))).pages) >= 3
+    with pytest.raises(MathpubError) as raised:
+        build(project, publication, root_seed="42", variant="review")
 
-    concrete_result = build(
-        project,
-        publication,
-        root_seed="42",
-        variant="concrete",
-        projections=["student"],
-        font_family="concrete",
-    )
-    concrete_edition = root / concrete_result["edition"]
-    concrete_manifest = json.loads((concrete_edition / "manifest.json").read_text())
-    concrete_pdf = concrete_edition / concrete_manifest["outputs"][0]["path"]
-    fonts = subprocess.run(
-        ["pdffonts", str(concrete_pdf)], capture_output=True, text=True, check=True
-    ).stdout
-    assert concrete_manifest["font_family"] == "concrete"
-    assert concrete_manifest["tex_engine"] == "lualatex"
-    assert "CMUConcrete-Roman" in fonts
-    assert "CMUConcrete-Bold" in fonts
-    assert "Type 3" not in fonts
+    assert raised.value.code == "MP-SRC-016"
+    assert raised.value.details["required_source_model"] == "component_chapters"
+    assert not (root / "build/algebra.textbook/review").exists()

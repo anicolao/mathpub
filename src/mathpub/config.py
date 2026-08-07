@@ -63,6 +63,48 @@ def load_toml(path: Path, schema: str) -> dict[str, Any]:
         raise MathpubError("MP-SRC-001", f"source file does not exist: {path}") from error
     except tomllib.TOMLDecodeError as error:
         raise MathpubError("MP-SRC-002", f"invalid TOML in {path}: {error}") from error
+    if schema == "publication" and data.get("kind") == "textbook" and "chapters" in data:
+        raise MathpubError(
+            "MP-SRC-016",
+            "textbook publications must use [[component_chapters]]; raw [[chapters]] TeX "
+            "sources are not component-backed and cannot be reliably selected, edited, or "
+            "commented on in the review workspace",
+            details={
+                "source": str(path),
+                "unsupported_source_model": "chapters",
+                "required_source_model": "component_chapters",
+                "remediation": (
+                    "Replace [[chapters]] with [[component_chapters]] and move every "
+                    "reviewable passage into catalog components referenced by include, derive, "
+                    "or problem_set blocks."
+                ),
+            },
+        )
+    if schema == "publication" and data.get("kind") == "textbook":
+        inline_chapter = next(
+            (
+                index
+                for index, chapter in enumerate(data.get("component_chapters", []))
+                if isinstance(chapter, dict) and "introduction" in chapter
+            ),
+            None,
+        )
+        if inline_chapter is not None:
+            location = f"component_chapters.{inline_chapter}.introduction"
+            raise MathpubError(
+                "MP-SRC-016",
+                f"reviewable textbook text at {location} must be a catalog component; inline "
+                "chapter introductions are not selectable or commentable in the review workspace",
+                details={
+                    "source": str(path),
+                    "location": location,
+                    "required_source_model": "component",
+                    "remediation": (
+                        "Move the introduction into a catalog component and reference it from an "
+                        "include block with an explicit placement."
+                    ),
+                },
+            )
     try:
         jsonschema.validate(data, schema_definition(schema))
     except jsonschema.ValidationError as error:

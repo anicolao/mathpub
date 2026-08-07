@@ -33,6 +33,18 @@ def capability_data(project: Project) -> dict[str, Any]:
         "refresh_command": "nix run .#mathpub -- capabilities",
         "commands": [{"name": name, "purpose": purpose} for name, purpose in COMMANDS],
         "publication_kinds": list(schema_enum("publication", "kind")),
+        "publication_authoring": {
+            "textbook_source_model": "component_chapters",
+            "raw_textbook_chapters_supported": False,
+            "review_contract": (
+                "Every reviewable textbook passage must live in a catalog component so the "
+                "workspace can select, edit, and comment on it."
+            ),
+            "layout_overflow_policy": (
+                "Overfull TeX boxes are fatal build errors; reflow or split content before "
+                "accepting any PDF."
+            ),
+        },
         "component_kinds": list(schema_enum("component", "kind")),
         "question_templates": list(QUESTION_TEMPLATES),
         "projections": ["student", "answers", "solutions", "validation", "parent"],

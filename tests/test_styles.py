@@ -85,6 +85,10 @@ def test_capabilities_include_library_styles(tmp_path, monkeypatch, capsys):
     assert payload["data"]["refresh_command"] == "nix run .#mathpub -- capabilities"
     assert [item["id"] for item in payload["data"]["styles"]] == ["mathpub", "anna", "house"]
     assert payload["data"]["style_authoring"]["publication_setting"] == 'style = "STYLE_ID"'
+    authoring = payload["data"]["publication_authoring"]
+    assert authoring["textbook_source_model"] == "component_chapters"
+    assert authoring["raw_textbook_chapters_supported"] is False
+    assert "fatal build errors" in authoring["layout_overflow_policy"]
 
 
 def test_style_catalog_rejects_document_ownership_commands(tmp_path, monkeypatch, capsys):
