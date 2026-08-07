@@ -20,55 +20,6 @@
     "student_fields": {"type": "object"},
     "instructions": {"type": "object"},
     "sections": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["questions"]}},
-    "chapters": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["title", "lessons"],
-        "properties": {
-          "title": {"type": "string"},
-          "introduction": {"type": "string"},
-          "practice": {
-            "type": "object",
-            "required": ["id", "title", "exercises", "self_assessment", "answers", "solutions"],
-            "properties": {
-              "id": {"type": "string"},
-              "title": {"type": "string"},
-              "exercises": {"type": "string"},
-              "self_assessment": {"type": "string"},
-              "answers": {"type": "string"},
-              "solutions": {"type": "string"},
-              "validation": {"type": "string"}
-            },
-            "additionalProperties": false
-          },
-          "lessons": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "type": "object",
-              "required": ["id", "title", "content", "exercises", "answers", "solutions"],
-              "properties": {
-                "id": {"type": "string"},
-                "number": {"type": "string"},
-                "heading": {"type": "string"},
-                "title": {"type": "string"},
-                "objectives": {"type": "array", "items": {"type": "string"}},
-                "content": {"type": "string"},
-                "exercises": {"type": "string"},
-                "self_assessment": {"type": "string"},
-                "answers": {"type": "string"},
-                "solutions": {"type": "string"},
-                "validation": {"type": "string"}
-              },
-              "additionalProperties": false
-            }
-          }
-        },
-        "additionalProperties": false
-      }
-    },
     "slides": {
       "type": "array",
       "minItems": 1,
@@ -86,6 +37,7 @@
       }
     },
     "component_chapters": {
+      "description": "Required source model for textbooks: reviewable content is assembled from catalog components with source mapping.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -94,7 +46,6 @@
         "properties": {
           "id": {"type": "string"},
           "title": {"type": "string"},
-          "introduction": {"type": "string"},
           "lessons": {
             "type": "array",
             "minItems": 1,
@@ -265,16 +216,13 @@
     {
       "if": {"properties": {"kind": {"const": "textbook"}}},
       "then": {
+        "required": ["component_chapters"],
         "not": {
           "anyOf": [
             {"required": ["sections"]},
             {"required": ["slides"]}
           ]
-        },
-        "oneOf": [
-          {"required": ["chapters"], "not": {"required": ["component_chapters"]}},
-          {"required": ["component_chapters"], "not": {"required": ["chapters"]}}
-        ]
+        }
       },
       "else": {
         "if": {"properties": {"kind": {"const": "presentation"}}},
@@ -291,7 +239,6 @@
           "not": {
             "anyOf": [
               {"required": ["sections"]},
-              {"required": ["chapters"]},
               {"required": ["component_chapters"]}
             ]
           }
@@ -300,7 +247,6 @@
           "required": ["sections"],
           "not": {
             "anyOf": [
-              {"required": ["chapters"]},
               {"required": ["component_chapters"]},
               {"required": ["slides"]}
             ]

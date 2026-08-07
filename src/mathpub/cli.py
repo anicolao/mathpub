@@ -562,50 +562,6 @@ placement = {json.dumps(placement)}
             for section in publication.get("sections", []):
                 for question in section["questions"]:
                     catalog.get("question", question["id"])
-            for chapter in publication.get("chapters", []):
-                for lesson in chapter["lessons"]:
-                    for key in (
-                        "content",
-                        "exercises",
-                        "self_assessment",
-                        "answers",
-                        "solutions",
-                        "validation",
-                    ):
-                        if source := lesson.get(key):
-                            lesson_path = (path.parent / source).resolve()
-                            try:
-                                lesson_path.relative_to(project.root)
-                            except ValueError as error:
-                                raise MathpubError(
-                                    "MP-SRC-005", f"lesson source escapes project root: {source}"
-                                ) from error
-                            if not lesson_path.is_file():
-                                raise MathpubError(
-                                    "MP-SRC-012", f"missing lesson source: {lesson_path}"
-                                )
-                if practice := chapter.get("practice"):
-                    for key in (
-                        "exercises",
-                        "self_assessment",
-                        "answers",
-                        "solutions",
-                        "validation",
-                    ):
-                        if source := practice.get(key):
-                            practice_path = (path.parent / source).resolve()
-                            try:
-                                practice_path.relative_to(project.root)
-                            except ValueError as error:
-                                raise MathpubError(
-                                    "MP-SRC-005",
-                                    f"unit-practice source escapes project root: {source}",
-                                ) from error
-                            if not practice_path.is_file():
-                                raise MathpubError(
-                                    "MP-SRC-012",
-                                    f"missing unit-practice source: {practice_path}",
-                                )
             slide_ids: set[str] = set()
             for slide in publication.get("slides", []):
                 if slide["id"] in slide_ids:

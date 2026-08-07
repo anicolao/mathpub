@@ -72,10 +72,88 @@ def test_capabilities_expose_the_version_matched_publication_contract(capsys):
     assert "## Publication styles" in output.out
     assert "`mathpub` (built-in, base `mathpub`)" in output.out
     assert "new style my-series --extends anna" in output.out
+    assert "Textbooks must use `[[component_chapters]]`" in output.out
+    assert "Treat every TeX overfull box as a showstopper" in output.out
 
     code = main(["agent-guide"])
     assert code == 0
     assert "## Publication styles" in capsys.readouterr().out
+
+
+def test_raw_tex_textbook_is_rejected_with_component_migration(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "course"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    publication = project / "publications/book.toml"
+    publication.write_text(
+        """schema = 1
+id = "course.book"
+kind = "textbook"
+title = "Course Book"
+profile = "mathpub.exam"
+
+[[chapters]]
+title = "Raw Chapter"
+[[chapters.lessons]]
+id = "raw-lesson"
+title = "Raw Lesson"
+content = "raw/content.tex"
+exercises = "raw/exercises.tex"
+answers = "raw/answers.tex"
+solutions = "raw/solutions.tex"
+"""
+    )
+
+    code, payload = invoke(
+        monkeypatch,
+        capsys,
+        project,
+        ["check", "publication", "publications/book.toml"],
+    )
+
+    assert code == 3
+    assert payload["error"]["code"] == "MP-SRC-016"
+    assert payload["error"]["details"]["required_source_model"] == "component_chapters"
+    assert "cannot be reliably selected, edited, or commented on" in payload["error"]["message"]
+    assert "catalog components" in payload["error"]["details"]["remediation"]
+
+
+def test_inline_textbook_prose_is_rejected_with_component_migration(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "course"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    publication = project / "publications/book.toml"
+    publication.write_text(
+        """schema = 1
+id = "course.book"
+kind = "textbook"
+title = "Course Book"
+profile = "mathpub.exam"
+
+[[component_chapters]]
+id = "chapter"
+title = "Chapter"
+introduction = "This prose bypasses the component catalog."
+[[component_chapters.lessons]]
+id = "lesson"
+title = "Lesson"
+concepts = ["course.lesson"]
+[[component_chapters.lessons.blocks]]
+derive = "concept-summary"
+"""
+    )
+
+    code, payload = invoke(
+        monkeypatch,
+        capsys,
+        project,
+        ["check", "publication", "publications/book.toml"],
+    )
+
+    assert code == 3
+    assert payload["error"]["code"] == "MP-SRC-016"
+    assert payload["error"]["details"]["location"] == "component_chapters.0.introduction"
+    assert "include block" in payload["error"]["details"]["remediation"]
 
 
 def test_init_creates_a_separate_content_repository_flake(tmp_path, capsys):
