@@ -171,60 +171,6 @@ def _lesson_path(project: Project, publication_path: Path, source: str) -> Path:
     return path
 
 
-def _textbook_chapters(
-    project: Project, publication_path: Path, publication: dict[str, Any], projection: str
-) -> list[str]:
-    rendered = []
-    for chapter in publication["chapters"]:
-        pieces = [rf"\chapter{{{chapter['title']}}}"]
-        if introduction := chapter.get("introduction"):
-            pieces.append(introduction)
-        for lesson in chapter["lessons"]:
-            pieces.append(rf"\section{{{lesson['title']}}}")
-            objectives = lesson.get("objectives", [])
-            if objectives:
-                items = "\n".join(rf"\item {objective}" for objective in objectives)
-                pieces.append(
-                    rf"\subsection*{{Learning objectives}}\begin{{itemize}}{items}\end{{itemize}}"
-                )
-            for key in ("content", "exercises"):
-                pieces.append(_lesson_path(project, publication_path, lesson[key]).read_text())
-            if source := lesson.get("self_assessment"):
-                pieces.append(_lesson_path(project, publication_path, source).read_text())
-            if projection == "answers":
-                pieces.append(
-                    _lesson_path(project, publication_path, lesson["answers"]).read_text()
-                )
-            elif projection in {"solutions", "validation"}:
-                pieces.append(
-                    _lesson_path(project, publication_path, lesson["solutions"]).read_text()
-                )
-            if projection == "validation":
-                if source := lesson.get("validation"):
-                    pieces.append(_lesson_path(project, publication_path, source).read_text())
-                else:
-                    pieces.append(
-                        r"\paragraph{Validation boundary.} Reviewed fixed content; "
-                        r"no executable checks are declared."
-                    )
-        if practice := chapter.get("practice"):
-            pieces.append(rf"\section{{{practice['title']}}}")
-            for key in ("exercises", "self_assessment"):
-                pieces.append(_lesson_path(project, publication_path, practice[key]).read_text())
-            if projection == "answers":
-                pieces.append(
-                    _lesson_path(project, publication_path, practice["answers"]).read_text()
-                )
-            elif projection in {"solutions", "validation"}:
-                pieces.append(
-                    _lesson_path(project, publication_path, practice["solutions"]).read_text()
-                )
-            if projection == "validation" and (source := practice.get("validation")):
-                pieces.append(_lesson_path(project, publication_path, source).read_text())
-        rendered.append("\n".join(pieces))
-    return rendered
-
-
 def _presentation_slides(
     project: Project,
     publication_path: Path,
@@ -385,8 +331,6 @@ def _component_book_chapters(
     for chapter in publication["component_chapters"]:
         anna_style = publication_style_base(publication) == "anna"
         chapter_parts = [] if anna_style else [rf"\chapter{{{chapter['title']}}}"]
-        if introduction := chapter.get("introduction"):
-            chapter_parts.append(introduction)
         for lesson in chapter["lessons"]:
             if anna_style:
                 if heading := lesson.get("heading"):
@@ -573,29 +517,14 @@ def _select_publication_lessons(
     selected_ids = set(lesson_ids)
     filtered = deepcopy(publication)
     found: set[str] = set()
-    if filtered.get("component_chapters"):
-        chapters = []
-        for chapter in filtered["component_chapters"]:
-            lessons = [lesson for lesson in chapter["lessons"] if lesson["id"] in selected_ids]
-            found.update(lesson["id"] for lesson in lessons)
-            if lessons:
-                chapter["lessons"] = lessons
-                chapters.append(chapter)
-        filtered["component_chapters"] = chapters
-    else:
-        chapters = []
-        for chapter in filtered.get("chapters", []):
-            lessons = [lesson for lesson in chapter["lessons"] if lesson["id"] in selected_ids]
-            found.update(lesson["id"] for lesson in lessons)
-            practice = chapter.get("practice")
-            if practice and practice["id"] in selected_ids:
-                found.add(practice["id"])
-            elif practice:
-                chapter.pop("practice")
-            if lessons or chapter.get("practice"):
-                chapter["lessons"] = lessons
-                chapters.append(chapter)
-        filtered["chapters"] = chapters
+    chapters = []
+    for chapter in filtered["component_chapters"]:
+        lessons = [lesson for lesson in chapter["lessons"] if lesson["id"] in selected_ids]
+        found.update(lesson["id"] for lesson in lessons)
+        if lessons:
+            chapter["lessons"] = lessons
+            chapters.append(chapter)
+    filtered["component_chapters"] = chapters
 
     missing = sorted(selected_ids - found)
     if missing:
@@ -859,10 +788,8 @@ def build(
             stem = f"{publication['id']}-{variant}-{projection}"
             tex_path = tex_dir / f"{stem}.tex"
             if publication["kind"] == "textbook":
-                chapters = (
-                    _component_book_chapters(catalog, publication, projection, component_instances)
-                    if publication.get("component_chapters")
-                    else _textbook_chapters(project, publication_path, publication, projection)
+                chapters = _component_book_chapters(
+                    catalog, publication, projection, component_instances
                 )
                 source = textbook_tex(
                     publication,
@@ -965,37 +892,6 @@ def build(
                 "component_generator_sources": {
                     entry.metadata["id"]: _generator_source_hash(entry)
                     for entry, _, _ in component_ordered
-                },
-                "lesson_sources": {
-                    lesson["id"]: {
-                        key: _file_hash(_lesson_path(project, publication_path, lesson[key]))
-                        for key in (
-                            "content",
-                            "exercises",
-                            "self_assessment",
-                            "answers",
-                            "solutions",
-                            "validation",
-                        )
-                        if lesson.get(key)
-                    }
-                    for chapter in publication.get("chapters", [])
-                    for lesson in chapter["lessons"]
-                },
-                "unit_practice_sources": {
-                    practice["id"]: {
-                        key: _file_hash(_lesson_path(project, publication_path, practice[key]))
-                        for key in (
-                            "exercises",
-                            "self_assessment",
-                            "answers",
-                            "solutions",
-                            "validation",
-                        )
-                        if practice.get(key)
-                    }
-                    for chapter in publication.get("chapters", [])
-                    if (practice := chapter.get("practice"))
                 },
                 "presentation_sources": {
                     slide["id"]: _file_hash(
@@ -1103,37 +999,6 @@ def reproduce(
         "component_sources": {
             component["id"]: _component_source_hash(catalog.get("component", component["id"]))
             for component in manifest.get("components", [])
-        },
-        "lesson_sources": {
-            lesson["id"]: {
-                key: _file_hash(_lesson_path(project, publication_path, lesson[key]))
-                for key in (
-                    "content",
-                    "exercises",
-                    "self_assessment",
-                    "answers",
-                    "solutions",
-                    "validation",
-                )
-                if lesson.get(key)
-            }
-            for chapter in publication.get("chapters", [])
-            for lesson in chapter["lessons"]
-        },
-        "unit_practice_sources": {
-            practice["id"]: {
-                key: _file_hash(_lesson_path(project, publication_path, practice[key]))
-                for key in (
-                    "exercises",
-                    "self_assessment",
-                    "answers",
-                    "solutions",
-                    "validation",
-                )
-                if practice.get(key)
-            }
-            for chapter in publication.get("chapters", [])
-            if (practice := chapter.get("practice"))
         },
         "presentation_sources": {
             slide["id"]: _file_hash(_lesson_path(project, publication_path, slide["source"]))
