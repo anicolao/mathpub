@@ -9,13 +9,19 @@ import pty
 import struct
 import sys
 import termios
+from collections.abc import Mapping
 from pathlib import Path
 
 
 class PTYManager:
     """Manages a Unix pseudo-terminal (PTY) child process for embedded terminal emulation."""
 
-    def __init__(self, command: list[str] | None = None, cwd: str | None = None) -> None:
+    def __init__(
+        self,
+        command: list[str] | None = None,
+        cwd: str | None = None,
+        environment: Mapping[str, str] | None = None,
+    ) -> None:
         if command:
             self.command = command
         else:
@@ -28,6 +34,7 @@ class PTYManager:
                 self.command = [shell_bin]
 
         self.cwd = cwd or os.getcwd()
+        self.environment = dict(environment or {})
         self.master_fd: int | None = None
         self.pid: int | None = None
 
@@ -39,6 +46,7 @@ class PTYManager:
         self.set_size(rows, cols)
 
         env = dict(os.environ)
+        env.update(self.environment)
         env.pop("PROMPT_COMMAND", None)
         env.pop("ENV", None)
         env.pop("BASH_ENV", None)

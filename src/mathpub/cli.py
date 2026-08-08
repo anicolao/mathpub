@@ -75,6 +75,18 @@ def parser() -> argparse.ArgumentParser:
     )
     _json_flag(capabilities)
 
+    complete = commands.add_parser(
+        "complete",
+        help="report completed work to the active interactive workspace",
+    )
+    completion_source = complete.add_mutually_exclusive_group(required=True)
+    completion_source.add_argument("--html", help="bounded HTML summary to show to the author")
+    completion_source.add_argument(
+        "--html-file",
+        help="UTF-8 HTML summary file, or - to read standard input",
+    )
+    _json_flag(complete)
+
     new = commands.add_parser("new", help="create authored source")
     new_types = new.add_subparsers(dest="new_type", required=True)
     question = new_types.add_parser("question")
@@ -301,6 +313,12 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
             browser=getattr(args, "browser", "webkit"),
         )
         return "workspace", {"host": args.host, "port": args.port}
+
+    if args.command == "complete":
+        from mathpub.completion import load_completion_html, notify_completion
+
+        html = load_completion_html(html=args.html, html_file=args.html_file)
+        return "complete", notify_completion(html)
 
     project = find_project()
     if args.command in {"agent-guide", "capabilities"}:

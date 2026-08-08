@@ -9,16 +9,22 @@ import hashlib
 import json
 import mimetypes
 import re
+import secrets
 import shlex
 import struct
 import subprocess
 import sys
 import webbrowser
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from mathpub import display_version
+from mathpub.completion import (
+    COMPLETION_HTML_LIMIT,
+    COMPLETION_TOKEN_ENV,
+    COMPLETION_URL_ENV,
+)
 from mathpub.config import Project, find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.libraries import LibraryHistory, open_authoring_library
@@ -41,6 +47,7 @@ HTTP_REASONS = {
     200: "OK",
     201: "Created",
     400: "Bad Request",
+    403: "Forbidden",
     404: "Not Found",
     409: "Conflict",
     413: "Content Too Large",
@@ -49,6 +56,7 @@ HTTP_REASONS = {
 FEEDBACK_LIMIT = 2000
 REQUEST_BODY_LIMIT = 16_384
 SOURCE_REQUEST_BODY_LIMIT = SOURCE_EDIT_LIMIT * 2 + 16_384
+COMPLETION_REQUEST_BODY_LIMIT = COMPLETION_HTML_LIMIT * 2 + 4096
 # Two device pixels per 96-DPI CSS reference pixel keeps previews sharp on HiDPI displays.
 PDF_PREVIEW_DPI = 192
 
@@ -278,6 +286,16 @@ class WorkspaceServer:
         self.build_version = build_version or display_version()
         self.native_preview_opener = native_preview_opener or _default_native_preview_opener()
         self.repository_edit_lock = asyncio.Lock()
+        self.completion_token = secrets.token_urlsafe(32)
+        self.completion_listeners: set[Callable[[dict[str, object]], Awaitable[None]]] = set()
+
+    async def _broadcast_completion(self, html: str) -> bool:
+        listeners = tuple(self.completion_listeners)
+        if not listeners:
+            return False
+        event = {"type": "agent-completed", "html": html}
+        await asyncio.gather(*(listener(event) for listener in listeners))
+        return True
 
     def _initial_project_root(self, project_root: Path | None) -> Path | None:
         try:
@@ -382,6 +400,54 @@ class WorkspaceServer:
 
         if path == "/api/workspace":
             writer.write(_json_response(200, self._workspace_payload()))
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path == "/api/agent/completed" and method == "POST":
+            content_type = headers.get("content-type", "")
+            authorization = headers.get("authorization", "")
+            try:
+                content_length = int(headers.get("content-length", "0"))
+            except ValueError:
+                content_length = -1
+            if not secrets.compare_digest(
+                authorization,
+                f"Bearer {self.completion_token}",
+            ):
+                response = _json_response(403, {"error": "invalid workspace completion token"})
+            elif not content_type.lower().startswith("application/json"):
+                response = _json_response(400, {"error": "request body must use application/json"})
+            elif content_length <= 0 or content_length > COMPLETION_REQUEST_BODY_LIMIT:
+                response = _json_response(413, {"error": "completion summary request is too large"})
+            else:
+                body = initial_body
+                remaining = content_length - len(body)
+                if remaining > 0:
+                    try:
+                        body += await reader.readexactly(remaining)
+                    except asyncio.IncompleteReadError:
+                        body = b""
+                try:
+                    payload = json.loads(body[:content_length])
+                    html = payload.get("html")
+                except (json.JSONDecodeError, AttributeError):
+                    html = None
+                if not isinstance(html, str) or not html.strip():
+                    response = _json_response(
+                        400,
+                        {"error": "completion summary HTML must be a non-empty string"},
+                    )
+                elif len(html.encode("utf-8")) > COMPLETION_HTML_LIMIT:
+                    response = _json_response(413, {"error": "completion summary is too large"})
+                elif await self._broadcast_completion(html):
+                    response = _json_response(200, {"delivered": True})
+                else:
+                    response = _json_response(
+                        409,
+                        {"error": "no interactive workspace is connected"},
+                    )
+            writer.write(response)
             await writer.drain()
             _close_writer(writer)
             return
@@ -930,7 +996,17 @@ class WorkspaceServer:
     ) -> None:
         project = self._project()
         terminal_root = project.root if project is not None else Path.cwd()
-        pty = PTYManager(cwd=str(terminal_root))
+        sockname = writer.get_extra_info("sockname")
+        completion_port = sockname[1] if isinstance(sockname, tuple) else self.port
+        completion_host = "[::1]" if self.host in {"::", "::1"} else "127.0.0.1"
+        completion_url = f"http://{completion_host}:{completion_port}/api/agent/completed"
+        pty = PTYManager(
+            cwd=str(terminal_root),
+            environment={
+                COMPLETION_URL_ENV: completion_url,
+                COMPLETION_TOKEN_ENV: self.completion_token,
+            },
+        )
         pty.start(rows=24, cols=80)
 
         loop = asyncio.get_running_loop()
@@ -943,6 +1019,8 @@ class WorkspaceServer:
                     await writer.drain()
             except (ConnectionResetError, BrokenPipeError):
                 return
+
+        self.completion_listeners.add(send_event)
 
         watcher = IncrementalPreviewWatcher(project, send_event) if project is not None else None
 
@@ -1044,6 +1122,7 @@ class WorkspaceServer:
         try:
             await asyncio.gather(read_pty_to_ws(), read_ws_to_pty())
         finally:
+            self.completion_listeners.discard(send_event)
             if watcher is not None:
                 await watcher.close()
             pty.close()

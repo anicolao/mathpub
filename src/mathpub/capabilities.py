@@ -19,6 +19,7 @@ COMMANDS = (
     ("build", "Build a deterministic publication edition."),
     ("variants", "Build several named deterministic variants."),
     ("reproduce", "Rebuild an edition from its stored manifest and instances."),
+    ("complete", "Show a final HTML work summary and completion chime in the active workspace."),
     ("workspace", "Launch the browser form of the interactive authoring workspace."),
 )
 
@@ -44,6 +45,28 @@ def capability_data(project: Project) -> dict[str, Any]:
                 "Overfull TeX boxes are fatal build errors; reflow or split content before "
                 "accepting any PDF."
             ),
+        },
+        "task_completion": {
+            "command": "mathpub complete --html '<p>Summary of completed work.</p>' --json",
+            "stdin_command": "mathpub complete --html-file - --json",
+            "availability": "GUI-launched agent sessions only",
+            "requirement": (
+                "Call once after the requested work and its validation are genuinely complete."
+            ),
+            "allowed_html": [
+                "p",
+                "h3",
+                "h4",
+                "ul",
+                "ol",
+                "li",
+                "strong",
+                "em",
+                "code",
+                "pre",
+                "a[href=http(s)]",
+                "br",
+            ],
         },
         "component_kinds": list(schema_enum("component", "kind")),
         "question_templates": list(QUESTION_TEMPLATES),
@@ -103,4 +126,24 @@ document class, create a document environment, or read and write arbitrary files
 may extend another custom style. Run `check publication` and build every required projection after
 style changes; the GUI watcher includes style sources in incremental rebuilds.
 """
-    return FRAMEWORK_GUIDE.replace("## Presentations", f"{style_section}\n\n## Presentations")
+    completion_section = r"""## Report completed work to the author
+
+When the requested work and its validation are genuinely complete, call the workspace completion
+tool exactly once. Supply a concise HTML summary of what changed, what was validated, and which
+review artifact is ready:
+
+```console
+mathpub complete \
+  --html '<h3>Workbook ready</h3><p>Built and validated the student edition.</p>' \
+  --json
+```
+
+For HTML that is awkward to shell-quote, pass it on standard input with
+`mathpub complete --html-file - --json`. The interactive workspace sanitizes the summary and shows
+it in a **Completed!** dialog with a chime. Supported markup is listed by the JSON capability
+contract. Do not use the tool for progress updates, partial results, questions, or blocked work.
+After the author reviews the summary, they can return to the same terminal prompt and continue the
+conversation.
+"""
+    guide = FRAMEWORK_GUIDE.replace("## Presentations", f"{style_section}\n\n## Presentations")
+    return f"{guide.rstrip()}\n\n{completion_section}"

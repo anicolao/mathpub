@@ -85,6 +85,23 @@ def test_pty_manager_lifecycle(monkeypatch):
     assert not pty.is_alive()
 
 
+def test_pty_manager_supplies_workspace_tools_to_child(monkeypatch):
+    monkeypatch.delenv("MATHPUB_TEST_COMPLETION", raising=False)
+    pty = PTYManager(
+        command=["sh", "-c", 'printf "%s" "$MATHPUB_TEST_COMPLETION"'],
+        environment={"MATHPUB_TEST_COMPLETION": "available"},
+    )
+    pty.start(rows=24, cols=80)
+
+    deadline = time.monotonic() + 5.0
+    output = b""
+    while b"available" not in output and time.monotonic() < deadline:
+        output += pty.read(4096)
+        time.sleep(0.02)
+    pty.close()
+    assert b"available" in output
+
+
 def test_native_preview_opener_uses_macos_launch_services(tmp_path, monkeypatch):
     pdf_path = tmp_path / "publication.pdf"
     pdf_path.write_bytes(b"%PDF-1.7\n")

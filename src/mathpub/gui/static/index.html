@@ -369,6 +369,34 @@
     </form>
   </dialog>
 
+  <dialog id="completion-dialog" class="completion-dialog" aria-labelledby="completion-title">
+    <div class="completion-panel">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Authoring agent</span>
+          <h2 id="completion-title"><span class="completion-mark" aria-hidden="true">✓</span> Completed!</h2>
+        </div>
+        <button
+          id="completion-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close completed work summary"
+        >×</button>
+      </div>
+
+      <div id="completion-summary" class="completion-summary" role="document"></div>
+      <p class="completion-help">
+        Review the summary, then return to the same prompt whenever you want to continue.
+      </p>
+
+      <div class="feedback-actions">
+        <button id="completion-return" class="button-primary" type="button">
+          Return to prompt
+        </button>
+      </div>
+    </div>
+  </dialog>
+
   <script src="./app.js"></script>
 </body>
 </html>

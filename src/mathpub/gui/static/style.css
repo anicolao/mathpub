@@ -351,7 +351,8 @@ body {
 
 .feedback-dialog,
 .library-dialog,
-.source-editor-dialog {
+.source-editor-dialog,
+.completion-dialog {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -368,14 +369,95 @@ body {
 
 .feedback-dialog::backdrop,
 .library-dialog::backdrop,
-.source-editor-dialog::backdrop {
+.source-editor-dialog::backdrop,
+.completion-dialog::backdrop {
   background: rgba(2, 6, 23, 0.72);
 }
 
 .feedback-dialog form,
 .library-dialog form,
-.source-editor-dialog form {
+.source-editor-dialog form,
+.completion-panel {
   padding: 20px;
+}
+
+.completion-dialog {
+  width: min(620px, calc(100vw - 48px));
+  border-color: rgba(74, 222, 128, 0.65);
+}
+
+.completion-mark {
+  display: inline-grid;
+  width: 1.4em;
+  height: 1.4em;
+  margin-right: 5px;
+  place-items: center;
+  color: #052e16;
+  background: var(--success);
+  border-radius: 50%;
+  font-size: 0.8em;
+}
+
+.completion-summary {
+  max-height: min(52vh, 520px);
+  margin-top: 18px;
+  padding: 14px 16px;
+  overflow: auto;
+  color: var(--text-main);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: system-ui, sans-serif;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.completion-summary h3,
+.completion-summary h4 {
+  margin: 0 0 8px;
+  color: var(--success);
+}
+
+.completion-summary h3:not(:first-child),
+.completion-summary h4:not(:first-child),
+.completion-summary p:not(:first-child),
+.completion-summary ul:not(:first-child),
+.completion-summary ol:not(:first-child),
+.completion-summary pre:not(:first-child) {
+  margin-top: 10px;
+}
+
+.completion-summary ul,
+.completion-summary ol {
+  padding-left: 22px;
+}
+
+.completion-summary code,
+.completion-summary pre {
+  font-family: monospace;
+}
+
+.completion-summary code {
+  color: #bae6fd;
+}
+
+.completion-summary pre {
+  padding: 9px;
+  overflow: auto;
+  background: #020617;
+  border-radius: 5px;
+  white-space: pre-wrap;
+}
+
+.completion-summary a {
+  color: var(--accent);
+}
+
+.completion-help {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .feedback-heading {
