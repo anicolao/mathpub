@@ -8,12 +8,10 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from unittest.mock import patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from mathpub.completion import notify_completion
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.libraries import LibraryHistory
@@ -39,6 +37,14 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
     init_project(existing_library)
     history = LibraryHistory(tmp_path / "workspace-state/recent-libraries.json")
     creation_attempts = 0
+    completion_html = (
+        "<h3>First-book plan ready</h3>"
+        "<p>Prepared the <strong>review outline</strong> and validated its structure.</p>"
+        '<p><a href="https://example.com/review">Review notes</a> '
+        '<a id="unsafe-link" href="javascript:alert(1)" onclick="alert(2)">unsafe</a></p>'
+        '<script>document.body.dataset.completionPwned = "yes"</script>'
+        '<img src="invalid" onerror="document.body.dataset.completionPwned = \'yes\'">'
+    )
 
     def fail_once_then_create(parent, name, **kwargs):
         nonlocal creation_attempts
@@ -66,12 +72,15 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             'test "$MATHPUB_AUTHORING_ENV" = 1 && test "$PWD" = "$1" '
             '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_URL" '
             '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_TOKEN" '
+            "&& command -v mathpub >/dev/null "
             "&& command -v gh >/dev/null "
             "&& command -v pdftotext >/dev/null "
             '&& grep -q "Use the worked examples" reference/course-outline.txt '
+            '&& mathpub complete --html "$2" --json '
             '&& printf "\\033cAntigravity E2E %s\\n" ready',
             "mathpub-agent-e2e",
             str(library),
+            completion_html,
         ],
         mathpub_url=f"path:{project.root}",
         library_creator=fail_once_then_create,
@@ -279,6 +288,12 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 "!document.getElementById('start-agent').disabled && "
                 "document.querySelector('.xterm-rows').textContent.includes('mathpub$')"
             )
+            rejected_completion = page.request.post(
+                f"http://127.0.0.1:{bound_port}/api/agent/completed",
+                data={"html": completion_html},
+            )
+            assert rejected_completion.status == 403
+            assert not page.locator("#completion-dialog").is_visible()
             page.locator("#start-agent").click()
             try:
                 page.wait_for_function(
@@ -291,53 +306,8 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
                 raise AssertionError(
                     f"agent did not start; terminal output was:\n{terminal_text}"
                 ) from error
-            assert page.locator("#agent-status").text_content() == "Antigravity started"
-
-            page.locator("#starter-prompt").click()
-            page.wait_for_function(
-                "document.querySelector('.xterm-rows').textContent.includes("
-                "'Outline my first book')"
-            )
-            terminal_text = page.locator(".xterm-rows").text_content()
-            assert "Outline my first book" in terminal_text
-            assert "command not found" not in terminal_text
-            assert page.locator("#agent-status").text_content() == "First-book prompt ready"
-            assert page.locator("#placeholder-title").text_content() == (
-                "Your authoring agent is ready"
-            )
-
-            steps.verify(page, "000-private-library-agent-ready")
-
-            completion_html = (
-                "<h3>First-book plan ready</h3>"
-                "<p>Prepared the <strong>review outline</strong> and validated its structure.</p>"
-                '<p><a href="https://example.com/review">Review notes</a> '
-                '<a id="unsafe-link" href="javascript:alert(1)" onclick="alert(2)">unsafe</a></p>'
-                '<script>document.body.dataset.completionPwned = "yes"</script>'
-                '<img src="invalid" onerror="document.body.dataset.completionPwned = \'yes\'">'
-            )
-            rejected_completion = page.request.post(
-                f"http://127.0.0.1:{bound_port}/api/agent/completed",
-                data={"html": completion_html},
-            )
-            assert rejected_completion.status == 403
-            assert not page.locator("#completion-dialog").is_visible()
-            with patch.dict(
-                os.environ,
-                {
-                    "MATHPUB_WORKSPACE_COMPLETION_URL": (
-                        f"http://127.0.0.1:{bound_port}/api/agent/completed"
-                    ),
-                    "MATHPUB_WORKSPACE_COMPLETION_TOKEN": server.completion_token,
-                },
-            ):
-                delivered = notify_completion(completion_html)
-            assert delivered == {
-                "delivered": True,
-                "summary_bytes": len(completion_html.encode("utf-8")),
-            }
             completion_dialog = page.locator("#completion-dialog")
-            assert completion_dialog.is_visible()
+            completion_dialog.wait_for(state="visible", timeout=AGENT_START_TIMEOUT_MS)
             assert page.locator("#completion-title").text_content().strip().endswith("Completed!")
             assert page.locator("#completion-summary h3").text_content() == (
                 "First-book plan ready"
@@ -357,9 +327,25 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             steps.verify(page, "001-agent-completed")
             page.locator("#completion-return").click()
             assert not completion_dialog.is_visible()
+            assert page.locator("#agent-status").text_content() == "Antigravity started"
             assert page.locator(".xterm-helper-textarea").evaluate(
                 "element => element === document.activeElement"
             )
+
+            page.locator("#starter-prompt").click()
+            page.wait_for_function(
+                "document.querySelector('.xterm-rows').textContent.includes("
+                "'Outline my first book')"
+            )
+            terminal_text = page.locator(".xterm-rows").text_content()
+            assert "Outline my first book" in terminal_text
+            assert "command not found" not in terminal_text
+            assert page.locator("#agent-status").text_content() == "First-book prompt ready"
+            assert page.locator("#placeholder-title").text_content() == (
+                "Your authoring agent is ready"
+            )
+
+            steps.verify(page, "000-private-library-agent-ready")
 
             page.locator("#open-library").click()
             open_dialog = page.locator("#open-library-dialog")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -20,14 +21,30 @@ def load_completion_html(*, html: str | None, html_file: str | None) -> str:
     """Load a completion summary from one explicit CLI source."""
     if html is not None:
         summary = html
-    elif html_file == "-":
-        import sys
-
-        summary = sys.stdin.read(COMPLETION_HTML_LIMIT + 1)
     elif html_file is not None:
+        summary_path = Path(html_file)
+        if html_file == "-":
+            raise MathpubError(
+                "MP-GUI-019",
+                "completion HTML must come from --html or a regular UTF-8 file; "
+                "interactive stdin is not supported",
+            )
         try:
-            with Path(html_file).open(encoding="utf-8") as stream:
+            descriptor = os.open(summary_path, os.O_RDONLY | os.O_NONBLOCK)
+            with os.fdopen(descriptor, encoding="utf-8") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise MathpubError(
+                        "MP-GUI-019",
+                        "completion HTML file must be a regular file, not a pipe or device",
+                    )
                 summary = stream.read(COMPLETION_HTML_LIMIT + 1)
+        except MathpubError:
+            raise
+        except UnicodeError as error:
+            raise MathpubError(
+                "MP-GUI-019",
+                f"completion summary is not valid UTF-8: {error}",
+            ) from error
         except OSError as error:
             raise MathpubError(
                 "MP-GUI-019",

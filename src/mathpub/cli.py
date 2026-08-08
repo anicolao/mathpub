@@ -83,7 +83,7 @@ def parser() -> argparse.ArgumentParser:
     completion_source.add_argument("--html", help="bounded HTML summary to show to the author")
     completion_source.add_argument(
         "--html-file",
-        help="UTF-8 HTML summary file, or - to read standard input",
+        help="regular UTF-8 file containing the bounded HTML summary",
     )
     _json_flag(complete)
 

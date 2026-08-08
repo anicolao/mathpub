@@ -48,7 +48,6 @@ def capability_data(project: Project) -> dict[str, Any]:
         },
         "task_completion": {
             "command": "mathpub complete --html '<p>Summary of completed work.</p>' --json",
-            "stdin_command": "mathpub complete --html-file - --json",
             "availability": "GUI-launched agent sessions only",
             "requirement": (
                 "Call once after the requested work and its validation are genuinely complete."
@@ -138,12 +137,13 @@ mathpub complete \
   --json
 ```
 
-For HTML that is awkward to shell-quote, pass it on standard input with
-`mathpub complete --html-file - --json`. The interactive workspace sanitizes the summary and shows
-it in a **Completed!** dialog with a chime. Supported markup is listed by the JSON capability
-contract. Do not use the tool for progress updates, partial results, questions, or blocked work.
-After the author reviews the summary, they can return to the same terminal prompt and continue the
-conversation.
+The command must receive HTML directly through `--html`, or from a regular UTF-8 file through
+`--html-file PATH`. Never invoke `--html-file -` or read the summary from interactive stdin: an
+agent terminal does not provide an EOF and would wait forever. The interactive workspace sanitizes
+the summary and shows it in a **Completed!** dialog with a chime. Supported markup is listed by the
+JSON capability contract. Do not use the tool for progress updates, partial results, questions, or
+blocked work. After the author reviews the summary, they can return to the same terminal prompt and
+continue the conversation.
 """
     guide = FRAMEWORK_GUIDE.replace("## Presentations", f"{style_section}\n\n## Presentations")
     return f"{guide.rstrip()}\n\n{completion_section}"
