@@ -133,6 +133,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const editorClose = document.getElementById("editor-close");
   const editorCancel = document.getElementById("editor-cancel");
   const editorSave = document.getElementById("editor-save");
+  const completionDialog = document.getElementById("completion-dialog");
+  const completionSummary = document.getElementById("completion-summary");
+  const completionClose = document.getElementById("completion-close");
+  const completionReturn = document.getElementById("completion-return");
   const appVersion = document.getElementById("app-version");
   const libraryName = document.getElementById("library-name");
   const openLibrary = document.getElementById("open-library");
@@ -186,6 +190,123 @@ document.addEventListener("DOMContentLoaded", () => {
   let previewBuildRequestId = 0;
   let currentPage = 1;
   let workspaceState = null;
+  let completionAudioContext = null;
+  let completionPreviousAgentStatus = null;
+
+  const completionTags = new Set([
+    "a",
+    "br",
+    "code",
+    "em",
+    "h3",
+    "h4",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "strong",
+    "ul"
+  ]);
+  const discardedCompletionTags = new Set([
+    "audio",
+    "embed",
+    "iframe",
+    "math",
+    "object",
+    "script",
+    "style",
+    "svg",
+    "template",
+    "video"
+  ]);
+
+  function primeCompletionAudio() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!completionAudioContext) completionAudioContext = new AudioContextClass();
+    if (completionAudioContext.state === "suspended") {
+      completionAudioContext.resume().catch(() => {});
+    }
+    return completionAudioContext;
+  }
+
+  function playCompletionChime() {
+    const audioContext = primeCompletionAudio();
+    if (!audioContext || audioContext.state === "closed") return;
+    const start = audioContext.currentTime + 0.02;
+    for (const [frequency, delay] of [
+      [523.25, 0],
+      [659.25, 0.14]
+    ]) {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const noteStart = start + delay;
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, noteStart);
+      gain.gain.setValueAtTime(0.0001, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.12, noteStart + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.38);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + 0.4);
+    }
+  }
+
+  function renderCompletionSummary(html) {
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    const safeContent = document.createDocumentFragment();
+
+    function copySafeNode(node, parent) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        parent.appendChild(document.createTextNode(node.textContent || ""));
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = node.tagName.toLowerCase();
+      if (discardedCompletionTags.has(tag)) return;
+      if (!completionTags.has(tag)) {
+        for (const child of node.childNodes) copySafeNode(child, parent);
+        return;
+      }
+
+      if (tag === "a") {
+        const href = node.getAttribute("href");
+        try {
+          const target = new URL(href || "", window.location.href);
+          if (href && (target.protocol === "http:" || target.protocol === "https:")) {
+            const safeLink = document.createElement("a");
+            safeLink.href = target.href;
+            safeLink.target = "_blank";
+            safeLink.rel = "noopener noreferrer";
+            for (const child of node.childNodes) copySafeNode(child, safeLink);
+            parent.appendChild(safeLink);
+            return;
+          }
+        } catch (error) {
+          // Fall through and unwrap malformed links as inert summary text.
+        }
+        for (const child of node.childNodes) copySafeNode(child, parent);
+        return;
+      }
+
+      const safeNode = document.createElement(tag);
+      for (const child of node.childNodes) copySafeNode(child, safeNode);
+      parent.appendChild(safeNode);
+    }
+
+    for (const child of parsed.body.childNodes) copySafeNode(child, safeContent);
+    completionSummary.replaceChildren(safeContent);
+  }
+
+  document.addEventListener("pointerdown", primeCompletionAudio, {
+    capture: true,
+    once: true
+  });
+  document.addEventListener("keydown", primeCompletionAudio, {
+    capture: true,
+    once: true
+  });
 
   function updateDictationAvailability() {
     dictatePrompt.disabled = !workspaceState?.project || ws.readyState !== WebSocket.OPEN;
@@ -372,6 +493,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (message.type === "agent-unavailable") {
       agentStatus.textContent = `${message.label || "Agent"} unavailable`;
       startAgent.disabled = true;
+      return true;
+    }
+    if (message.type === "agent-completed") {
+      if (typeof message.html !== "string" || !message.html.trim()) return true;
+      renderCompletionSummary(message.html);
+      if (!completionDialog.open) {
+        completionPreviousAgentStatus = agentStatus.textContent;
+      }
+      agentStatus.textContent = "Completed — review summary";
+      if (!completionDialog.open) completionDialog.showModal();
+      playCompletionChime();
       return true;
     }
     if (message.type === "starter-prompt-inserted") {
@@ -932,6 +1064,16 @@ document.addEventListener("DOMContentLoaded", () => {
   starterPrompt.addEventListener("click", () => {
     if (ws.readyState !== WebSocket.OPEN || starterPrompt.disabled) return;
     ws.send(JSON.stringify({ type: "starter-prompt" }));
+  });
+
+  completionClose.addEventListener("click", () => completionDialog.close());
+  completionReturn.addEventListener("click", () => completionDialog.close());
+  completionDialog.addEventListener("close", () => {
+    if (completionPreviousAgentStatus !== null) {
+      agentStatus.textContent = completionPreviousAgentStatus;
+      completionPreviousAgentStatus = null;
+    }
+    term.focus();
   });
 
   feedbackClose.addEventListener("click", () => feedbackDialog.close());

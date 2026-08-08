@@ -8,10 +8,12 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from unittest.mock import patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
+from mathpub.completion import notify_completion
 from mathpub.config import find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.libraries import LibraryHistory
@@ -62,6 +64,8 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             "sh",
             "-c",
             'test "$MATHPUB_AUTHORING_ENV" = 1 && test "$PWD" = "$1" '
+            '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_URL" '
+            '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_TOKEN" '
             "&& command -v gh >/dev/null "
             "&& command -v pdftotext >/dev/null "
             '&& grep -q "Use the worked examples" reference/course-outline.txt '
@@ -119,6 +123,45 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
         )
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 720})
+            page.add_init_script(
+                """
+                window.__completionChimeNotes = [];
+                class TestAudioParam {
+                  setValueAtTime() {}
+                  exponentialRampToValueAtTime() {}
+                }
+                class TestAudioNode {
+                  connect() { return this; }
+                }
+                class TestOscillator extends TestAudioNode {
+                  constructor() {
+                    super();
+                    this.frequency = new TestAudioParam();
+                    this.type = "sine";
+                  }
+                  start(when) { window.__completionChimeNotes.push(when); }
+                  stop() {}
+                }
+                class TestGain extends TestAudioNode {
+                  constructor() {
+                    super();
+                    this.gain = new TestAudioParam();
+                  }
+                }
+                class TestAudioContext {
+                  constructor() {
+                    this.currentTime = 1;
+                    this.destination = {};
+                    this.state = "running";
+                  }
+                  createOscillator() { return new TestOscillator(); }
+                  createGain() { return new TestGain(); }
+                  resume() { return Promise.resolve(); }
+                }
+                window.AudioContext = TestAudioContext;
+                window.webkitAudioContext = TestAudioContext;
+                """
+            )
             page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
             page.wait_for_function(
                 "document.getElementById('library-name').textContent === 'No library open'"
@@ -264,6 +307,59 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             )
 
             steps.verify(page, "000-private-library-agent-ready")
+
+            completion_html = (
+                "<h3>First-book plan ready</h3>"
+                "<p>Prepared the <strong>review outline</strong> and validated its structure.</p>"
+                '<p><a href="https://example.com/review">Review notes</a> '
+                '<a id="unsafe-link" href="javascript:alert(1)" onclick="alert(2)">unsafe</a></p>'
+                '<script>document.body.dataset.completionPwned = "yes"</script>'
+                '<img src="invalid" onerror="document.body.dataset.completionPwned = \'yes\'">'
+            )
+            rejected_completion = page.request.post(
+                f"http://127.0.0.1:{bound_port}/api/agent/completed",
+                data={"html": completion_html},
+            )
+            assert rejected_completion.status == 403
+            assert not page.locator("#completion-dialog").is_visible()
+            with patch.dict(
+                os.environ,
+                {
+                    "MATHPUB_WORKSPACE_COMPLETION_URL": (
+                        f"http://127.0.0.1:{bound_port}/api/agent/completed"
+                    ),
+                    "MATHPUB_WORKSPACE_COMPLETION_TOKEN": server.completion_token,
+                },
+            ):
+                delivered = notify_completion(completion_html)
+            assert delivered == {
+                "delivered": True,
+                "summary_bytes": len(completion_html.encode("utf-8")),
+            }
+            completion_dialog = page.locator("#completion-dialog")
+            assert completion_dialog.is_visible()
+            assert page.locator("#completion-title").text_content().strip().endswith("Completed!")
+            assert page.locator("#completion-summary h3").text_content() == (
+                "First-book plan ready"
+            )
+            assert page.locator("#completion-summary strong").text_content() == "review outline"
+            assert page.locator("#completion-summary script").count() == 0
+            assert page.locator("#completion-summary img").count() == 0
+            assert page.locator("#completion-summary a").count() == 1
+            assert "unsafe" in page.locator("#completion-summary").text_content()
+            assert "javascript:" not in page.locator("#completion-summary").evaluate(
+                "element => element.innerHTML"
+            )
+            assert page.locator("body").get_attribute("data-completion-pwned") is None
+            assert page.evaluate("window.__completionChimeNotes.length") == 2
+            assert page.locator("#agent-status").text_content() == "Completed — review summary"
+            page.mouse.move(640, 680)
+            steps.verify(page, "001-agent-completed")
+            page.locator("#completion-return").click()
+            assert not completion_dialog.is_visible()
+            assert page.locator(".xterm-helper-textarea").evaluate(
+                "element => element === document.activeElement"
+            )
 
             page.locator("#open-library").click()
             open_dialog = page.locator("#open-library-dialog")

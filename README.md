@@ -144,6 +144,12 @@ After the agent starts, **Insert first-book prompt** places a curriculum-plannin
 active prompt for the author to review and submit. Newly created libraries include agent
 instructions describing the PDF-centered, multi-publication workflow.
 
+The versioned capability contract also gives GUI-launched agents a `mathpub complete` command.
+After the requested work and validation are genuinely finished, the command delivers a bounded
+HTML summary over an authenticated loopback channel. The workspace sanitizes that markup, sounds a
+short completion chime, and opens a **Completed!** review dialog. **Return to prompt** closes the
+summary and restores terminal focus so the author can continue the same conversation.
+
 Options:
 - `--port PORT`: Specify custom port (default: `8765`).
 - `--host HOST`: Specify custom host IP (default: `127.0.0.1`).
