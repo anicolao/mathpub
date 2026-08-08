@@ -1,7 +1,11 @@
 import json
 
+import pytest
+
 from mathpub import __version__, display_version
 from mathpub.cli import main
+from mathpub.completion import load_completion_html
+from mathpub.errors import MathpubError
 
 
 def test_version(capsys, monkeypatch):
@@ -65,3 +69,25 @@ def test_complete_requires_a_gui_launched_agent(capsys, monkeypatch):
     payload = json.loads(capsys.readouterr().out)
     assert payload["error"]["code"] == "MP-GUI-019"
     assert "launched by the MathPub workspace" in payload["error"]["message"]
+
+
+def test_complete_rejects_interactive_stdin_without_reading_it(capsys, monkeypatch):
+    class InteractiveInput:
+        def read(self, *_args, **_kwargs):
+            raise AssertionError("completion command attempted a blocking stdin read")
+
+    monkeypatch.setattr("sys.stdin", InteractiveInput())
+
+    assert main(["complete", "--html-file", "-", "--json"]) == 3
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"]["code"] == "MP-GUI-019"
+    assert "interactive stdin is not supported" in payload["error"]["message"]
+
+
+def test_completion_html_file_must_be_a_regular_utf8_file(tmp_path):
+    summary = tmp_path / "summary.html"
+    summary.write_text("<p>Finished safely.</p>", encoding="utf-8")
+    assert load_completion_html(html=None, html_file=str(summary)) == ("<p>Finished safely.</p>")
+
+    with pytest.raises(MathpubError, match="regular file"):
+        load_completion_html(html=None, html_file="/dev/null")

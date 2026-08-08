@@ -75,7 +75,9 @@ def test_capabilities_expose_the_version_matched_publication_contract(capsys):
     assert "Textbooks must use `[[component_chapters]]`" in output.out
     assert "Treat every TeX overfull box as a showstopper" in output.out
     assert "## Report completed work to the author" in output.out
-    assert "mathpub complete --html" in output.out
+    assert "mathpub complete" in output.out
+    assert "Never invoke `--html-file -`" in output.out
+    assert "would wait forever" in output.out
 
     code = main(["agent-guide"])
     assert code == 0

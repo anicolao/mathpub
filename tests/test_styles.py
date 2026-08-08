@@ -91,7 +91,7 @@ def test_capabilities_include_library_styles(tmp_path, monkeypatch, capsys):
     assert "fatal build errors" in authoring["layout_overflow_policy"]
     completion = payload["data"]["task_completion"]
     assert completion["availability"] == "GUI-launched agent sessions only"
-    assert completion["stdin_command"] == "mathpub complete --html-file - --json"
+    assert "stdin_command" not in completion
 
 
 def test_style_catalog_rejects_document_ownership_commands(tmp_path, monkeypatch, capsys):
