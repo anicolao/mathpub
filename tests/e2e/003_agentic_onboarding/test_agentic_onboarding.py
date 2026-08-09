@@ -215,7 +215,12 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             assert (library / "styles").is_dir()
             assert (library / "flake.lock").is_file()
             assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"
-            assert json.loads((library / ".agents/mcp_config.json").read_text()) == {
+            plugin = library / ".agents/plugins/mathpub-workspace"
+            assert json.loads((library / ".agents/plugins.json").read_text()) == {
+                "entries": [{"path": ".agents/plugins"}]
+            }
+            assert json.loads((plugin / "plugin.json").read_text()) == {"name": "mathpub-workspace"}
+            assert json.loads((plugin / "mcp_config.json").read_text()) == {
                 "mcpServers": {
                     "mathpub-workspace": {"args": ["mcp"], "command": "mathpub"},
                 }
