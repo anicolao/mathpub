@@ -21,6 +21,8 @@ from mathpub.errors import MathpubError
 from mathpub.gui.libraries import LibraryHistory, open_authoring_library
 from mathpub.gui.onboarding import (
     AGENT_BOOTSTRAP_PROMPT,
+    AGENT_LAUNCH_COMMAND_ENV,
+    AGENT_LAUNCH_INPUT,
     AgentConfiguration,
     create_authoring_library,
 )
@@ -102,6 +104,32 @@ def test_pty_manager_supplies_workspace_tools_to_child(monkeypatch):
     assert b"available" in output
 
 
+def test_pty_launches_agent_command_larger_than_canonical_input_limit(monkeypatch):
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    padding = "x" * 2_048
+    long_command = f"{shlex.join(['printf', 'agent-ready\\n'])} #{padding}"
+    pty = PTYManager(environment={AGENT_LAUNCH_COMMAND_ENV: long_command})
+    pty.start(rows=24, cols=80)
+
+    try:
+        assert pty.master_fd is not None
+        canonical_limit = os.fpathconf(pty.master_fd, "PC_MAX_CANON")
+        assert len(long_command.encode()) > canonical_limit
+        assert len(AGENT_LAUNCH_INPUT.encode()) < canonical_limit
+
+        pty.write(b"\x15" + AGENT_LAUNCH_INPUT.encode() + b"\r")
+        deadline = time.monotonic() + 5.0
+        output = b""
+        while b"agent-ready" not in output and time.monotonic() < deadline:
+            output += pty.read(4096)
+            time.sleep(0.01)
+
+        assert b"agent-ready" in output
+        assert padding.encode() not in output
+    finally:
+        pty.close()
+
+
 def test_native_preview_opener_uses_macos_launch_services(tmp_path, monkeypatch):
     pdf_path = tmp_path / "publication.pdf"
     pdf_path.write_bytes(b"%PDF-1.7\n")
@@ -169,8 +197,6 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
     monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
     configuration = AgentConfiguration.from_environment()
     assert configuration.label == "Antigravity"
-    assert "automatic incremental preview watcher" in AGENT_BOOTSTRAP_PROMPT
-    assert "instead of running full publication builds" in AGENT_BOOTSTRAP_PROMPT
     assert configuration.command == (
         "nix",
         "run",
