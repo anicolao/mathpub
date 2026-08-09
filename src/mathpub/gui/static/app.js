@@ -18,6 +18,49 @@ document.addEventListener("DOMContentLoaded", () => {
   term.open(termContainer);
   fitAddon.fit();
 
+  // xtermjs/xterm.js#6012: xterm retains IME-committed text in its hidden textarea after
+  // sending it to the PTY.
+  // macOS Dictation can then replace that stale value, causing xterm to emit destructive DELs
+  // that erase the beginning of the terminal prompt. Clear only idle residue, after xterm's
+  // asynchronous composition reads have finished.
+  const terminalTextarea = term.textarea;
+  const imeResidueClearDelay = 150;
+  let imeCompositionActive = false;
+  let imeResidueClearTimer = null;
+
+  function cancelImeResidueClear() {
+    if (imeResidueClearTimer !== null) {
+      clearTimeout(imeResidueClearTimer);
+      imeResidueClearTimer = null;
+    }
+  }
+
+  function scheduleImeResidueClear() {
+    if (!terminalTextarea || term.options.screenReaderMode) return;
+    cancelImeResidueClear();
+    imeResidueClearTimer = setTimeout(() => {
+      imeResidueClearTimer = null;
+      if (imeCompositionActive) return;
+      if (terminalTextarea.selectionStart !== terminalTextarea.selectionEnd) return;
+      terminalTextarea.value = "";
+    }, imeResidueClearDelay);
+  }
+
+  if (terminalTextarea && !term.options.screenReaderMode) {
+    terminalTextarea.addEventListener("compositionstart", () => {
+      imeCompositionActive = true;
+      cancelImeResidueClear();
+    });
+    terminalTextarea.addEventListener("compositionend", () => {
+      imeCompositionActive = false;
+      scheduleImeResidueClear();
+    });
+    // Re-arm so the timer cannot fire inside xterm's keydown-229 textarea diff window.
+    terminalTextarea.addEventListener("keydown", () => {
+      if (!imeCompositionActive) scheduleImeResidueClear();
+    });
+  }
+
   // 2. Connect WebSocket to PTY Backend
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${protocol}//${window.location.host}/ws/terminal`;
@@ -60,6 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "input", data: data }));
     }
+    if (!imeCompositionActive) scheduleImeResidueClear();
   });
 
   function sendResize() {
