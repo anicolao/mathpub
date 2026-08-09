@@ -285,6 +285,7 @@
           default = pkgs.mkShell {
             inputsFrom = [ package ];
             packages = [
+              package
               pkgs.gh
               pkgs.git
               pkgs.jq
