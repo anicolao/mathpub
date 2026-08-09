@@ -75,6 +75,8 @@ def parser() -> argparse.ArgumentParser:
     )
     _json_flag(capabilities)
 
+    commands.add_parser("mcp", help="serve workspace agent tools over MCP stdio")
+
     complete = commands.add_parser(
         "complete",
         help="report completed work to the active interactive workspace",
@@ -657,6 +659,10 @@ placement = {json.dumps(placement)}
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
+    if arguments.command == "mcp":
+        from mathpub.mcp import serve_mcp
+
+        return serve_mcp()
     try:
         command, data = run(arguments)
         emit(command, data, as_json=arguments.as_json)

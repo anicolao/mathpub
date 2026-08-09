@@ -72,10 +72,16 @@ def capability_data(project: Project) -> dict[str, Any]:
             ),
         },
         "task_completion": {
-            "command": "mathpub complete --html '<p>Summary of completed work.</p>' --json",
-            "availability": "GUI-launched agent sessions only",
-            "requirement": (
-                "Call once after the requested work and its validation are genuinely complete."
+            "tool": "complete_task",
+            "tool_server": "mathpub-workspace",
+            "fallback_command": (
+                "mathpub complete --html '<p>Summary of completed work.</p>' --json"
+            ),
+            "availability": "GUI-launched Antigravity sessions",
+            "required_final_action": (
+                "Call complete_task exactly once after the requested work and validation are "
+                "genuinely complete and before the final conversational response. Do not finish "
+                "a successful task with terminal prose alone."
             ),
             "allowed_html": [
                 "p",
@@ -152,9 +158,12 @@ style changes; the GUI watcher includes style sources in incremental rebuilds.
 """
     completion_section = r"""## Report completed work to the author
 
-When the requested work and its validation are genuinely complete, call the workspace completion
-tool exactly once. Supply a concise HTML summary of what changed, what was validated, and which
-review artifact is ready:
+When the requested work and its validation are genuinely complete, call the `complete_task` tool
+from the `mathpub-workspace` tool server exactly once, before your final conversational response.
+Pass it a concise `html` summary of what changed, what was validated, and which review artifact is
+ready. Do not omit this tool call and finish a successful task with terminal prose alone.
+
+Only if `complete_task` is unavailable, use the CLI fallback:
 
 ```console
 mathpub complete \
@@ -162,13 +171,13 @@ mathpub complete \
   --json
 ```
 
-The command must receive HTML directly through `--html`, or from a regular UTF-8 file through
-`--html-file PATH`. Never invoke `--html-file -` or read the summary from interactive stdin: an
-agent terminal does not provide an EOF and would wait forever. The interactive workspace sanitizes
-the summary and shows it in a **Completed!** dialog with a chime. Supported markup is listed by the
-JSON capability contract. Do not use the tool for progress updates, partial results, questions, or
-blocked work. After the author reviews the summary, they can return to the same terminal prompt and
-continue the conversation.
+The fallback command must receive HTML directly through `--html`, or from a regular UTF-8 file
+through `--html-file PATH`. Never invoke `--html-file -` or read the summary from interactive stdin:
+an agent terminal does not provide an EOF and would wait forever. The interactive workspace
+sanitizes the summary and shows it in a **Completed!** dialog with a chime. Supported markup is
+listed by the JSON capability contract. Do not use the tool for progress updates, partial results,
+questions, or blocked work. After the author reviews the summary, they can return to the same
+terminal prompt and continue the conversation.
 """
     guide = FRAMEWORK_GUIDE.replace("## Presentations", f"{style_section}\n\n## Presentations")
     return f"{guide.rstrip()}\n\n{completion_section}"

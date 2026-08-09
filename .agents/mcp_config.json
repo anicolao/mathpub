@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "mathpub-workspace": {
+      "args": [
+        "mcp"
+      ],
+      "command": "mathpub"
+    }
+  }
+}

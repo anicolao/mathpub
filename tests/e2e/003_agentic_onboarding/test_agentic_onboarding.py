@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -76,7 +77,10 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             "&& command -v gh >/dev/null "
             "&& command -v pdftotext >/dev/null "
             '&& grep -q "Use the worked examples" reference/course-outline.txt '
-            '&& mathpub complete --html "$2" --json '
+            '&& jq -nc --arg html "$2" '
+            '\'{jsonrpc:"2.0",id:1,method:"tools/call",params:'
+            '{name:"complete_task",arguments:{html:$html}}}\' '
+            "| mathpub mcp | jq -e '.result.structuredContent.delivered == true' >/dev/null "
             '&& printf "\\033cAntigravity E2E %s\\n" ready',
             "mathpub-agent-e2e",
             str(library),
@@ -211,6 +215,11 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             assert (library / "styles").is_dir()
             assert (library / "flake.lock").is_file()
             assert (library / ".git/HEAD").read_text().strip() == "ref: refs/heads/main"
+            assert json.loads((library / ".agents/mcp_config.json").read_text()) == {
+                "mcpServers": {
+                    "mathpub-workspace": {"args": ["mcp"], "command": "mathpub"},
+                }
+            }
             instructions = (library / "AGENTS.md").read_text()
             assert "nix run .#mathpub -- capabilities" in instructions
             assert "version-matched framework contract" in instructions

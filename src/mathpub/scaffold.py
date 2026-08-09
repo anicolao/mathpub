@@ -25,6 +25,15 @@ Add only library-specific author or editorial instructions below this line; do n
 framework contract into this file.
 """
 
+AGENT_MCP_CONFIG = {
+    "mcpServers": {
+        "mathpub-workspace": {
+            "command": "mathpub",
+            "args": ["mcp"],
+        }
+    }
+}
+
 FRAMEWORK_GUIDE = r"""# Working with mathpub
 
 This is a publication-content repository. Its authored components and publications are separate
@@ -467,6 +476,10 @@ def init_project(
                 "MP-SRC-005", f"publication path must stay inside the repository: {path}"
             )
     _write_new(root / "mathpub.toml", PROJECT.format(name=name))
+    _write_new(
+        root / ".agents/mcp_config.json",
+        json.dumps(AGENT_MCP_CONFIG, indent=2, sort_keys=True) + "\n",
+    )
     if not (root / "AGENTS.md").exists():
         _write_new(root / "AGENTS.md", AGENTS)
     if not (root / "flake.nix").exists():

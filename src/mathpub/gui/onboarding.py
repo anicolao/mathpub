@@ -22,8 +22,10 @@ AGENT_BOOTSTRAP_PROMPT = (
     "Read AGENTS.md and run `nix run .#mathpub -- capabilities` before doing any work; the runtime "
     "contract is authoritative if an older repository file differs. Use the MathPub framework for "
     "every requested publication, first identify the requested document type, and operate the "
-    "framework autonomously on the author's behalf. When the requested work is genuinely "
-    "complete, use the completion-reporting command described by that capability contract."
+    "framework autonomously on the author's behalf. When the requested work and validation are "
+    "genuinely complete, call the `complete_task` tool exactly once before your final response so "
+    "the author receives the visible summary and chime. Use the capability contract's CLI "
+    "fallback only if that tool is unavailable."
 )
 AGENT_LAUNCH_COMMAND_ENV = "MATHPUB_WORKSPACE_AGENT_LAUNCH_COMMAND"
 AGENT_LAUNCH_INPUT = f'eval "${AGENT_LAUNCH_COMMAND_ENV}"'

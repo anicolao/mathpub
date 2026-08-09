@@ -308,10 +308,12 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     ).stdout.splitlines()
     assert "flake.nix" in tracked
     assert "AGENTS.md" in tracked
+    assert ".agents/mcp_config.json" in tracked
     assert (library / "mathpub.toml").is_file()
     assert {path.name for path in library.iterdir()} >= {
         ".git",
         ".gitignore",
+        ".agents",
         "AGENTS.md",
         "README.md",
         "components",
@@ -325,6 +327,11 @@ def test_create_authoring_library_initializes_agent_ready_git_project(tmp_path):
     assert "nix run .#mathpub -- capabilities" in instructions
     assert "version-matched framework contract" in instructions
     assert "locked `nix develop` environment" not in instructions
+    assert json.loads((library / ".agents/mcp_config.json").read_text()) == {
+        "mcpServers": {
+            "mathpub-workspace": {"args": ["mcp"], "command": "mathpub"},
+        }
+    }
     flake = (library / "flake.nix").read_text()
     assert "extraPackages = pkgs: with pkgs;" in flake
 

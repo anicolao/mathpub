@@ -20,6 +20,11 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert payload["status"] == "ok"
     assert (project / "mathpub.toml").is_file()
+    assert json.loads((project / ".agents/mcp_config.json").read_text()) == {
+        "mcpServers": {
+            "mathpub-workspace": {"args": ["mcp"], "command": "mathpub"},
+        }
+    }
     instructions = (project / "AGENTS.md").read_text()
     assert "nix run .#mathpub -- capabilities" in instructions
     assert "version-matched framework contract" in instructions
@@ -79,6 +84,9 @@ def test_capabilities_expose_the_version_matched_publication_contract(capsys):
     assert "--lesson LESSON_ID --incremental --replace --json" in output.out
     assert "clean full rebuild only" in output.out
     assert "## Report completed work to the author" in output.out
+    assert "call the `complete_task` tool" in output.out
+    assert "before your final conversational response" in output.out
+    assert "Only if `complete_task` is unavailable" in output.out
     assert "mathpub complete" in output.out
     assert "Never invoke `--html-file -`" in output.out
     assert "would wait forever" in output.out

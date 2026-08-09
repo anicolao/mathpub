@@ -95,7 +95,11 @@ def test_capabilities_include_library_styles(tmp_path, monkeypatch, capsys):
     assert "--lesson LESSON_ID --incremental --replace" in previews["textbook_lesson_command"]
     assert "final publication validation" in previews["full_build_policy"]
     completion = payload["data"]["task_completion"]
-    assert completion["availability"] == "GUI-launched agent sessions only"
+    assert completion["tool"] == "complete_task"
+    assert completion["tool_server"] == "mathpub-workspace"
+    assert completion["availability"] == "GUI-launched Antigravity sessions"
+    assert "before the final conversational response" in completion["required_final_action"]
+    assert "mathpub complete" in completion["fallback_command"]
     assert "stdin_command" not in completion
 
 
