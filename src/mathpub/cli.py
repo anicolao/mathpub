@@ -156,7 +156,7 @@ def parser() -> argparse.ArgumentParser:
     _json_flag(preview)
 
     build_parser = commands.add_parser(
-        "build", help="build a publication edition; prefer --incremental for previews"
+        "build", help="build a publication edition incrementally by default"
     )
     build_parser.add_argument("publication", type=Path)
     build_parser.add_argument("--seed", required=True)
@@ -176,14 +176,23 @@ def parser() -> argparse.ArgumentParser:
         dest="lesson_ids",
         help="compile only this textbook lesson; may be repeated",
     )
-    build_parser.add_argument(
+    rebuild_mode = build_parser.add_mutually_exclusive_group()
+    rebuild_mode.add_argument(
         "--incremental",
+        dest="incremental",
         action="store_true",
+        help="deprecated compatibility flag; builds already reuse existing edition state",
+    )
+    rebuild_mode.add_argument(
+        "--full-rebuild",
+        dest="incremental",
+        action="store_false",
         help=(
-            "reuse unchanged instances and prior TeX state from the existing edition; "
-            "prefer this for manual previews"
+            "discard reusable edition state; use only to diagnose suspected stale or corrupt "
+            "output, or when clean reproduction is explicitly required"
         ),
     )
+    build_parser.set_defaults(incremental=True)
     build_parser.add_argument("--require-clean", action="store_true")
     _json_flag(build_parser)
 

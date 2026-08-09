@@ -186,7 +186,7 @@ def test_single_lesson_filter_preserves_only_requested_content():
     assert len(publication["component_chapters"][0]["lessons"]) == 2
 
 
-def test_incremental_build_reuses_unchanged_question_instances(tmp_path, monkeypatch):
+def test_default_build_reuses_unchanged_question_instances(tmp_path, monkeypatch):
     root = tmp_path / "project"
     init_project(root)
     project = find_project(root)
@@ -224,8 +224,8 @@ id = "physics.fixed"
         publication,
         root_seed="42",
         variant="A",
-        incremental=True,
     )
+    assert first["incremental"] is True
     assert first["instance_cache"]["questions_regenerated"] == 1
     first_manifest = json.loads((root / first["manifest"]).read_text())
     first_answers = next(
@@ -241,7 +241,6 @@ id = "physics.fixed"
         variant="A",
         projections=["student"],
         replace=True,
-        incremental=True,
     )
     assert second["instance_cache"] == {
         "questions_reused": 1,
@@ -255,6 +254,23 @@ id = "physics.fixed"
         "answers",
     }
     assert (root / second["edition"] / first_answers["path"]).read_bytes() == answers_bytes
+
+    full = build(
+        project,
+        publication,
+        root_seed="42",
+        variant="A",
+        projections=["student"],
+        replace=True,
+        incremental=False,
+    )
+    assert full["incremental"] is False
+    assert full["instance_cache"] == {
+        "questions_reused": 0,
+        "questions_regenerated": 1,
+        "components_reused": 0,
+        "components_regenerated": 0,
+    }
 
 
 def test_builds_isolated_projections_and_reproduces(tmp_path):

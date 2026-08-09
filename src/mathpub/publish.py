@@ -657,7 +657,7 @@ def build(
     stored_component_instances: dict[str, dict[str, Any]] | None = None,
     reproduction_override: dict[str, Any] | None = None,
     lesson_ids: list[str] | None = None,
-    incremental: bool = False,
+    incremental: bool = True,
 ) -> dict[str, Any]:
     started = time.monotonic()
     publication_path = _publication_path(project, publication_source)
@@ -1049,4 +1049,5 @@ def reproduce(
         stored_component_instances=component_instances,
         reproduction_override={"allowed": True, "mismatches": mismatches} if mismatches else None,
         lesson_ids=manifest.get("lesson_ids"),
+        incremental=False,
     )

@@ -3,7 +3,7 @@ import json
 import pytest
 
 from mathpub import __version__, display_version
-from mathpub.cli import main
+from mathpub.cli import main, parser
 from mathpub.completion import load_completion_html
 from mathpub.errors import MathpubError
 
@@ -25,6 +25,34 @@ def test_version_includes_nix_build_revision(capsys, monkeypatch):
         assert error.code == 0
     assert display_version() == "0.1.0 (8aafec7)"
     assert capsys.readouterr().out.strip() == "mathpub 0.1.0 (8aafec7)"
+
+
+def test_build_cli_is_incremental_unless_full_rebuild_is_explicit():
+    arguments = parser().parse_args(["build", "publications/book.toml", "--seed", "2026"])
+    assert arguments.incremental is True
+
+    full = parser().parse_args(
+        ["build", "publications/book.toml", "--seed", "2026", "--full-rebuild"]
+    )
+    assert full.incremental is False
+
+    legacy = parser().parse_args(
+        ["build", "publications/book.toml", "--seed", "2026", "--incremental"]
+    )
+    assert legacy.incremental is True
+
+    with pytest.raises(SystemExit) as raised:
+        parser().parse_args(
+            [
+                "build",
+                "publications/book.toml",
+                "--seed",
+                "2026",
+                "--incremental",
+                "--full-rebuild",
+            ]
+        )
+    assert raised.value.code == 2
 
 
 def test_complete_delivers_html_to_the_active_workspace(capsys, monkeypatch):

@@ -81,8 +81,9 @@ def test_capabilities_expose_the_version_matched_publication_contract(capsys):
     assert "Treat every TeX overfull box as a showstopper" in output.out
     assert "## Fast edit and review loop" in output.out
     assert "Do not invoke\n`mathpub build` after each edit" in output.out
-    assert "--lesson LESSON_ID --incremental --replace --json" in output.out
-    assert "clean full rebuild only" in output.out
+    assert "--lesson LESSON_ID --replace --json" in output.out
+    assert "Never pass `--full-rebuild`" in output.out
+    assert "Do not build merely to orient\nyourself at startup" in output.out
     assert "## Report completed work to the author" in output.out
     assert "call the `complete_task` tool" in output.out
     assert "before your final conversational response" in output.out

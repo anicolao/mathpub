@@ -196,6 +196,10 @@ def test_feedback_prompt_is_single_line_and_validated():
 def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch):
     monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
     configuration = AgentConfiguration.from_environment()
+    assert "Do not build merely to orient yourself at startup" in AGENT_BOOTSTRAP_PROMPT
+    assert "Never use `--full-rebuild` unless cached output appears wrong" in (
+        AGENT_BOOTSTRAP_PROMPT
+    )
     assert configuration.label == "Antigravity"
     assert configuration.command == (
         "nix",

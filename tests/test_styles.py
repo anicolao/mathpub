@@ -90,10 +90,13 @@ def test_capabilities_include_library_styles(tmp_path, monkeypatch, capsys):
     assert authoring["raw_textbook_chapters_supported"] is False
     assert "fatal build errors" in authoring["layout_overflow_policy"]
     previews = payload["data"]["preview_builds"]
+    assert "incremental by default" in previews["default_mode"]
     assert "do not run a publication build after each edit" in previews["preferred_workflow"]
-    assert "--projection student --incremental --replace" in previews["manual_command"]
-    assert "--lesson LESSON_ID --incremental --replace" in previews["textbook_lesson_command"]
-    assert "final publication validation" in previews["full_build_policy"]
+    assert "--projection student --replace" in previews["manual_command"]
+    assert "--lesson LESSON_ID --replace" in previews["textbook_lesson_command"]
+    assert "--incremental" not in previews["manual_command"]
+    assert "Never pass --full-rebuild" in previews["full_build_policy"]
+    assert "--full-rebuild --replace" in previews["full_rebuild_command"]
     completion = payload["data"]["task_completion"]
     assert completion["tool"] == "complete_task"
     assert completion["tool_server"] == "mathpub-workspace"
