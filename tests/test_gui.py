@@ -25,6 +25,7 @@ from mathpub.gui.onboarding import (
     AGENT_LAUNCH_INPUT,
     AgentConfiguration,
     create_authoring_library,
+    synchronize_library_mathpub,
 )
 from mathpub.gui.reference_import import import_reference
 from mathpub.gui.server import (
@@ -201,6 +202,7 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
         AGENT_BOOTSTRAP_PROMPT
     )
     assert configuration.label == "Antigravity"
+    assert configuration.synchronize_mathpub is True
     assert configuration.command == (
         "nix",
         "run",
@@ -212,6 +214,84 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
         "--prompt-interactive",
         AGENT_BOOTSTRAP_PROMPT,
     )
+
+
+def test_custom_agent_does_not_synchronize_mathpub(monkeypatch):
+    monkeypatch.setenv("MATHPUB_AGENT_COMMAND", "custom-agent --interactive")
+
+    configuration = AgentConfiguration.from_environment()
+
+    assert configuration.synchronize_mathpub is False
+
+
+def test_library_mathpub_sync_avoids_update_when_revision_matches(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda command: "/nix/bin/nix")
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, "mathpub 0.1.0 (8aafec7)\n", "")
+
+    monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
+
+    result = synchronize_library_mathpub(tmp_path, "8aafec7")
+
+    assert result == {"skipped": False, "updated": False, "revision": "8aafec7"}
+    assert len(calls) == 1
+    assert calls[0][0][-3:] == [".#mathpub", "--", "--version"]
+    assert calls[0][1]["cwd"] == tmp_path
+
+
+def test_library_mathpub_sync_refreshes_mismatched_revision(tmp_path, monkeypatch):
+    calls = []
+    versions = iter(("mathpub 0.1.0 (1111111)\n", "mathpub 0.1.0 (8aafec7)\n"))
+    monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda command: "/nix/bin/nix")
+
+    def run(command, **kwargs):
+        calls.append(command)
+        stdout = next(versions) if command[1] == "run" else ""
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
+
+    result = synchronize_library_mathpub(tmp_path, "8aafec7")
+
+    assert result == {
+        "skipped": False,
+        "updated": True,
+        "previous_revision": "1111111",
+        "revision": "8aafec7",
+    }
+    assert calls[1] == ["/nix/bin/nix", "flake", "update", "--refresh", "mathpub"]
+
+
+def test_library_mathpub_sync_rejects_still_mismatched_update(tmp_path, monkeypatch):
+    monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda command: "/nix/bin/nix")
+
+    def run(command, **kwargs):
+        stdout = "mathpub 0.1.0 (1111111)\n" if command[1] == "run" else ""
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
+
+    with pytest.raises(MathpubError, match="still does not match") as error:
+        synchronize_library_mathpub(tmp_path, "8aafec7")
+
+    assert error.value.code == "MP-GUI-023"
+    assert error.value.details["expected_revision"] == "8aafec7"
+
+
+def test_library_mathpub_sync_skips_unversioned_gui_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "mathpub.gui.onboarding.subprocess.run",
+        lambda *args, **kwargs: pytest.fail("unversioned development builds should not run Nix"),
+    )
+
+    assert synchronize_library_mathpub(tmp_path, "unknown") == {
+        "skipped": True,
+        "updated": False,
+        "revision": None,
+    }
 
 
 def test_default_agent_is_confined_to_a_fresh_library_project(tmp_path, monkeypatch):

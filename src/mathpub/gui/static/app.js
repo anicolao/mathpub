@@ -534,6 +534,25 @@ document.addEventListener("DOMContentLoaded", () => {
       term.focus();
       return true;
     }
+    if (message.type === "agent-toolchain-syncing") {
+      agentStatus.textContent = "Checking library toolchain…";
+      agentStatus.removeAttribute("title");
+      startAgent.disabled = true;
+      return true;
+    }
+    if (message.type === "agent-toolchain-synced") {
+      agentStatus.textContent = message.updated
+        ? "Library toolchain updated — starting agent…"
+        : "Library toolchain current — starting agent…";
+      agentStatus.removeAttribute("title");
+      return true;
+    }
+    if (message.type === "agent-toolchain-sync-failed") {
+      agentStatus.textContent = "Library toolchain update failed";
+      agentStatus.title = sourceFailureMessage(message, 0);
+      startAgent.disabled = false;
+      return true;
+    }
     if (message.type === "agent-unavailable") {
       agentStatus.textContent = `${message.label || "Agent"} unavailable`;
       startAgent.disabled = true;
