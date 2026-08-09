@@ -153,7 +153,9 @@ def parser() -> argparse.ArgumentParser:
     preview.add_argument("--replace", action="store_true")
     _json_flag(preview)
 
-    build_parser = commands.add_parser("build", help="build a publication edition")
+    build_parser = commands.add_parser(
+        "build", help="build a publication edition; prefer --incremental for previews"
+    )
     build_parser.add_argument("publication", type=Path)
     build_parser.add_argument("--seed", required=True)
     build_parser.add_argument("--variant", default="A")
@@ -175,7 +177,10 @@ def parser() -> argparse.ArgumentParser:
     build_parser.add_argument(
         "--incremental",
         action="store_true",
-        help="reuse unchanged instances from the existing edition",
+        help=(
+            "reuse unchanged instances and prior TeX state from the existing edition; "
+            "prefer this for manual previews"
+        ),
     )
     build_parser.add_argument("--require-clean", action="store_true")
     _json_flag(build_parser)

@@ -46,6 +46,31 @@ def capability_data(project: Project) -> dict[str, Any]:
                 "accepting any PDF."
             ),
         },
+        "preview_builds": {
+            "preferred_workflow": (
+                "When a preview is open in the workspace, edit authored source and let the "
+                "automatic watcher rebuild it; do not run a publication build after each edit."
+            ),
+            "automatic_scope": (
+                "The watcher rebuilds only the active projection, preserves an explicit textbook "
+                "lesson target, and reuses unchanged instances, TeX auxiliary state, and the "
+                "edition's other projections."
+            ),
+            "manual_command": (
+                "nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT "
+                "--projection student --incremental --replace --json"
+            ),
+            "textbook_lesson_command": (
+                "nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT "
+                "--projection student --lesson LESSON_ID --incremental --replace --json"
+            ),
+            "full_build_policy": (
+                "Build every required projection or omit --lesson only for final publication "
+                "validation. Continue to use --incremental when a matching edition exists; use a "
+                "clean rebuild only when no cache exists, the seed or variant changes, the cache "
+                "is suspect, or clean reproduction is explicitly required."
+            ),
+        },
         "task_completion": {
             "command": "mathpub complete --html '<p>Summary of completed work.</p>' --json",
             "availability": "GUI-launched agent sessions only",

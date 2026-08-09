@@ -22,8 +22,11 @@ AGENT_BOOTSTRAP_PROMPT = (
     "Read AGENTS.md and run `nix run .#mathpub -- capabilities` before doing any work; the runtime "
     "contract is authoritative if an older repository file differs. Use the MathPub framework for "
     "every requested publication, first identify the requested document type, and operate the "
-    "framework autonomously on the author's behalf. When the requested work is genuinely "
-    "complete, use the completion-reporting command described by that capability contract."
+    "framework autonomously on the author's behalf. During editing, rely on the workspace's "
+    "automatic incremental preview watcher instead of running full publication builds; use the "
+    "contract's focused incremental command only when a manual preview is necessary. When the "
+    "requested work is genuinely complete, use the completion-reporting command described by that "
+    "capability contract."
 )
 DEFAULT_AGENT_COMMAND = (
     "nix",

@@ -65,10 +65,42 @@ standalone TeX file outside the framework. Preserve concrete editorial constrain
 minimum example counts, answer placement, title-page fields, visual requirements, and page or
 frame fit--as acceptance criteria and inspect the built PDF against them.
 
-After editing, run focused checks with explicit seeds, build the smallest useful review projection,
-and tell the author exactly which PDF is ready. Run the complete publication loop before proposing
-a commit or release. Never commit, push, publish, or change repository visibility without the
-author's approval.
+After editing, run focused checks with explicit seeds and tell the author exactly which PDF is
+ready. Use the fast preview loop below while iterating. Run the complete publication loop only when
+the work is ready for final validation before a commit or release. Never commit, push, publish, or
+change repository visibility without the author's approval.
+
+## Fast edit and review loop
+
+The open workspace owns preview rebuilds. Once the intended PDF is selected, edit its authored
+component, question, slide, publication, or style source and let the workspace watcher rebuild it.
+The workspace header reports **Rebuilding preview…** and then **Preview updated**. Do not invoke
+`mathpub build` after each edit: a competing manual build does more work and can race the watcher.
+
+When no watched preview is available and a manual preview is necessary, build only the active
+projection and always request reuse from the matching edition:
+
+```console
+nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT \
+  --projection student --incremental --replace --json
+```
+
+For a change confined to one textbook lesson, narrow the preview further:
+
+```console
+nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT \
+  --projection student --lesson LESSON_ID --incremental --replace --json
+```
+
+Keep the existing edition's seed, variant, font, and projection so its cache can be reused.
+`--incremental` reuses unchanged question and component instances plus prior TeX auxiliary state;
+an active watcher also preserves projections it did not build. `--lesson` is available only for
+textbooks.
+
+Build every required projection or omit `--lesson` only for final publication validation. Even
+then, keep `--incremental` when a matching edition exists. Use a clean full rebuild only when no
+reusable edition exists, the seed or variant changes, cached output is suspect, or clean
+reproduction is explicitly required.
 
 ## Reference material
 
@@ -142,14 +174,18 @@ solution fragments. Keep exact mathematical values in `ctx.parameter` and `ctx.d
 `ctx.check_*` for mathematical evidence. Attach a reader-friendly explanation to every important
 check with `ctx.validation_note(CHECK_ID, NOTE)`. Computational evidence is not a formal proof.
 
-Required loop after changing a question component:
+Focused loop after changing a question component:
 
 ```console
 nix run .#mathpub -- check component QUESTION_ID --seeds 20 --json
 nix run .#mathpub -- preview QUESTION_ID --seed 2026 --replace --json
 nix run .#mathpub -- check publication PUBLICATION_PATH --json
-nix run .#mathpub -- build PUBLICATION_PATH --seed 2026 --variant A --replace --json
+nix run .#mathpub -- build PUBLICATION_PATH --seed 2026 --variant A \
+  --projection student --incremental --replace --json
 ```
+
+If the changed question belongs to one textbook lesson, add `--lesson LESSON_ID` to the publication
+preview. Do not repeatedly render every publication projection while correcting one component.
 
 Keep answer and solution content out of `prompt.tex`; source boundaries enforce projection
 isolation. Parameterized diagrams must derive coordinates from the same canonical parameters as
@@ -206,12 +242,12 @@ split crowded material into additional slides, and place each worked solution on
 question. A request for at least five examples needs at least five distinct example/solution
 sequences in the manifest.
 
-Run the normal publication loop:
+If no workspace preview is already watching the presentation, run the focused preview loop:
 
 ```console
 nix run .#mathpub -- check publication publications/PRESENTATION.toml --json
 nix run .#mathpub -- build publications/PRESENTATION.toml \
-  --seed 2026 --variant review --projection student --replace --json
+  --seed 2026 --variant review --projection student --incremental --replace --json
 ```
 
 Open the resulting PDF in the MathPub preview and inspect every frame for clipping, overflow,

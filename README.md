@@ -160,7 +160,8 @@ page while keeping its SyncTeX regions aligned. Editing a component rebuilds onl
 projection, preserves explicit single-lesson targets, reuses unchanged question instances and TeX
 auxiliary state, preserves the edition's other projections, and hot-swaps the visible page. The
 header reports `Preview watching`, `Rebuilding preview…`, or `Preview updated`, including the
-measured rebuild duration.
+measured rebuild duration. Once a preview is selected, edit the authored source and wait for that
+status; do not run a competing full publication build after each edit.
 
 The native Linux application can be exercised through `tauri-driver`:
 

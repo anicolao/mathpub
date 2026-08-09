@@ -169,6 +169,8 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
     monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
     configuration = AgentConfiguration.from_environment()
     assert configuration.label == "Antigravity"
+    assert "automatic incremental preview watcher" in AGENT_BOOTSTRAP_PROMPT
+    assert "instead of running full publication builds" in AGENT_BOOTSTRAP_PROMPT
     assert configuration.command == (
         "nix",
         "run",

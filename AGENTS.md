@@ -41,7 +41,7 @@ Required validation loop after authoring or changing a question component:
 nix run .#mathpub -- check component QUESTION_ID --seeds 20 --json
 nix run .#mathpub -- preview QUESTION_ID --seed 2026 --replace --json
 nix run .#mathpub -- check publication publications/physics-practice.toml --json
-nix run .#mathpub -- build publications/physics-practice.toml --seed 2026 --variant A --replace --json
+nix run .#mathpub -- build publications/physics-practice.toml --seed 2026 --variant A --incremental --replace --json
 nix flake check
 ```
 
@@ -60,9 +60,12 @@ nix run .#mathpub-workspace
 
 The workspace navigates multipage PDFs with page-specific SyncTeX overlays and watches authored
 component roots to incrementally rebuild the active PDF projection without changing the visible
-page. Prepare formats manually with `nix run .#mathpub -- dump-format ...`; use `mathpub build
---lesson LESSON_ID --incremental` for an explicit single-lesson preview build, which the watcher
-preserves.
+page. Once a preview is selected, edit its authored sources and wait for the watcher; do not run a
+publication build after each edit. Prepare formats manually with
+`nix run .#mathpub -- dump-format ...`. When a manual preview is necessary, use one projection plus
+`--incremental`, and add `--lesson LESSON_ID` for an explicit single-lesson textbook preview.
+Reserve all-projection or whole-book builds for final validation, and continue to use
+`--incremental` when a matching edition exists.
 On Linux, validate the packaged native application with `nix run .#mathpub-gui-e2e`. The macOS
 zero-pixel renderer baseline remains the Playwright WebKit test because direct `tauri-driver`
 does not support WKWebView.
