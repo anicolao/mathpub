@@ -227,6 +227,84 @@ source = "gui-slide-editing/01-editable-slide.tex"
             )
             page.wait_for_function(wait_js)
 
+            # Direct native dictation enters xterm through its hidden IME textarea. Ensure a
+            # long composition reaches terminal transport intact, then clear xterm's stale copy
+            # so a later dictation segment cannot replace it and emit destructive DEL bytes.
+            page.evaluate(
+                """
+                () => {
+                  const nativeSend = WebSocket.prototype.send;
+                  window.__terminalInputFrames = [];
+                  window.__composeTerminalText = transcript => {
+                    const textarea = document.querySelector('.xterm-helper-textarea');
+                    textarea.dispatchEvent(
+                      new CompositionEvent('compositionstart', { data: '' })
+                    );
+                    textarea.dispatchEvent(
+                      new CompositionEvent('compositionupdate', { data: transcript })
+                    );
+                    textarea.value += transcript;
+                    textarea.dispatchEvent(
+                      new CompositionEvent('compositionend', { data: transcript })
+                    );
+                  };
+                  WebSocket.prototype.send = function(payload) {
+                    if (typeof payload === "string") {
+                      try {
+                        const message = JSON.parse(payload);
+                        if (message.type === "input") {
+                          window.__terminalInputFrames.push(message.data);
+                          if (
+                            message.data.includes("Keep this direct dictated prefix.") ||
+                            message.data.includes("Continue this direct dictation safely.") ||
+                            message.data.includes("Keep this dictated prefix.")
+                          ) {
+                            return;
+                          }
+                        }
+                      } catch (_) {}
+                    }
+                    return nativeSend.call(this, payload);
+                  };
+                }
+                """
+            )
+            direct_dictation = (
+                "Keep this direct dictated prefix. "
+                + "Continue accepting direct voice input. " * 240
+                + "Keep this direct dictated suffix."
+            )
+            assert len(direct_dictation) > 8_000
+            page.evaluate(
+                "transcript => window.__composeTerminalText(transcript)",
+                direct_dictation,
+            )
+            page.wait_for_function(
+                "window.__terminalInputFrames.some(frame => "
+                "frame.includes('Keep this direct dictated prefix.'))"
+            )
+            direct_frame = page.evaluate(
+                "window.__terminalInputFrames.find(frame => "
+                "frame.includes('Keep this direct dictated prefix.'))"
+            )
+            assert direct_dictation in direct_frame
+            page.wait_for_function("document.querySelector('.xterm-helper-textarea').value === ''")
+            direct_frame_count = page.evaluate("window.__terminalInputFrames.length")
+            continued_dictation = "Continue this direct dictation safely."
+            page.evaluate(
+                "transcript => window.__composeTerminalText(transcript)",
+                continued_dictation,
+            )
+            page.wait_for_function(
+                "window.__terminalInputFrames.some(frame => "
+                "frame.includes('Continue this direct dictation safely.'))"
+            )
+            continued_frames = page.evaluate(
+                "start => window.__terminalInputFrames.slice(start)", direct_frame_count
+            )
+            assert continued_dictation in "".join(continued_frames)
+            assert "\x7f" not in "".join(continued_frames)
+
             # Wait for PDF select dropdown to populate from /api/publications
             page.wait_for_function("document.getElementById('pdf-select').options.length > 1")
             assert page.locator(f'#pdf-select option[value="{expected_pdf}"]').count() == 1
@@ -310,35 +388,13 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert len(long_dictation) > 8_000
             dictation_text.fill(long_dictation)
             assert dictation_text.input_value() == long_dictation
-            page.evaluate(
-                """
-                () => {
-                  const nativeSend = WebSocket.prototype.send;
-                  window.__dictationInputFrames = [];
-                  WebSocket.prototype.send = function(payload) {
-                    if (typeof payload === "string") {
-                      try {
-                        const message = JSON.parse(payload);
-                        if (message.type === "input") {
-                          window.__dictationInputFrames.push(message.data);
-                          if (message.data.includes("Keep this dictated prefix.")) {
-                            return;
-                          }
-                        }
-                      } catch (_) {}
-                    }
-                    return nativeSend.call(this, payload);
-                  };
-                }
-                """
-            )
             page.locator("#dictation-insert").click()
             page.wait_for_function(
-                "window.__dictationInputFrames.some(frame => "
+                "window.__terminalInputFrames.some(frame => "
                 "frame.includes('Keep this dictated prefix.'))"
             )
             dictation_frame = page.evaluate(
-                "window.__dictationInputFrames.find(frame => "
+                "window.__terminalInputFrames.find(frame => "
                 "frame.includes('Keep this dictated prefix.'))"
             )
             assert long_dictation in dictation_frame
