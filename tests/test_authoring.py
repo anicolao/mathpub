@@ -20,7 +20,13 @@ def test_init_and_agent_instructions(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert payload["status"] == "ok"
     assert (project / "mathpub.toml").is_file()
-    assert json.loads((project / ".agents/mcp_config.json").read_text()) == {
+    assert json.loads((project / ".agents/plugins.json").read_text()) == {
+        "entries": [{"path": ".agents/plugins"}]
+    }
+    assert not (project / ".agents/mcp_config.json").exists()
+    plugin = project / ".agents/plugins/mathpub-workspace"
+    assert json.loads((plugin / "plugin.json").read_text()) == {"name": "mathpub-workspace"}
+    assert json.loads((plugin / "mcp_config.json").read_text()) == {
         "mcpServers": {
             "mathpub-workspace": {"args": ["mcp"], "command": "mathpub"},
         }

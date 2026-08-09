@@ -144,13 +144,13 @@ After the agent starts, **Insert first-book prompt** places a curriculum-plannin
 active prompt for the author to review and submit. Newly created libraries include agent
 instructions describing the PDF-centered, multi-publication workflow.
 
-New authoring libraries include a workspace-local Antigravity MCP configuration. It exposes a
-first-class `complete_task` tool and the launch prompt requires the agent to call it once after the
-requested work and validation are genuinely finished. The tool delivers a bounded HTML summary
-over an authenticated loopback channel; `mathpub complete` remains the fallback when MCP is
-unavailable. The workspace sanitizes that markup, sounds a short completion chime, and opens a
-**Completed!** review dialog. **Return to prompt** closes the summary and restores terminal focus
-so the author can continue the same conversation.
+New authoring libraries include an explicitly registered workspace-local Antigravity plugin. Its
+MCP configuration exposes a first-class `complete_task` tool, and the launch prompt requires the
+agent to call it once after the requested work and validation are genuinely finished. The tool
+delivers a bounded HTML summary over an authenticated loopback channel; `mathpub complete` remains
+the fallback when MCP is unavailable. The workspace sanitizes that markup, sounds a short
+completion chime, and opens a **Completed!** review dialog. **Return to prompt** closes the summary
+and restores terminal focus so the author can continue the same conversation.
 
 Options:
 - `--port PORT`: Specify custom port (default: `8765`).

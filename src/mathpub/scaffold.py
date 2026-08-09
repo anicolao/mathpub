@@ -25,6 +25,8 @@ Add only library-specific author or editorial instructions below this line; do n
 framework contract into this file.
 """
 
+# Antigravity loads repository-scoped MCP servers from enabled workspace plugins. A standalone
+# .agents/mcp_config.json looks plausible but is ignored, leaving its tools out of the model prompt.
 AGENT_MCP_CONFIG = {
     "mcpServers": {
         "mathpub-workspace": {
@@ -33,6 +35,8 @@ AGENT_MCP_CONFIG = {
         }
     }
 }
+AGENT_PLUGIN_MANIFEST = {"name": "mathpub-workspace"}
+AGENT_PLUGINS_CONFIG = {"entries": [{"path": ".agents/plugins"}]}
 
 FRAMEWORK_GUIDE = r"""# Working with mathpub
 
@@ -478,10 +482,13 @@ def init_project(
                 "MP-SRC-005", f"publication path must stay inside the repository: {path}"
             )
     _write_new(root / "mathpub.toml", PROJECT.format(name=name))
-    _write_new(
-        root / ".agents/mcp_config.json",
-        json.dumps(AGENT_MCP_CONFIG, indent=2, sort_keys=True) + "\n",
-    )
+    agent_plugin_root = root / ".agents/plugins/mathpub-workspace"
+    for path, data in (
+        (root / ".agents/plugins.json", AGENT_PLUGINS_CONFIG),
+        (agent_plugin_root / "plugin.json", AGENT_PLUGIN_MANIFEST),
+        (agent_plugin_root / "mcp_config.json", AGENT_MCP_CONFIG),
+    ):
+        _write_new(path, json.dumps(data, indent=2, sort_keys=True) + "\n")
     if not (root / "AGENTS.md").exists():
         _write_new(root / "AGENTS.md", AGENTS)
     if not (root / "flake.nix").exists():
