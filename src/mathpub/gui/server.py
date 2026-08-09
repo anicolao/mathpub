@@ -29,6 +29,8 @@ from mathpub.config import Project, find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.libraries import LibraryHistory, open_authoring_library
 from mathpub.gui.onboarding import (
+    AGENT_LAUNCH_COMMAND_ENV,
+    AGENT_LAUNCH_INPUT,
     STARTER_PROMPT,
     AgentConfiguration,
     create_authoring_library,
@@ -1000,12 +1002,16 @@ class WorkspaceServer:
         completion_port = sockname[1] if isinstance(sockname, tuple) else self.port
         completion_host = "[::1]" if self.host in {"::", "::1"} else "127.0.0.1"
         completion_url = f"http://{completion_host}:{completion_port}/api/agent/completed"
+        agent_command = self.agent.shell_command_for(project.root if project is not None else None)
+        terminal_environment = {
+            COMPLETION_URL_ENV: completion_url,
+            COMPLETION_TOKEN_ENV: self.completion_token,
+        }
+        if agent_command is not None:
+            terminal_environment[AGENT_LAUNCH_COMMAND_ENV] = agent_command
         pty = PTYManager(
             cwd=str(terminal_root),
-            environment={
-                COMPLETION_URL_ENV: completion_url,
-                COMPLETION_TOKEN_ENV: self.completion_token,
-            },
+            environment=terminal_environment,
         )
         pty.start(rows=24, cols=80)
 
@@ -1061,10 +1067,7 @@ class WorkspaceServer:
                                         pty.write(prompt.encode())
                                     continue
                                 if msg.get("type") == "start-agent":
-                                    command = self.agent.shell_command_for(
-                                        project.root if project is not None else None
-                                    )
-                                    if command is None:
+                                    if agent_command is None:
                                         await send_event(
                                             {
                                                 "type": "agent-unavailable",
@@ -1072,7 +1075,7 @@ class WorkspaceServer:
                                             }
                                         )
                                     else:
-                                        pty.write(b"\x15" + command.encode() + b"\r")
+                                        pty.write(b"\x15" + AGENT_LAUNCH_INPUT.encode() + b"\r")
                                         await send_event(
                                             {
                                                 "type": "agent-started",
