@@ -1055,7 +1055,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (ws.readyState !== WebSocket.OPEN) return;
     const prompt = dictationText.value.trim().replace(/\s*[\r\n]+\s*/g, " ");
     if (!prompt) return;
-    ws.send(JSON.stringify({ type: "input", data: prompt }));
+    // Let xterm mark this as a paste when the active shell or agent supports bracketed-paste
+    // mode. Sending a long transcript as raw terminal keystrokes can make a TUI treat it as an
+    // overflowing sequence of edits instead of one intact prompt.
+    term.paste(prompt);
     dictationDialog.close();
     dictationText.value = "";
     term.focus();

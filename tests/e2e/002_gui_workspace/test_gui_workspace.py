@@ -299,8 +299,53 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert dictation_dialog.is_visible()
             assert dictation_text.evaluate("element => element === document.activeElement")
             assert "⌘⇧D" in dictation_dialog.text_content()
+            assert dictation_text.get_attribute("maxlength") is None
             page.mouse.move(0, 0)
             steps.verify(page, "000-dictation-prompt")
+            long_dictation = (
+                "Keep this dictated prefix. "
+                + "Continue accepting the voice transcript. " * 240
+                + "Keep this dictated suffix."
+            )
+            assert len(long_dictation) > 8_000
+            dictation_text.fill(long_dictation)
+            assert dictation_text.input_value() == long_dictation
+            page.evaluate(
+                """
+                () => {
+                  const nativeSend = WebSocket.prototype.send;
+                  window.__dictationInputFrames = [];
+                  WebSocket.prototype.send = function(payload) {
+                    if (typeof payload === "string") {
+                      try {
+                        const message = JSON.parse(payload);
+                        if (message.type === "input") {
+                          window.__dictationInputFrames.push(message.data);
+                          if (message.data.includes("Keep this dictated prefix.")) {
+                            return;
+                          }
+                        }
+                      } catch (_) {}
+                    }
+                    return nativeSend.call(this, payload);
+                  };
+                }
+                """
+            )
+            page.locator("#dictation-insert").click()
+            page.wait_for_function(
+                "window.__dictationInputFrames.some(frame => "
+                "frame.includes('Keep this dictated prefix.'))"
+            )
+            dictation_frame = page.evaluate(
+                "window.__dictationInputFrames.find(frame => "
+                "frame.includes('Keep this dictated prefix.'))"
+            )
+            assert long_dictation in dictation_frame
+            page.keyboard.press("Control+U")
+
+            page.locator("#dictate-prompt").click()
+            assert dictation_dialog.is_visible()
             dictated_prompt = "Outline a short lesson about equivalent fractions. Include examples."
             dictation_text.fill(
                 "Outline a short lesson about equivalent fractions.\nInclude examples."
