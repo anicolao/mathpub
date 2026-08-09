@@ -176,13 +176,17 @@ writes its native screenshot to `build/e2e/tauri-driver.png`. Direct `tauri-driv
 not available for macOS WKWebView, so the Playwright WebKit scenario remains the deterministic
 zero-pixel screenshot test on macOS.
 
-Precompile a reusable format explicitly, or request an incremental single-lesson build:
+Precompile a reusable format explicitly, or use the default incremental single-lesson build:
 
 ```console
 nix run .#mathpub -- dump-format --style textbook --font libertinus --paper letter --json
 nix run .#mathpub -- build publications/book.toml --seed 2026 --variant A \
-  --projection student --lesson linear-equations --incremental --replace --json
+  --projection student --lesson linear-equations --replace --json
 ```
+
+`mathpub build` always reuses a matching edition when possible. `--full-rebuild` is an explicit
+diagnostic escape hatch for suspected stale or corrupt output or an intentionally clean
+reproduction; it is not part of the normal authoring or startup workflow.
 
 For detailed interface design, SyncTeX source-map routing, Tauri desktop integration, and the
 agentic onboarding implementation, see [GUI_DESIGN.md](GUI_DESIGN.md),

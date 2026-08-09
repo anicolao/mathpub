@@ -76,8 +76,9 @@ frame fit--as acceptance criteria and inspect the built PDF against them.
 
 After editing, run focused checks with explicit seeds and tell the author exactly which PDF is
 ready. Use the fast preview loop below while iterating. Run the complete publication loop only when
-the work is ready for final validation before a commit or release. Never commit, push, publish, or
-change repository visibility without the author's approval.
+the work is ready for final validation before a commit or release. Do not build merely to orient
+yourself at startup. Never commit, push, publish, or change repository visibility without the
+author's approval.
 
 ## Fast edit and review loop
 
@@ -87,29 +88,30 @@ The workspace header reports **Rebuilding preview…** and then **Preview update
 `mathpub build` after each edit: a competing manual build does more work and can race the watcher.
 
 When no watched preview is available and a manual preview is necessary, build only the active
-projection and always request reuse from the matching edition:
+projection. Builds reuse the matching edition by default:
 
 ```console
 nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT \
-  --projection student --incremental --replace --json
+  --projection student --replace --json
 ```
 
 For a change confined to one textbook lesson, narrow the preview further:
 
 ```console
 nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT \
-  --projection student --lesson LESSON_ID --incremental --replace --json
+  --projection student --lesson LESSON_ID --replace --json
 ```
 
-Keep the existing edition's seed, variant, font, and projection so its cache can be reused.
-`--incremental` reuses unchanged question and component instances plus prior TeX auxiliary state;
-an active watcher also preserves projections it did not build. `--lesson` is available only for
-textbooks.
+Keep the existing edition's seed, variant, font, and projection so its cache can be reused. The
+default incremental mode reuses unchanged question and component instances plus prior TeX
+auxiliary state; an active watcher also preserves projections it did not build. `--lesson` is
+available only for textbooks.
 
 Build every required projection or omit `--lesson` only for final publication validation. Even
-then, keep `--incremental` when a matching edition exists. Use a clean full rebuild only when no
-reusable edition exists, the seed or variant changes, cached output is suspect, or clean
-reproduction is explicitly required.
+then, keep the default incremental mode. Never pass `--full-rebuild` unless cached output appears
+wrong or corrupt, clean reproduction is explicitly required, or the author asks for it. A missing
+cache, new seed, or new variant is not a reason to pass it: the default build creates that edition
+naturally. Do not run `mathpub clean` as part of a routine build or startup sequence.
 
 ## Reference material
 
@@ -190,7 +192,7 @@ nix run .#mathpub -- check component QUESTION_ID --seeds 20 --json
 nix run .#mathpub -- preview QUESTION_ID --seed 2026 --replace --json
 nix run .#mathpub -- check publication PUBLICATION_PATH --json
 nix run .#mathpub -- build PUBLICATION_PATH --seed 2026 --variant A \
-  --projection student --incremental --replace --json
+  --projection student --replace --json
 ```
 
 If the changed question belongs to one textbook lesson, add `--lesson LESSON_ID` to the publication
@@ -256,7 +258,7 @@ If no workspace preview is already watching the presentation, run the focused pr
 ```console
 nix run .#mathpub -- check publication publications/PRESENTATION.toml --json
 nix run .#mathpub -- build publications/PRESENTATION.toml \
-  --seed 2026 --variant review --projection student --incremental --replace --json
+  --seed 2026 --variant review --projection student --replace --json
 ```
 
 Open the resulting PDF in the MathPub preview and inspect every frame for clipping, overflow,

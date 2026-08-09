@@ -47,9 +47,14 @@ def capability_data(project: Project) -> dict[str, Any]:
             ),
         },
         "preview_builds": {
+            "default_mode": (
+                "All mathpub build commands are incremental by default. If no matching edition "
+                "exists, the same command naturally creates it from scratch."
+            ),
             "preferred_workflow": (
                 "When a preview is open in the workspace, edit authored source and let the "
-                "automatic watcher rebuild it; do not run a publication build after each edit."
+                "automatic watcher rebuild it; do not build merely to inspect the repository at "
+                "startup and do not run a publication build after each edit."
             ),
             "automatic_scope": (
                 "The watcher rebuilds only the active projection, preserves an explicit textbook "
@@ -58,17 +63,22 @@ def capability_data(project: Project) -> dict[str, Any]:
             ),
             "manual_command": (
                 "nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT "
-                "--projection student --incremental --replace --json"
+                "--projection student --replace --json"
             ),
             "textbook_lesson_command": (
                 "nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT "
-                "--projection student --lesson LESSON_ID --incremental --replace --json"
+                "--projection student --lesson LESSON_ID --replace --json"
             ),
             "full_build_policy": (
-                "Build every required projection or omit --lesson only for final publication "
-                "validation. Continue to use --incremental when a matching edition exists; use a "
-                "clean rebuild only when no cache exists, the seed or variant changes, the cache "
-                "is suspect, or clean reproduction is explicitly required."
+                "Building every required projection or omitting --lesson for final validation "
+                "does not justify discarding reusable state. Never pass --full-rebuild unless "
+                "cached output appears wrong or corrupt, clean reproduction is explicitly "
+                "required, or the author asks for it. A missing cache, new seed, or new variant is "
+                "not a reason to pass it: the default build creates the new edition naturally."
+            ),
+            "full_rebuild_command": (
+                "nix run .#mathpub -- build PUBLICATION_PATH --seed SEED --variant VARIANT "
+                "--full-rebuild --replace --json"
             ),
         },
         "task_completion": {
