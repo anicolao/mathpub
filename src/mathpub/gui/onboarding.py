@@ -48,6 +48,8 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 URL_CREDENTIAL_RE = re.compile(r"(https?://)[^/\s@]+@")
 GITHUB_TOKEN_RE = re.compile(r"\b(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+\b")
 SECRET_ASSIGNMENT_RE = re.compile(r"(?i)\b(token|password|secret|authorization)(\s*[:=]\s*)\S+")
+GIT_REVISION_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
+CLI_REVISION_RE = re.compile(r"\(([0-9a-f]{7,40})\)\s*$", re.IGNORECASE)
 
 
 def _clean_process_output(value: object) -> str:
@@ -105,6 +107,7 @@ class AgentConfiguration:
 
     label: str
     command: tuple[str, ...]
+    synchronize_mathpub: bool = False
 
     @classmethod
     def from_environment(cls) -> AgentConfiguration:
@@ -119,6 +122,7 @@ class AgentConfiguration:
         return cls(
             label=os.environ.get("MATHPUB_AGENT_LABEL", "Antigravity"),
             command=command,
+            synchronize_mathpub=raw_command is None,
         )
 
     @property
@@ -187,6 +191,110 @@ class AgentConfiguration:
                 else None
             ),
         }
+
+
+def synchronize_library_mathpub(
+    project_root: Path,
+    expected_revision: str,
+) -> dict[str, object]:
+    """Refresh a library's MathPub input when it differs from the GUI build."""
+    expected_revision = expected_revision.strip()
+    if GIT_REVISION_RE.fullmatch(expected_revision) is None:
+        return {"skipped": True, "updated": False, "revision": None}
+
+    nix = shutil.which("nix")
+    if nix is None:
+        raise MathpubError(
+            "MP-GUI-023",
+            "Nix is unavailable; cannot verify the library MathPub toolchain",
+        )
+
+    version_command = [
+        nix,
+        "run",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        ".#mathpub",
+        "--",
+        "--version",
+    ]
+
+    def cli_revision(*, stage: str) -> str | None:
+        try:
+            result = subprocess.run(
+                version_command,
+                cwd=project_root,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise MathpubError(
+                "MP-GUI-023",
+                "could not verify the library MathPub toolchain",
+                details=_process_failure_details(
+                    error,
+                    stage=stage,
+                    command=version_command,
+                ),
+            ) from error
+        match = CLI_REVISION_RE.search(result.stdout.strip())
+        return match.group(1).lower() if match is not None else None
+
+    def revisions_match(actual: str | None) -> bool:
+        if actual is None:
+            return False
+        expected = expected_revision.lower()
+        return actual.startswith(expected) or expected.startswith(actual)
+
+    previous_revision = cli_revision(stage="Checking the library MathPub version")
+    if revisions_match(previous_revision):
+        return {
+            "skipped": False,
+            "updated": False,
+            "revision": previous_revision,
+        }
+
+    update_command = [nix, "flake", "update", "--refresh", "mathpub"]
+    try:
+        subprocess.run(
+            update_command,
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise MathpubError(
+            "MP-GUI-023",
+            "could not update the library MathPub toolchain",
+            details=_process_failure_details(
+                error,
+                stage="Updating the library MathPub input",
+                command=update_command,
+            ),
+        ) from error
+
+    revision = cli_revision(stage="Verifying the updated library MathPub version")
+    if not revisions_match(revision):
+        raise MathpubError(
+            "MP-GUI-023",
+            "the library MathPub toolchain still does not match this GUI build",
+            details={
+                "stage": "Verifying the updated library MathPub version",
+                "expected_revision": expected_revision,
+                "actual_revision": revision or "unavailable",
+            },
+        )
+    return {
+        "skipped": False,
+        "updated": True,
+        "previous_revision": previous_revision,
+        "revision": revision,
+    }
 
 
 def create_authoring_library(

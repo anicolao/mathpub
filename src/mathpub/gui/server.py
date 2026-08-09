@@ -8,6 +8,7 @@ import contextlib
 import hashlib
 import json
 import mimetypes
+import os
 import re
 import secrets
 import shlex
@@ -34,6 +35,7 @@ from mathpub.gui.onboarding import (
     STARTER_PROMPT,
     AgentConfiguration,
     create_authoring_library,
+    synchronize_library_mathpub,
 )
 from mathpub.gui.reference_import import REFERENCE_IMPORT_LIMIT, import_reference
 from mathpub.gui.source_edit import SOURCE_EDIT_LIMIT, load_tex_source, save_tex_source
@@ -271,6 +273,7 @@ class WorkspaceServer:
         library_creator: Callable[..., dict[str, object]] = create_authoring_library,
         library_history: LibraryHistory | None = None,
         build_version: str | None = None,
+        build_revision: str | None = None,
         native_preview_opener: Callable[[Path], None] | None = None,
     ) -> None:
         self.host = host
@@ -286,6 +289,11 @@ class WorkspaceServer:
         self.mathpub_url = mathpub_url
         self.library_creator = library_creator
         self.build_version = build_version or display_version()
+        self.build_revision = (
+            build_revision
+            if build_revision is not None
+            else os.environ.get("MATHPUB_BUILD_REVISION", "")
+        )
         self.native_preview_opener = native_preview_opener or _default_native_preview_opener()
         self.repository_edit_lock = asyncio.Lock()
         self.completion_token = secrets.token_urlsafe(32)
@@ -1075,6 +1083,31 @@ class WorkspaceServer:
                                             }
                                         )
                                     else:
+                                        if project is not None and self.agent.synchronize_mathpub:
+                                            await send_event({"type": "agent-toolchain-syncing"})
+                                            try:
+                                                async with self.repository_edit_lock:
+                                                    synchronization = await asyncio.to_thread(
+                                                        synchronize_library_mathpub,
+                                                        project.root,
+                                                        self.build_revision,
+                                                    )
+                                            except MathpubError as error:
+                                                await send_event(
+                                                    {
+                                                        "type": "agent-toolchain-sync-failed",
+                                                        "error": error.message,
+                                                        "code": error.code,
+                                                        "details": error.details,
+                                                    }
+                                                )
+                                                continue
+                                            await send_event(
+                                                {
+                                                    "type": "agent-toolchain-synced",
+                                                    **synchronization,
+                                                }
+                                            )
                                         pty.write(b"\x15" + AGENT_LAUNCH_INPUT.encode() + b"\r")
                                         await send_event(
                                             {
