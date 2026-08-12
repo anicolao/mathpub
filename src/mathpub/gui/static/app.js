@@ -513,6 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
         root_seed: currentPublication.root_seed,
         variant: currentPublication.variant,
         projection: currentPublication.projection,
+        path: currentPublication.path,
         font_family: currentPublication.font_family,
         page: currentPage,
         lesson_ids: currentPublication.lesson_ids || []
@@ -539,6 +540,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (message.type === "preview-build-failed") {
       buildStatus.textContent = "Preview build failed";
+      buildStatus.title = message.error || "";
+      return true;
+    }
+    if (message.type === "preview-review-failed") {
+      buildStatus.textContent = "Page review rendering failed";
       buildStatus.title = message.error || "";
       return true;
     }

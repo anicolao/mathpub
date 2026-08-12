@@ -170,6 +170,10 @@ header reports `Preview watching`, `Rebuilding preview…`, or `Preview updated`
 measured rebuild duration. Once a preview is selected, edit the authored source and wait for that
 status; do not run a competing full publication build after each edit.
 
+After each incremental watcher build, MathPub writes PNGs for visually changed pages beneath the
+edition's `review-pages/` directory and sends the active agent a follow-up requiring it to inspect
+those images for content, formatting, clipping, crowding, and diagram clarity before continuing.
+
 The native Linux application can be exercised through `tauri-driver`:
 
 ```console
