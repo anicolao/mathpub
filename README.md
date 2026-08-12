@@ -128,15 +128,19 @@ other author or agent changes untouched. The agent starts in the library's locke
 is instructed to inspect `reference/` whenever the author mentions supplied material; PDF
 references can be read with the included `pdftotext` tool.
 
-The agent button launches Anna's pinned Antigravity flake with
-`nix run github:anicolao/nix-antigravity` by default. MathPub runs the configured agent through the
-authoring library's locked `nix develop` environment, which guarantees `mathpub`, `nix`, `gh`,
-`git`, `jq`, `rg`, and `pdftotext`. Repository-specific tools can be added with the generated flake's
-`extraPackages` function. Configure another executable or label without rebuilding MathPub:
+The workspace offers separate **Start Antigravity** and **Start Codex** buttons. Antigravity uses
+Anna's pinned `nix run github:anicolao/nix-antigravity` launcher. Codex uses the installed Codex CLI
+in interactive workspace-write mode and registers `mathpub mcp` for the session. Both launchers run
+through the authoring library's locked `nix develop` environment, which guarantees `mathpub`,
+`nix`, `gh`, `git`, `jq`, `rg`, and `pdftotext`. Repository-specific tools can be added with the
+generated flake's `extraPackages` function. Configure either executable or label without rebuilding
+MathPub:
 
 ```console
 MATHPUB_AGENT_COMMAND="nix run github:anicolao/nix-antigravity" \
 MATHPUB_AGENT_LABEL="Antigravity" \
+MATHPUB_CODEX_COMMAND="codex --no-alt-screen" \
+MATHPUB_CODEX_LABEL="Codex" \
 nix run .#mathpub-gui
 ```
 
@@ -145,10 +149,11 @@ active prompt for the author to review and submit. Newly created libraries inclu
 instructions describing the PDF-centered, multi-publication workflow.
 
 New authoring libraries include an explicitly registered workspace-local Antigravity plugin. Its
-MCP configuration exposes a first-class `complete_task` tool, and the launch prompt requires the
-agent to call it once after the requested work and validation are genuinely finished. The tool
-delivers a bounded HTML summary over an authenticated loopback channel; `mathpub complete` remains
-the fallback when MCP is unavailable. The workspace sanitizes that markup, sounds a short
+MCP configuration exposes a first-class `complete_task` tool; the Codex launcher registers the
+same `mathpub mcp` server through its session configuration. The shared launch prompt requires the
+chosen agent to call the tool once after the requested work and validation are genuinely finished.
+The tool delivers a bounded HTML summary over an authenticated loopback channel; `mathpub complete`
+remains the fallback when MCP is unavailable. The workspace sanitizes that markup, sounds a short
 completion chime, and opens a **Completed!** review dialog. **Return to prompt** closes the summary
 and restores terminal focus so the author can continue the same conversation.
 

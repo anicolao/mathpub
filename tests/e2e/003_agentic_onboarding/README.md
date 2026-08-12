@@ -7,8 +7,9 @@ This scenario exercises the first agentic authoring vertical slice:
 3. Import a reference through the file chooser and verify that only
    `reference/course-outline.txt` is committed.
 4. Reconnect the PTY with the new library as its working directory.
-5. Launch a configured Antigravity-compatible CLI command through the library's locked
-   `nix develop` environment and verify that it can find the imported file and `pdftotext`.
+5. Verify that both agent choices are available, launch the configured Codex-compatible command
+   through the library's locked `nix develop` environment, and confirm that it can find the
+   imported file, `pdftotext`, and the completion MCP tool.
 6. Insert the first-book planning prompt for the agent.
 7. Open the library chooser and verify that the new library appears in the recent list.
 8. Open an arbitrary existing MathPub library by its folder path.

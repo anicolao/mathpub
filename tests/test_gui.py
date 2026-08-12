@@ -23,6 +23,9 @@ from mathpub.gui.onboarding import (
     AGENT_BOOTSTRAP_PROMPT,
     AGENT_LAUNCH_COMMAND_ENV,
     AGENT_LAUNCH_INPUT,
+    CODEX_LAUNCH_COMMAND_ENV,
+    CODEX_LAUNCH_INPUT,
+    DEFAULT_CODEX_COMMAND,
     AgentConfiguration,
     create_authoring_library,
     synchronize_library_mathpub,
@@ -105,20 +108,31 @@ def test_pty_manager_supplies_workspace_tools_to_child(monkeypatch):
     assert b"available" in output
 
 
-def test_pty_launches_agent_command_larger_than_canonical_input_limit(monkeypatch):
+@pytest.mark.parametrize(
+    ("launch_environment", "launch_input"),
+    (
+        (AGENT_LAUNCH_COMMAND_ENV, AGENT_LAUNCH_INPUT),
+        (CODEX_LAUNCH_COMMAND_ENV, CODEX_LAUNCH_INPUT),
+    ),
+)
+def test_pty_launches_agent_command_larger_than_canonical_input_limit(
+    monkeypatch,
+    launch_environment,
+    launch_input,
+):
     monkeypatch.delenv("PYTHONPATH", raising=False)
     padding = "x" * 2_048
     long_command = f"{shlex.join(['printf', 'agent-ready\\n'])} #{padding}"
-    pty = PTYManager(environment={AGENT_LAUNCH_COMMAND_ENV: long_command})
+    pty = PTYManager(environment={launch_environment: long_command})
     pty.start(rows=24, cols=80)
 
     try:
         assert pty.master_fd is not None
         canonical_limit = os.fpathconf(pty.master_fd, "PC_MAX_CANON")
         assert len(long_command.encode()) > canonical_limit
-        assert len(AGENT_LAUNCH_INPUT.encode()) < canonical_limit
+        assert len(launch_input.encode()) < canonical_limit
 
-        pty.write(b"\x15" + AGENT_LAUNCH_INPUT.encode() + b"\r")
+        pty.write(b"\x15" + launch_input.encode() + b"\r")
         deadline = time.monotonic() + 5.0
         output = b""
         while b"agent-ready" not in output and time.monotonic() < deadline:
@@ -222,6 +236,54 @@ def test_custom_agent_does_not_synchronize_mathpub(monkeypatch):
     configuration = AgentConfiguration.from_environment()
 
     assert configuration.synchronize_mathpub is False
+
+
+def test_codex_configuration_uses_safe_interactive_launcher(tmp_path, monkeypatch):
+    monkeypatch.delenv("MATHPUB_CODEX_COMMAND", raising=False)
+    monkeypatch.setattr(
+        "mathpub.gui.onboarding.shutil.which",
+        lambda command: f"/usr/bin/{command}" if command in {"codex", "nix"} else None,
+    )
+    (tmp_path / "flake.nix").write_text("{}")
+
+    configuration = AgentConfiguration.codex_from_environment()
+    command = configuration.command_for(tmp_path)
+
+    assert configuration.label == "Codex"
+    assert configuration.command == DEFAULT_CODEX_COMMAND
+    assert configuration.synchronize_mathpub is True
+    assert configuration.requires_host_executable is True
+    assert command is not None
+    assert command[:7] == (
+        "nix",
+        "develop",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        "--command",
+        "codex",
+    )
+    assert "--sandbox" in command
+    assert command[command.index("--sandbox") + 1] == "workspace-write"
+    assert command[command.index("--ask-for-approval") + 1] == "on-request"
+    assert command[command.index("--cd") + 1] == str(tmp_path)
+    assert 'mcp_servers.mathpub-workspace.command="mathpub"' in command
+    assert 'mcp_servers.mathpub-workspace.args=["mcp"]' in command
+    assert f"The only authoring library for this session is {tmp_path}." in command[-1]
+
+
+def test_codex_configuration_is_unavailable_without_codex(tmp_path, monkeypatch):
+    monkeypatch.delenv("MATHPUB_CODEX_COMMAND", raising=False)
+    monkeypatch.setattr(
+        "mathpub.gui.onboarding.shutil.which",
+        lambda command: "/usr/bin/nix" if command == "nix" else None,
+    )
+    (tmp_path / "flake.nix").write_text("{}")
+
+    configuration = AgentConfiguration.codex_from_environment()
+
+    assert configuration.command_for(tmp_path) is None
+    assert configuration.payload(tmp_path)["available"] is False
 
 
 def test_library_mathpub_sync_avoids_update_when_revision_matches(tmp_path, monkeypatch):
@@ -808,6 +870,10 @@ def test_workspace_server_http(tmp_path):
         assert workspace_data["root"]
         assert workspace_data["recent_libraries"] == []
         assert workspace_data["version"] == "0.1.0 (8aafec7)"
+        assert [agent["id"] for agent in workspace_data["agents"]] == [
+            "antigravity",
+            "codex",
+        ]
         assert workspace_data["native_pdf_viewer"] == {
             "available": True,
             "label": "Preview",
