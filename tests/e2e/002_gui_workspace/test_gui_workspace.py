@@ -133,6 +133,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
             port=0,
             project_root=project.root,
             agent_command=[],
+            codex_command=[],
             build_version="0.1.0 (e2e0000)",
             native_preview_opener=opened_pdfs.append,
         )
@@ -205,6 +206,9 @@ source = "gui-slide-editing/01-editable-slide.tex"
 
             page.route("**/api/publications", add_stale_publication)
             page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "document.getElementById('app-version').textContent === '0.1.0 (e2e0000)'"
+            )
 
             # 1. Verify Header Elements
             assert page.locator(".logo").text_content() == "mathpub"
