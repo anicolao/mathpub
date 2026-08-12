@@ -1066,7 +1066,21 @@ class WorkspaceServer:
 
         self.completion_listeners.add(send_event)
 
-        watcher = IncrementalPreviewWatcher(project, send_event) if project is not None else None
+        active_agent_id: str | None = None
+
+        async def send_review_prompt(prompt: str) -> None:
+            if active_agent_id is not None and pty.is_alive():
+                pty.write(prompt.encode() + b"\r")
+
+        watcher = (
+            IncrementalPreviewWatcher(
+                project,
+                send_event,
+                send_review_prompt=send_review_prompt,
+            )
+            if project is not None
+            else None
+        )
 
         async def read_pty_to_ws() -> None:
             while pty.is_alive():
@@ -1080,6 +1094,7 @@ class WorkspaceServer:
                     await asyncio.sleep(0.02)
 
         async def read_ws_to_pty() -> None:
+            nonlocal active_agent_id
             frame_buffer = bytearray()
             while pty.is_alive():
                 try:
@@ -1159,6 +1174,7 @@ class WorkspaceServer:
                                         pty.write(
                                             b"\x15" + launch_inputs[agent_id].encode() + b"\r"
                                         )
+                                        active_agent_id = agent_id
                                         await send_event(
                                             {
                                                 "type": "agent-started",
@@ -1172,10 +1188,17 @@ class WorkspaceServer:
                                     await send_event({"type": "starter-prompt-inserted"})
                                     continue
                                 if msg.get("type") == "watch-preview":
-                                    selection = (
-                                        await watcher.select(msg) if watcher is not None else None
-                                    )
-                                    preparation_error = None
+                                    selection_error = None
+                                    try:
+                                        selection = (
+                                            await watcher.select(msg)
+                                            if watcher is not None
+                                            else None
+                                        )
+                                    except Exception as error:
+                                        selection = None
+                                        selection_error = str(error)
+                                    preparation_error = selection_error
                                     if selection is not None:
                                         try:
                                             await asyncio.to_thread(

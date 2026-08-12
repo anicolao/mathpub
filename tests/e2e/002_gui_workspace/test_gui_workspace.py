@@ -645,6 +645,13 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert page.locator("#page-position").text_content() == "Page 2 of 2"
             assert "page=2" in page.locator("#pdf-preview").get_attribute("src")
             assert watched_source.read_text() == edited_content
+            document_review_pages = sorted(
+                (project.root / "build/physics.practice/A/review-pages").glob("*.png")
+            )
+            assert [path.name for path in document_review_pages] == [
+                "physics.practice-A-student-page-001.png"
+            ]
+            assert document_review_pages[0].stat().st_size > 0
 
             commit_after = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
@@ -780,6 +787,13 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert page.locator("#pdf-select").input_value() == presentation_pdf
             assert page.locator("#page-position").text_content() == "Page 2 of 2"
             assert presentation_source.read_text() == slide_edited
+            presentation_review_pages = sorted(
+                (project.root / "build/gui.slide-editing/A/review-pages").glob("*.png")
+            )
+            assert [path.name for path in presentation_review_pages] == [
+                "gui.slide-editing-A-student-page-002.png"
+            ]
+            assert presentation_review_pages[0].stat().st_size > 0
             slide_commit_after = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 cwd=project.root,

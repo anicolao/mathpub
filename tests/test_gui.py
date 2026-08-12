@@ -215,6 +215,7 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
     assert "Never use `--full-rebuild` unless cached output appears wrong" in (
         AGENT_BOOTSTRAP_PROMPT
     )
+    assert "inspect every changed-page PNG" in AGENT_BOOTSTRAP_PROMPT
     assert configuration.label == "Antigravity"
     assert configuration.synchronize_mathpub is True
     assert configuration.command == (

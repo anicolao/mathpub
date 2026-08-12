@@ -5,8 +5,16 @@ from __future__ import annotations
 import asyncio
 import threading
 
+from pypdf import PdfWriter
+
 from mathpub.config import find_project
-from mathpub.gui.watch import IncrementalPreviewWatcher, _selection
+from mathpub.gui.watch import (
+    IncrementalPreviewWatcher,
+    _changed_page_numbers,
+    _pdf_page_fingerprints,
+    _review_prompt,
+    _selection,
+)
 from mathpub.scaffold import init_project
 
 
@@ -34,6 +42,40 @@ def test_preview_selection_rejects_unsafe_values(tmp_path):
     assert _selection(project, {**valid, "page": 0}) is None
     assert _selection(project, {**valid, "page": "2"}) is None
     assert _selection(project, {**valid, "lesson_ids": ["../outside"]}) is None
+    assert _selection(project, {**valid, "path": "../outside.pdf"}) is None
+
+
+def test_changed_pages_include_visual_differences_and_new_page_boundary():
+    assert _changed_page_numbers(("same", "old", "removed"), ("same", "new")) == (2,)
+    assert _changed_page_numbers(("same",), ("same", "added")) == (2,)
+    assert _changed_page_numbers(("same",), ("same",)) == ()
+
+
+def test_pdf_page_fingerprints_are_stable_for_unchanged_pages(tmp_path):
+    pdf = tmp_path / "fixture.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer.add_blank_page(width=612, height=792)
+    with pdf.open("wb") as output:
+        writer.write(output)
+
+    first = _pdf_page_fingerprints(pdf)
+
+    assert len(first) == 2
+    assert first == _pdf_page_fingerprints(pdf)
+
+
+def test_review_prompt_requires_visual_content_and_diagram_checks():
+    prompt = _review_prompt(
+        ["build/demo/A/review-pages/demo-A-student-page-002.png"],
+        page_count_changed=True,
+    )
+
+    assert "use your image-viewing tool" in prompt
+    assert "demo-A-student-page-002.png" in prompt
+    assert "page count also changed" in prompt
+    assert "nothing is clipped, overlapping, or overcrowded" in prompt
+    assert "diagram is clear, legible, and mathematically consistent" in prompt
 
 
 def test_preview_watcher_rebuilds_after_authored_change(tmp_path):
@@ -114,6 +156,99 @@ id = "demo.question"
     assert build_call["incremental"] is True
     assert build_call["projections"] == ["student"]
     assert build_call["lesson_ids"] == ["lesson-one"]
+
+
+def test_preview_watcher_renders_changed_pages_and_prompts_agent(tmp_path):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/demo.toml"
+    publication.write_text(
+        """schema = 1
+id = "demo"
+kind = "worksheet"
+title = "Demo"
+profile = "mathpub.exam"
+projections = ["student"]
+[[sections]]
+title = "Demo"
+questions = []
+"""
+    )
+    watched = root / "components/watched.tex"
+    watched.parent.mkdir(exist_ok=True)
+    watched.write_text("before")
+    edition = root / "build/demo/A"
+    edition.mkdir(parents=True)
+    pdf = edition / "demo-A-student.pdf"
+    pdf.write_bytes(b"old pdf fixture")
+    review_dir = edition / "review-pages"
+    review_dir.mkdir()
+    stale = review_dir / "demo-A-student-page-001.png"
+    stale.write_bytes(b"stale")
+    fingerprints = iter((("same", "before"), ("same", "after")))
+    rendered = []
+    events = []
+    prompts = []
+
+    def fake_builder(*_args, **_kwargs):
+        pdf.write_bytes(b"new pdf fixture")
+        return {
+            "edition": "build/demo/A",
+            "outputs": [{"projection": "student", "path": "demo-A-student.pdf", "pages": 2}],
+            "instance_cache": {"components_reused": 1},
+            "latex_format": None,
+        }
+
+    def fake_renderer(_pdf_path, page, target):
+        rendered.append((page, target))
+        target.write_bytes(b"changed page")
+
+    async def exercise():
+        async def send_event(event):
+            events.append(event)
+
+        async def send_review_prompt(prompt):
+            prompts.append(prompt)
+
+        watcher = IncrementalPreviewWatcher(
+            project,
+            send_event,
+            poll_interval=0.01,
+            builder=fake_builder,
+            format_dumper=lambda *_args, **_kwargs: {"format": None},
+            page_fingerprinter=lambda _path: next(fingerprints),
+            page_renderer=fake_renderer,
+            send_review_prompt=send_review_prompt,
+        )
+        selected = await watcher.select(
+            {
+                "publication_path": "publications/demo.toml",
+                "path": "build/demo/A/demo-A-student.pdf",
+                "root_seed": "2026",
+                "variant": "A",
+                "projection": "student",
+                "font_family": "libertinus",
+                "page": 1,
+            }
+        )
+        assert selected is not None
+        watched.write_text("after")
+        for _ in range(100):
+            if any(event["type"] == "preview-built" for event in events):
+                break
+            await asyncio.sleep(0.01)
+        await watcher.close()
+
+    asyncio.run(exercise())
+    expected = "build/demo/A/review-pages/demo-A-student-page-002.png"
+    assert events[-1]["review_pages"] == [expected]
+    assert [page for page, _target in rendered] == [2]
+    assert not stale.exists()
+    assert (root / expected).read_bytes() == b"changed page"
+    assert len(prompts) == 1
+    assert expected in prompts[0]
+    assert "do not declare the task complete" in prompts[0]
 
 
 def test_preview_watcher_does_not_prepare_a_document_format_for_presentations(tmp_path):

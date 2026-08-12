@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 import tomllib
 from collections.abc import Awaitable, Callable
@@ -33,6 +37,7 @@ class PreviewSelection:
     font_family: str
     page: int
     lesson_ids: tuple[str, ...]
+    output_path: Path | None
 
 
 def _selection(project: Project, message: dict[str, object]) -> PreviewSelection | None:
@@ -40,6 +45,7 @@ def _selection(project: Project, message: dict[str, object]) -> PreviewSelection
     fields = ("root_seed", "variant", "projection", "font_family")
     page = message.get("page", 1)
     lesson_ids = message.get("lesson_ids", [])
+    output_value = message.get("path")
     if (
         not isinstance(publication_value, str)
         or not all(isinstance(message.get(field), str) for field in fields)
@@ -49,9 +55,11 @@ def _selection(project: Project, message: dict[str, object]) -> PreviewSelection
             isinstance(lesson_id, str) and SAFE_VALUE.fullmatch(lesson_id)
             for lesson_id in lesson_ids
         )
+        or (output_value is not None and not isinstance(output_value, str))
     ):
         return None
     publication_path = (project.root / publication_value).resolve()
+    output_path = (project.root / output_value).resolve() if output_value else None
     if (
         not publication_path.is_relative_to(project.root)
         or not publication_path.is_file()
@@ -61,6 +69,12 @@ def _selection(project: Project, message: dict[str, object]) -> PreviewSelection
         or not SAFE_VALUE.fullmatch(str(message["variant"]))
         or page < 1
         or page > 10_000
+        or (
+            output_path is not None
+            and (
+                not output_path.is_relative_to(project.root) or output_path.suffix.lower() != ".pdf"
+            )
+        )
     ):
         return None
     return PreviewSelection(
@@ -71,6 +85,92 @@ def _selection(project: Project, message: dict[str, object]) -> PreviewSelection
         font_family=str(message["font_family"]),
         page=page,
         lesson_ids=tuple(lesson_ids),
+        output_path=output_path,
+    )
+
+
+def _pdf_page_fingerprints(pdf_path: Path | None) -> tuple[str, ...]:
+    """Fingerprint low-resolution page pixels so PDF internals do not cause false changes."""
+    if pdf_path is None or not pdf_path.is_file():
+        return ()
+    pdftocairo = shutil.which("pdftocairo")
+    if pdftocairo is None:
+        raise RuntimeError("pdftocairo is unavailable; cannot identify changed PDF pages")
+    with tempfile.TemporaryDirectory(prefix="mathpub-page-fingerprints-") as temporary:
+        prefix = Path(temporary) / "page"
+        subprocess.run(
+            [pdftocairo, "-png", "-r", "36", str(pdf_path), str(prefix)],
+            check=True,
+            capture_output=True,
+            timeout=120,
+        )
+        pages = sorted(
+            prefix.parent.glob("page-*.png"),
+            key=lambda path: int(path.stem.rsplit("-", 1)[1]),
+        )
+        return tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in pages)
+
+
+def _render_pdf_page(pdf_path: Path, page: int, target: Path) -> None:
+    """Render one review page to a stable PNG path using the Nix-provided Poppler tool."""
+    pdftocairo = shutil.which("pdftocairo")
+    if pdftocairo is None:
+        raise RuntimeError("pdftocairo is unavailable; cannot render incremental review pages")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    prefix = target.with_suffix("")
+    subprocess.run(
+        [
+            pdftocairo,
+            "-png",
+            "-singlefile",
+            "-f",
+            str(page),
+            "-l",
+            str(page),
+            "-r",
+            "150",
+            str(pdf_path),
+            str(prefix),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    if not target.is_file():
+        raise RuntimeError(f"pdftocairo did not create review image: {target}")
+
+
+def _changed_page_numbers(
+    previous: tuple[str, ...],
+    current: tuple[str, ...],
+) -> tuple[int, ...]:
+    """Return current pages whose rendered pixels changed."""
+    changed = {
+        index + 1
+        for index, fingerprint in enumerate(current)
+        if index >= len(previous) or previous[index] != fingerprint
+    }
+    if len(previous) != len(current) and current:
+        changed.add(len(current))
+    return tuple(sorted(changed))
+
+
+def _review_prompt(review_pages: list[str], *, page_count_changed: bool) -> str:
+    if review_pages:
+        pages = ", ".join(review_pages)
+        count_note = " The publication's page count also changed." if page_count_changed else ""
+        return (
+            "MathPub's incremental build completed. Before continuing, use your image-viewing "
+            f"tool to inspect every changed page PNG: {pages}.{count_note} Check that the content "
+            "and formatting are correct, nothing is clipped, overlapping, or overcrowded, and "
+            "every diagram is clear, legible, and mathematically consistent. Fix any issue in "
+            "the authored source and let the incremental build run again; do not declare the "
+            "task complete until you have reviewed all of these pages."
+        )
+    return (
+        "MathPub's incremental build completed, but no rendered page content changed. Confirm "
+        "that this is expected before continuing; if the edit should be visible, investigate the "
+        "publication selection and authored source."
     )
 
 
@@ -85,26 +185,51 @@ class IncrementalPreviewWatcher:
         poll_interval: float = 0.35,
         builder: Callable[..., dict[str, Any]] = build,
         format_dumper: Callable[..., dict[str, Any]] = dump_latex_format,
+        page_fingerprinter: Callable[[Path | None], tuple[str, ...]] = _pdf_page_fingerprints,
+        page_renderer: Callable[[Path, int, Path], None] = _render_pdf_page,
+        send_review_prompt: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self.project = project
         self.send_event = send_event
         self.poll_interval = poll_interval
         self.builder = builder
         self.format_dumper = format_dumper
+        self.page_fingerprinter = page_fingerprinter
+        self.page_renderer = page_renderer
+        self.send_review_prompt = send_review_prompt
         self.selection: PreviewSelection | None = None
         self._snapshot: dict[Path, tuple[int, int]] = {}
         self._selection_revision = 0
         self._snapshot_revision = 0
         self._task: asyncio.Task[None] | None = None
+        self._page_fingerprints: tuple[str, ...] | None = None
+        self._fingerprint_revision = 0
 
     async def select(self, message: dict[str, object]) -> PreviewSelection | None:
         selected = _selection(self.project, message)
+        previous_selection = self.selection
+        previous_fingerprints = self._page_fingerprints
         self._selection_revision += 1
         revision = self._selection_revision
         self.selection = selected
+        self._page_fingerprints = None
+        self._fingerprint_revision = revision
+        if (
+            selected is not None
+            and previous_selection is not None
+            and selected.output_path == previous_selection.output_path
+            and previous_fingerprints is not None
+        ):
+            fingerprints = previous_fingerprints
+        else:
+            fingerprints = await asyncio.to_thread(
+                self.page_fingerprinter,
+                selected.output_path if selected is not None else None,
+            )
         snapshot = await asyncio.to_thread(self._source_snapshot, selected)
         if revision != self._selection_revision:
             return selected
+        self._page_fingerprints = fingerprints
         self._snapshot = snapshot
         self._snapshot_revision = revision
         if selected is not None and self._task is None:
@@ -188,6 +313,30 @@ class IncrementalPreviewWatcher:
             lesson_ids=list(selection.lesson_ids) or None,
         )
 
+    def _review_changed_pages(
+        self,
+        pdf_path: Path,
+        previous_fingerprints: tuple[str, ...],
+    ) -> tuple[list[str], tuple[str, ...]]:
+        current_fingerprints = self.page_fingerprinter(pdf_path)
+        changed_pages = _changed_page_numbers(previous_fingerprints, current_fingerprints)
+        review_dir = pdf_path.parent / "review-pages"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        paths = []
+        with tempfile.TemporaryDirectory(prefix=".tmp-review-", dir=review_dir) as temporary:
+            staged = []
+            for page in changed_pages:
+                name = f"{pdf_path.stem}-page-{page:03d}.png"
+                target = Path(temporary) / name
+                self.page_renderer(pdf_path, page, target)
+                staged.append((target, review_dir / name))
+            for stale in review_dir.glob(f"{pdf_path.stem}-page-*.png"):
+                stale.unlink()
+            for source, target in staged:
+                source.replace(target)
+                paths.append(str(target.relative_to(self.project.root)))
+        return paths, current_fingerprints
+
     async def _run(self) -> None:
         while True:
             await asyncio.sleep(self.poll_interval)
@@ -202,6 +351,13 @@ class IncrementalPreviewWatcher:
             ):
                 continue
             self._snapshot = current
+            if self._page_fingerprints is None or self._fingerprint_revision != revision:
+                self._page_fingerprints = await asyncio.to_thread(
+                    self.page_fingerprinter,
+                    selection.output_path,
+                )
+                self._fingerprint_revision = revision
+            previous_fingerprints = self._page_fingerprints
             started = time.monotonic()
             await self.send_event({"type": "preview-build-started"})
             try:
@@ -219,6 +375,21 @@ class IncrementalPreviewWatcher:
             output = next(
                 item for item in result["outputs"] if item["projection"] == selection.projection
             )
+            pdf_path = self.project.root / result["edition"] / output["path"]
+            try:
+                review_pages, current_fingerprints = await asyncio.to_thread(
+                    self._review_changed_pages,
+                    pdf_path,
+                    previous_fingerprints,
+                )
+            except Exception as error:
+                review_pages = []
+                current_fingerprints = previous_fingerprints
+                review_error = str(error)
+            else:
+                review_error = None
+                self._page_fingerprints = current_fingerprints
+            page_count_changed = len(previous_fingerprints) != len(current_fingerprints)
             await self.send_event(
                 {
                     "type": "preview-built",
@@ -227,8 +398,26 @@ class IncrementalPreviewWatcher:
                     "duration_ms": round((time.monotonic() - started) * 1000),
                     "instance_cache": result["instance_cache"],
                     "format": result["latex_format"],
+                    "review_pages": review_pages,
                 }
             )
+            if review_error is not None:
+                await self.send_event(
+                    {
+                        "type": "preview-review-failed",
+                        "error": review_error,
+                    }
+                )
+                if self.send_review_prompt is not None:
+                    await self.send_review_prompt(
+                        "MathPub's incremental build completed, but changed-page PNG generation "
+                        f"failed: {review_error}. Investigate this review failure before declaring "
+                        "the task complete."
+                    )
+            elif self.send_review_prompt is not None:
+                await self.send_review_prompt(
+                    _review_prompt(review_pages, page_count_changed=page_count_changed)
+                )
 
     async def close(self) -> None:
         if self._task is None:
