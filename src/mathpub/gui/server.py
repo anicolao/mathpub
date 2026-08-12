@@ -32,6 +32,10 @@ from mathpub.gui.libraries import LibraryHistory, open_authoring_library
 from mathpub.gui.onboarding import (
     AGENT_LAUNCH_COMMAND_ENV,
     AGENT_LAUNCH_INPUT,
+    ANTIGRAVITY_AGENT_ID,
+    CODEX_AGENT_ID,
+    CODEX_LAUNCH_COMMAND_ENV,
+    CODEX_LAUNCH_INPUT,
     STARTER_PROMPT,
     AgentConfiguration,
     create_authoring_library,
@@ -268,6 +272,8 @@ class WorkspaceServer:
         project_root: Path | None = None,
         agent_command: list[str] | None = None,
         agent_label: str = "Antigravity",
+        codex_command: list[str] | None = None,
+        codex_label: str = "Codex",
         lock_libraries: bool = True,
         mathpub_url: str = "github:anicolao/mathpub",
         library_creator: Callable[..., dict[str, object]] = create_authoring_library,
@@ -285,6 +291,15 @@ class WorkspaceServer:
             if agent_command is None
             else AgentConfiguration(agent_label, tuple(agent_command))
         )
+        self.codex_agent = (
+            AgentConfiguration.codex_from_environment()
+            if codex_command is None
+            else AgentConfiguration(codex_label, tuple(codex_command))
+        )
+        self.agents = {
+            ANTIGRAVITY_AGENT_ID: self.agent,
+            CODEX_AGENT_ID: self.codex_agent,
+        }
         self.lock_libraries = lock_libraries
         self.mathpub_url = mathpub_url
         self.library_creator = library_creator
@@ -335,6 +350,9 @@ class WorkspaceServer:
             "default_parent": str(root.parent if root is not None else Path.home()),
             "recent_libraries": self.library_history.recent(),
             "agent": self.agent.payload(root),
+            "agents": [
+                {"id": agent_id, **agent.payload(root)} for agent_id, agent in self.agents.items()
+            ],
             "starter_prompt": STARTER_PROMPT,
             "version": self.build_version,
             "native_pdf_viewer": {
@@ -1010,13 +1028,25 @@ class WorkspaceServer:
         completion_port = sockname[1] if isinstance(sockname, tuple) else self.port
         completion_host = "[::1]" if self.host in {"::", "::1"} else "127.0.0.1"
         completion_url = f"http://{completion_host}:{completion_port}/api/agent/completed"
-        agent_command = self.agent.shell_command_for(project.root if project is not None else None)
+        agent_commands = {
+            agent_id: agent.shell_command_for(project.root if project is not None else None)
+            for agent_id, agent in self.agents.items()
+        }
         terminal_environment = {
             COMPLETION_URL_ENV: completion_url,
             COMPLETION_TOKEN_ENV: self.completion_token,
         }
-        if agent_command is not None:
-            terminal_environment[AGENT_LAUNCH_COMMAND_ENV] = agent_command
+        launch_environments = {
+            ANTIGRAVITY_AGENT_ID: AGENT_LAUNCH_COMMAND_ENV,
+            CODEX_AGENT_ID: CODEX_LAUNCH_COMMAND_ENV,
+        }
+        launch_inputs = {
+            ANTIGRAVITY_AGENT_ID: AGENT_LAUNCH_INPUT,
+            CODEX_AGENT_ID: CODEX_LAUNCH_INPUT,
+        }
+        for agent_id, agent_command in agent_commands.items():
+            if agent_command is not None:
+                terminal_environment[launch_environments[agent_id]] = agent_command
         pty = PTYManager(
             cwd=str(terminal_root),
             environment=terminal_environment,
@@ -1075,16 +1105,30 @@ class WorkspaceServer:
                                         pty.write(prompt.encode())
                                     continue
                                 if msg.get("type") == "start-agent":
-                                    if agent_command is None:
+                                    agent_id = msg.get("agent", ANTIGRAVITY_AGENT_ID)
+                                    if not isinstance(agent_id, str):
+                                        agent_id = ""
+                                    agent = self.agents.get(agent_id)
+                                    agent_command = agent_commands.get(agent_id)
+                                    if agent is None or agent_command is None:
                                         await send_event(
                                             {
                                                 "type": "agent-unavailable",
-                                                "label": self.agent.label,
+                                                "agent": agent_id,
+                                                "label": agent.label
+                                                if agent is not None
+                                                else "Agent",
                                             }
                                         )
                                     else:
-                                        if project is not None and self.agent.synchronize_mathpub:
-                                            await send_event({"type": "agent-toolchain-syncing"})
+                                        if project is not None and agent.synchronize_mathpub:
+                                            await send_event(
+                                                {
+                                                    "type": "agent-toolchain-syncing",
+                                                    "agent": agent_id,
+                                                    "label": agent.label,
+                                                }
+                                            )
                                             try:
                                                 async with self.repository_edit_lock:
                                                     synchronization = await asyncio.to_thread(
@@ -1096,6 +1140,8 @@ class WorkspaceServer:
                                                 await send_event(
                                                     {
                                                         "type": "agent-toolchain-sync-failed",
+                                                        "agent": agent_id,
+                                                        "label": agent.label,
                                                         "error": error.message,
                                                         "code": error.code,
                                                         "details": error.details,
@@ -1105,14 +1151,19 @@ class WorkspaceServer:
                                             await send_event(
                                                 {
                                                     "type": "agent-toolchain-synced",
+                                                    "agent": agent_id,
+                                                    "label": agent.label,
                                                     **synchronization,
                                                 }
                                             )
-                                        pty.write(b"\x15" + AGENT_LAUNCH_INPUT.encode() + b"\r")
+                                        pty.write(
+                                            b"\x15" + launch_inputs[agent_id].encode() + b"\r"
+                                        )
                                         await send_event(
                                             {
                                                 "type": "agent-started",
-                                                "label": self.agent.label,
+                                                "agent": agent_id,
+                                                "label": agent.label,
                                             }
                                         )
                                     continue

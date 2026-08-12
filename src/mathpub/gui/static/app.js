@@ -70,6 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ws.onopen = () => {
     document.getElementById("status-terminal").textContent = "PTY Connected";
+    updateAgentAvailability();
     updateDictationAvailability();
     sendResize();
     sendPreviewSelection();
@@ -95,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ws.onclose = () => {
     document.getElementById("status-terminal").textContent = "PTY Disconnected";
     document.getElementById("status-terminal").className = "badge";
+    updateAgentAvailability();
     updateDictationAvailability();
     term.write("\r\n\x1b[31m[mathpub workspace] Connection closed.\x1b[0m\r\n");
   };
@@ -208,6 +210,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const libraryCancel = document.getElementById("library-cancel");
   const librarySubmit = document.getElementById("library-submit");
   const startAgent = document.getElementById("start-agent");
+  const startCodex = document.getElementById("start-codex");
   const agentStatus = document.getElementById("agent-status");
   const dictatePrompt = document.getElementById("dictate-prompt");
   const dictationDialog = document.getElementById("dictation-dialog");
@@ -356,6 +359,35 @@ document.addEventListener("DOMContentLoaded", () => {
     dictatePrompt.disabled = !workspaceState?.project || ws.readyState !== WebSocket.OPEN;
   }
 
+  function configuredAgents() {
+    if (Array.isArray(workspaceState?.agents)) return workspaceState.agents;
+    return [{ id: "antigravity", ...(workspaceState?.agent || {}) }];
+  }
+
+  function agentButton(agentId) {
+    return agentId === "codex" ? startCodex : startAgent;
+  }
+
+  function updateAgentAvailability() {
+    const agents = configuredAgents();
+    for (const agent of agents) {
+      const button = agentButton(agent.id);
+      button.textContent = `Start ${agent.label || "agent"}`;
+      button.disabled =
+        !workspaceState?.project ||
+        agent.available !== true ||
+        ws.readyState !== WebSocket.OPEN;
+      button.title = agent.available === true
+        ? ""
+        : `${agent.command || "Configured agent command"} was not found`;
+    }
+  }
+
+  function disableAgentButtons() {
+    startAgent.disabled = true;
+    startCodex.disabled = true;
+  }
+
   async function refreshWorkspace() {
     try {
       const response = await fetch("/api/workspace");
@@ -368,9 +400,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!libraryParent.value) libraryParent.value = workspaceState.default_parent || "";
       renderRecentLibraries(workspaceState.recent_libraries || []);
 
-      const agent = workspaceState.agent || {};
-      startAgent.textContent = `Start ${agent.label || "agent"}`;
-      startAgent.disabled = !workspaceState.project || agent.available !== true;
+      const agents = configuredAgents();
+      const availableAgents = agents.filter((agent) => agent.available === true);
+      updateAgentAvailability();
       updateDictationAvailability();
       if (!workspaceState.project) {
         agentStatus.textContent = "Create or open a library first";
@@ -378,14 +410,13 @@ document.addEventListener("DOMContentLoaded", () => {
         placeholderCopy.textContent =
           "Return to a recent library, open another MathPub repository, or create a private " +
           "library for many publications and reusable components.";
-      } else if (agent.available === true) {
-        agentStatus.textContent = `${agent.label} ready`;
+      } else if (availableAgents.length > 0) {
+        agentStatus.textContent = `${availableAgents.map((agent) => agent.label).join(" or ")} ready`;
         placeholderTitle.textContent = "Your authoring agent is ready";
         placeholderCopy.textContent =
           "Start the agent, then insert a first-book prompt or give it your own direction.";
       } else {
-        agentStatus.textContent = `${agent.label || "Agent"} unavailable`;
-        startAgent.title = `${agent.command || "Configured agent command"} was not found`;
+        agentStatus.textContent = "No authoring agent available";
         placeholderTitle.textContent = "No built PDF selected";
         placeholderCopy.textContent =
           "Configure an authoring agent or use the terminal to build a publication.";
@@ -529,7 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (message.type === "agent-started") {
       agentStatus.textContent = `${message.label || "Agent"} started`;
-      startAgent.disabled = true;
+      disableAgentButtons();
       starterPrompt.disabled = false;
       term.focus();
       return true;
@@ -537,25 +568,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (message.type === "agent-toolchain-syncing") {
       agentStatus.textContent = "Checking library toolchain…";
       agentStatus.removeAttribute("title");
-      startAgent.disabled = true;
+      disableAgentButtons();
       return true;
     }
     if (message.type === "agent-toolchain-synced") {
       agentStatus.textContent = message.updated
-        ? "Library toolchain updated — starting agent…"
-        : "Library toolchain current — starting agent…";
+        ? `Library toolchain updated — starting ${message.label || "agent"}…`
+        : `Library toolchain current — starting ${message.label || "agent"}…`;
       agentStatus.removeAttribute("title");
       return true;
     }
     if (message.type === "agent-toolchain-sync-failed") {
       agentStatus.textContent = "Library toolchain update failed";
       agentStatus.title = sourceFailureMessage(message, 0);
-      startAgent.disabled = false;
+      updateAgentAvailability();
       return true;
     }
     if (message.type === "agent-unavailable") {
       agentStatus.textContent = `${message.label || "Agent"} unavailable`;
-      startAgent.disabled = true;
+      agentButton(message.agent).disabled = true;
       return true;
     }
     if (message.type === "agent-completed") {
@@ -1094,12 +1125,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  startAgent.addEventListener("click", () => {
-    if (ws.readyState !== WebSocket.OPEN || startAgent.disabled) return;
-    startAgent.disabled = true;
-    agentStatus.textContent = "Starting agent…";
-    ws.send(JSON.stringify({ type: "start-agent" }));
-  });
+  function launchAgent(agentId) {
+    const button = agentButton(agentId);
+    if (ws.readyState !== WebSocket.OPEN || button.disabled) return;
+    disableAgentButtons();
+    const agent = configuredAgents().find((candidate) => candidate.id === agentId);
+    agentStatus.textContent = `Starting ${agent?.label || "agent"}…`;
+    ws.send(JSON.stringify({ type: "start-agent", agent: agentId }));
+  }
+
+  startAgent.addEventListener("click", () => launchAgent("antigravity"));
+  startCodex.addEventListener("click", () => launchAgent("codex"));
 
   function closeDictationDialog() {
     dictationDialog.close();

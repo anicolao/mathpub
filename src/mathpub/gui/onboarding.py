@@ -32,6 +32,10 @@ AGENT_BOOTSTRAP_PROMPT = (
 )
 AGENT_LAUNCH_COMMAND_ENV = "MATHPUB_WORKSPACE_AGENT_LAUNCH_COMMAND"
 AGENT_LAUNCH_INPUT = f'eval "${AGENT_LAUNCH_COMMAND_ENV}"'
+CODEX_LAUNCH_COMMAND_ENV = "MATHPUB_WORKSPACE_CODEX_LAUNCH_COMMAND"
+CODEX_LAUNCH_INPUT = f'eval "${CODEX_LAUNCH_COMMAND_ENV}"'
+ANTIGRAVITY_AGENT_ID = "antigravity"
+CODEX_AGENT_ID = "codex"
 DEFAULT_AGENT_COMMAND = (
     "nix",
     "run",
@@ -41,6 +45,19 @@ DEFAULT_AGENT_COMMAND = (
     "--sandbox",
     "--dangerously-skip-permissions",
     "--prompt-interactive",
+    AGENT_BOOTSTRAP_PROMPT,
+)
+DEFAULT_CODEX_COMMAND = (
+    "codex",
+    "--no-alt-screen",
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "on-request",
+    "-c",
+    'mcp_servers.mathpub-workspace.command="mathpub"',
+    "-c",
+    'mcp_servers.mathpub-workspace.args=["mcp"]',
     AGENT_BOOTSTRAP_PROMPT,
 )
 PROCESS_OUTPUT_LIMIT = 8_000
@@ -108,6 +125,7 @@ class AgentConfiguration:
     label: str
     command: tuple[str, ...]
     synchronize_mathpub: bool = False
+    requires_host_executable: bool = False
 
     @classmethod
     def from_environment(cls) -> AgentConfiguration:
@@ -123,6 +141,23 @@ class AgentConfiguration:
             label=os.environ.get("MATHPUB_AGENT_LABEL", "Antigravity"),
             command=command,
             synchronize_mathpub=raw_command is None,
+        )
+
+    @classmethod
+    def codex_from_environment(cls) -> AgentConfiguration:
+        raw_command = os.environ.get("MATHPUB_CODEX_COMMAND")
+        if raw_command is None:
+            command = DEFAULT_CODEX_COMMAND
+        else:
+            try:
+                command = tuple(shlex.split(raw_command))
+            except ValueError:
+                command = ()
+        return cls(
+            label=os.environ.get("MATHPUB_CODEX_LABEL", "Codex"),
+            command=command,
+            synchronize_mathpub=raw_command is None,
+            requires_host_executable=raw_command is None,
         )
 
     @property
@@ -146,6 +181,8 @@ class AgentConfiguration:
         """Return the agent command inside the project's pinned development shell."""
         if not self.command:
             return None
+        if self.requires_host_executable and self.executable is None:
+            return None
         command = self.command
         if project_root is not None and command == DEFAULT_AGENT_COMMAND:
             prompt_index = command.index("--prompt-interactive")
@@ -154,6 +191,18 @@ class AgentConfiguration:
                 "--add-dir",
                 str(project_root),
                 *command[prompt_index:-1],
+                (
+                    f"The only authoring library for this session is {project_root}. "
+                    "Work only inside that directory. Do not search the home directory, inspect "
+                    "other repositories, or request access to paths outside the library. "
+                    f"Start in {project_root}. {AGENT_BOOTSTRAP_PROMPT}"
+                ),
+            )
+        elif project_root is not None and command == DEFAULT_CODEX_COMMAND:
+            command = (
+                *command[:-1],
+                "--cd",
+                str(project_root),
                 (
                     f"The only authoring library for this session is {project_root}. "
                     "Work only inside that directory. Do not search the home directory, inspect "

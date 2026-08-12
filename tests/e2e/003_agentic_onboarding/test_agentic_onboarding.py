@@ -63,29 +63,37 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             )
         return create_authoring_library(parent, name, **kwargs)
 
+    fake_agent_script = (
+        'test "$MATHPUB_AUTHORING_ENV" = 1 && test "$PWD" = "$1" '
+        '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_URL" '
+        '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_TOKEN" '
+        "&& command -v mathpub >/dev/null "
+        "&& command -v gh >/dev/null "
+        "&& command -v pdftotext >/dev/null "
+        '&& grep -q "Use the worked examples" reference/course-outline.txt '
+        '&& jq -nc --arg html "$2" '
+        '\'{jsonrpc:"2.0",id:1,method:"tools/call",params:'
+        '{name:"complete_task",arguments:{html:$html}}}\' '
+        "| mathpub mcp | jq -e '.result.structuredContent.delivered == true' >/dev/null "
+        '&& printf "\\033c%s E2E %s\\n" "$0" ready'
+    )
+
+    def fake_agent(label):
+        return [
+            "sh",
+            "-c",
+            fake_agent_script,
+            label,
+            str(library),
+            completion_html,
+        ]
+
     server = WorkspaceServer(
         host="127.0.0.1",
         port=0,
         project_root=tmp_path,
-        agent_command=[
-            "sh",
-            "-c",
-            'test "$MATHPUB_AUTHORING_ENV" = 1 && test "$PWD" = "$1" '
-            '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_URL" '
-            '&& test -n "$MATHPUB_WORKSPACE_COMPLETION_TOKEN" '
-            "&& command -v mathpub >/dev/null "
-            "&& command -v gh >/dev/null "
-            "&& command -v pdftotext >/dev/null "
-            '&& grep -q "Use the worked examples" reference/course-outline.txt '
-            '&& jq -nc --arg html "$2" '
-            '\'{jsonrpc:"2.0",id:1,method:"tools/call",params:'
-            '{name:"complete_task",arguments:{html:$html}}}\' '
-            "| mathpub mcp | jq -e '.result.structuredContent.delivered == true' >/dev/null "
-            '&& printf "\\033cAntigravity E2E %s\\n" ready',
-            "mathpub-agent-e2e",
-            str(library),
-            completion_html,
-        ],
+        agent_command=fake_agent("Antigravity"),
+        codex_command=fake_agent("Codex"),
         mathpub_url=f"path:{project.root}",
         library_creator=fail_once_then_create,
         library_history=history,
@@ -300,6 +308,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
 
             page.wait_for_function(
                 "!document.getElementById('start-agent').disabled && "
+                "!document.getElementById('start-codex').disabled && "
                 "document.querySelector('.xterm-rows').textContent.includes('mathpub$')"
             )
             rejected_completion = page.request.post(
@@ -308,11 +317,10 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             )
             assert rejected_completion.status == 403
             assert not page.locator("#completion-dialog").is_visible()
-            page.locator("#start-agent").click()
+            page.locator("#start-codex").click()
             try:
                 page.wait_for_function(
-                    "document.querySelector('.xterm-rows').textContent.includes("
-                    "'Antigravity E2E ready')",
+                    "document.querySelector('.xterm-rows').textContent.includes('Codex E2E ready')",
                     timeout=AGENT_START_TIMEOUT_MS,
                 )
             except PlaywrightTimeoutError as error:
@@ -341,7 +349,7 @@ def test_agentic_onboarding_e2e(tmp_path: Path, update_baselines: bool):
             steps.verify(page, "001-agent-completed")
             page.locator("#completion-return").click()
             assert not completion_dialog.is_visible()
-            assert page.locator("#agent-status").text_content() == "Antigravity started"
+            assert page.locator("#agent-status").text_content() == "Codex started"
             assert page.locator(".xterm-helper-textarea").evaluate(
                 "element => element === document.activeElement"
             )
