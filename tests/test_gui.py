@@ -239,11 +239,11 @@ def test_custom_agent_does_not_synchronize_mathpub(monkeypatch):
     assert configuration.synchronize_mathpub is False
 
 
-def test_codex_configuration_uses_safe_interactive_launcher(tmp_path, monkeypatch):
+def test_codex_configuration_uses_bunx_launcher(tmp_path, monkeypatch):
     monkeypatch.delenv("MATHPUB_CODEX_COMMAND", raising=False)
     monkeypatch.setattr(
         "mathpub.gui.onboarding.shutil.which",
-        lambda command: f"/usr/bin/{command}" if command in {"codex", "nix"} else None,
+        lambda command: "/usr/bin/nix" if command == "nix" else None,
     )
     (tmp_path / "flake.nix").write_text("{}")
 
@@ -253,27 +253,25 @@ def test_codex_configuration_uses_safe_interactive_launcher(tmp_path, monkeypatc
     assert configuration.label == "Codex"
     assert configuration.command == DEFAULT_CODEX_COMMAND
     assert configuration.synchronize_mathpub is True
-    assert configuration.requires_host_executable is True
     assert command is not None
-    assert command[:7] == (
+    assert command[:9] == (
         "nix",
         "develop",
         "--no-write-lock-file",
         "--no-warn-dirty",
         "--quiet",
         "--command",
-        "codex",
+        "bunx",
+        "@openai/codex",
+        "--yolo",
     )
-    assert "--sandbox" in command
-    assert command[command.index("--sandbox") + 1] == "workspace-write"
-    assert command[command.index("--ask-for-approval") + 1] == "on-request"
     assert command[command.index("--cd") + 1] == str(tmp_path)
     assert 'mcp_servers.mathpub-workspace.command="mathpub"' in command
     assert 'mcp_servers.mathpub-workspace.args=["mcp"]' in command
     assert f"The only authoring library for this session is {tmp_path}." in command[-1]
 
 
-def test_codex_configuration_is_unavailable_without_codex(tmp_path, monkeypatch):
+def test_codex_configuration_uses_bunx_from_project_shell(tmp_path, monkeypatch):
     monkeypatch.delenv("MATHPUB_CODEX_COMMAND", raising=False)
     monkeypatch.setattr(
         "mathpub.gui.onboarding.shutil.which",
@@ -283,8 +281,19 @@ def test_codex_configuration_is_unavailable_without_codex(tmp_path, monkeypatch)
 
     configuration = AgentConfiguration.codex_from_environment()
 
-    assert configuration.command_for(tmp_path) is None
-    assert configuration.payload(tmp_path)["available"] is False
+    command = configuration.command_for(tmp_path)
+
+    assert command is not None
+    assert command[:7] == (
+        "nix",
+        "develop",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        "--command",
+        "bunx",
+    )
+    assert configuration.payload(tmp_path)["available"] is True
 
 
 def test_library_mathpub_sync_avoids_update_when_revision_matches(tmp_path, monkeypatch):

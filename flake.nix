@@ -92,7 +92,7 @@
             postInstall = ''
               wrapProgram $out/bin/mathpub \
                 --set MATHPUB_BUILD_REVISION ${buildRevision} \
-                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bun pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
               makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
                 --add-flags "workspace"
             '';
@@ -286,6 +286,7 @@
             inputsFrom = [ package ];
             packages = [
               package
+              pkgs.bun
               pkgs.gh
               pkgs.git
               pkgs.jq
@@ -321,6 +322,13 @@
           package = package;
           tests = self.packages.${system}.mathpub-tests;
           gui = self.packages.${system}.mathpub-gui;
+          codex-launcher-runtime = pkgs.runCommand "mathpub-codex-launcher-runtime"
+            {
+              nativeBuildInputs = [ pkgs.gnugrep ];
+            } ''
+            grep -F ${pkgs.lib.escapeShellArg "${pkgs.bun}/bin"} ${package}/bin/mathpub
+            touch $out
+          '';
           formatting = pkgs.runCommand "mathpub-formatting"
             {
               nativeBuildInputs = [ pkgs.python312Packages.ruff ];
@@ -353,6 +361,7 @@
               default = pkgs.mkShell {
                 packages = [
                   self.packages.${system}.mathpub
+                  pkgs.bun
                   pkgs.gh
                   pkgs.git
                   pkgs.jq
