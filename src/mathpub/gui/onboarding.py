@@ -51,12 +51,10 @@ DEFAULT_AGENT_COMMAND = (
     AGENT_BOOTSTRAP_PROMPT,
 )
 DEFAULT_CODEX_COMMAND = (
-    "codex",
+    "bunx",
+    "@openai/codex",
+    "--yolo",
     "--no-alt-screen",
-    "--sandbox",
-    "workspace-write",
-    "--ask-for-approval",
-    "on-request",
     "-c",
     'mcp_servers.mathpub-workspace.command="mathpub"',
     "-c",
@@ -128,7 +126,6 @@ class AgentConfiguration:
     label: str
     command: tuple[str, ...]
     synchronize_mathpub: bool = False
-    requires_host_executable: bool = False
 
     @classmethod
     def from_environment(cls) -> AgentConfiguration:
@@ -160,7 +157,6 @@ class AgentConfiguration:
             label=os.environ.get("MATHPUB_CODEX_LABEL", "Codex"),
             command=command,
             synchronize_mathpub=raw_command is None,
-            requires_host_executable=raw_command is None,
         )
 
     @property
@@ -183,8 +179,6 @@ class AgentConfiguration:
     def command_for(self, project_root: Path | None) -> tuple[str, ...] | None:
         """Return the agent command inside the project's pinned development shell."""
         if not self.command:
-            return None
-        if self.requires_host_executable and self.executable is None:
             return None
         command = self.command
         if project_root is not None and command == DEFAULT_AGENT_COMMAND:

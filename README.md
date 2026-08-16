@@ -129,17 +129,16 @@ is instructed to inspect `reference/` whenever the author mentions supplied mate
 references can be read with the included `pdftotext` tool.
 
 The workspace offers separate **Start Antigravity** and **Start Codex** buttons. Antigravity uses
-Anna's pinned `nix run github:anicolao/nix-antigravity` launcher. Codex uses the installed Codex CLI
-in interactive workspace-write mode and registers `mathpub mcp` for the session. Both launchers run
-through the authoring library's locked `nix develop` environment, which guarantees `mathpub`,
-`nix`, `gh`, `git`, `jq`, `rg`, and `pdftotext`. Repository-specific tools can be added with the
-generated flake's `extraPackages` function. Configure either executable or label without rebuilding
-MathPub:
+Anna's pinned `nix run github:anicolao/nix-antigravity` launcher. Codex runs
+`bunx @openai/codex --yolo` and registers `mathpub mcp` for the session. Both launchers run through
+the authoring library's locked `nix develop` environment, which guarantees `mathpub`, `bun`, `nix`,
+`gh`, `git`, `jq`, `rg`, and `pdftotext`. Repository-specific tools can be added with the generated
+flake's `extraPackages` function. Configure either executable or label without rebuilding MathPub:
 
 ```console
 MATHPUB_AGENT_COMMAND="nix run github:anicolao/nix-antigravity" \
 MATHPUB_AGENT_LABEL="Antigravity" \
-MATHPUB_CODEX_COMMAND="codex --no-alt-screen" \
+MATHPUB_CODEX_COMMAND="bunx @openai/codex --yolo --no-alt-screen" \
 MATHPUB_CODEX_LABEL="Codex" \
 nix run .#mathpub-gui
 ```
