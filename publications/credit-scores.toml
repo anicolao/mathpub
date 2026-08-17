@@ -1,0 +1,83 @@
+schema = 1
+id = "consumer-math.credit-scores"
+kind = "presentation"
+title = "Understanding Credit Scores and Credit Reports"
+profile = "mathpub.exam"
+theme = "metropolis"
+aspect_ratio = "169"
+projections = ["student"]
+
+[[slides]]
+id = "learning-goals"
+title = "Learning Goals"
+source = "credit-scores/01-learning-goals.tex"
+
+[[slides]]
+id = "fico-basics"
+title = "Credit Scores and FICO Ranges"
+source = "credit-scores/02-fico-basics.tex"
+
+[[slides]]
+id = "score-factors"
+title = "FICO Score Weight Breakdown"
+source = "credit-scores/03-score-factors.tex"
+
+[[slides]]
+id = "utilization-formula"
+title = "Credit Utilization and Credit Reports"
+source = "credit-scores/04-utilization-formula.tex"
+
+[[slides]]
+id = "example-1-question"
+title = "Example 1: Credit Utilization Ratio"
+source = "credit-scores/05-example-1-question.tex"
+
+[[slides]]
+id = "example-1-solution"
+title = "Solution 1: Credit Utilization Ratio"
+source = "credit-scores/05-example-1-solution.tex"
+
+[[slides]]
+id = "example-2-question"
+title = "Example 2: Impact of New Debt"
+source = "credit-scores/06-example-2-question.tex"
+
+[[slides]]
+id = "example-2-solution"
+title = "Solution 2: Impact of New Debt"
+source = "credit-scores/06-example-2-solution.tex"
+
+[[slides]]
+id = "example-3-question"
+title = "Example 3: Total Credit Utilization Across Cards"
+source = "credit-scores/07-example-3-question.tex"
+
+[[slides]]
+id = "example-3-solution"
+title = "Solution 3: Total Credit Utilization Across Cards"
+source = "credit-scores/07-example-3-solution.tex"
+
+[[slides]]
+id = "example-4-question"
+title = "Example 4: Maximum Balance for Target Utilization"
+source = "credit-scores/08-example-4-question.tex"
+
+[[slides]]
+id = "example-4-solution"
+title = "Solution 4: Maximum Balance for Target Utilization"
+source = "credit-scores/08-example-4-solution.tex"
+
+[[slides]]
+id = "example-5-question"
+title = "Example 5: Credit Score Factor Ranking"
+source = "credit-scores/09-example-5-question.tex"
+
+[[slides]]
+id = "example-5-solution"
+title = "Solution 5: Credit Score Factor Ranking"
+source = "credit-scores/09-example-5-solution.tex"
+
+[[slides]]
+id = "key-points"
+title = "Key Points and Summary"
+source = "credit-scores/10-key-points.tex"
