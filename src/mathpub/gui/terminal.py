@@ -6,11 +6,15 @@ import contextlib
 import fcntl
 import os
 import pty
+import select
 import struct
 import sys
 import termios
+import time
 from collections.abc import Mapping
 from pathlib import Path
+
+PTY_WRITE_TIMEOUT_SECONDS = 5.0
 
 
 class PTYManager:
@@ -95,11 +99,31 @@ class PTYManager:
         except (OSError, ValueError):
             return b""
 
-    def write(self, data: bytes) -> None:
-        """Write user/agent input bytes to the PTY master_fd."""
-        if self.master_fd is not None:
-            with contextlib.suppress(OSError):
-                os.write(self.master_fd, data)
+    def write(self, data: bytes) -> bool:
+        """Write one complete input frame to the nonblocking PTY."""
+        if self.master_fd is None:
+            return False
+        remaining = memoryview(data)
+        deadline = time.monotonic() + PTY_WRITE_TIMEOUT_SECONDS
+        while remaining:
+            try:
+                written = os.write(self.master_fd, remaining)
+            except BlockingIOError:
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    return False
+                _readable, writable, _exceptional = select.select(
+                    [], [self.master_fd], [], min(timeout, 0.1)
+                )
+                if not writable:
+                    continue
+            except OSError:
+                return False
+            else:
+                if written <= 0:
+                    return False
+                remaining = remaining[written:]
+        return True
 
     def set_size(self, rows: int, cols: int) -> None:
         """Update terminal dimensions via TIOCSWINSZ ioctl."""

@@ -239,6 +239,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 () => {
                   const nativeSend = WebSocket.prototype.send;
                   window.__terminalInputFrames = [];
+                  window.__dropGeneratedReviewSubmit = false;
                   window.__composeTerminalText = transcript => {
                     const textarea = document.querySelector('.xterm-helper-textarea');
                     textarea.dispatchEvent(
@@ -259,6 +260,18 @@ source = "gui-slide-editing/01-editable-slide.tex"
                         if (message.type === "input") {
                           window.__terminalInputFrames.push(message.data);
                           if (
+                            window.__dropGeneratedReviewSubmit &&
+                            message.data.length === 1 &&
+                            message.data.charCodeAt(0) === 13
+                          ) {
+                            window.__dropGeneratedReviewSubmit = false;
+                            return;
+                          }
+                          if (message.data.includes("Keep this generated review prefix.")) {
+                            window.__dropGeneratedReviewSubmit = true;
+                            return;
+                          }
+                          if (
                             message.data.includes("Keep this direct dictated prefix.") ||
                             message.data.includes("Continue this direct dictation safely.") ||
                             message.data.includes("Keep this dictated prefix.")
@@ -273,6 +286,41 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 }
                 """
             )
+            generated_review_prompt = (
+                "Keep this generated review prefix. "
+                + "Inspect every changed page before continuing. " * 200
+                + "Keep this generated review suffix."
+            )
+            assert len(generated_review_prompt) > 8_000
+
+            async def broadcast_generated_review_prompt():
+                await asyncio.gather(
+                    *(
+                        listener(
+                            {
+                                "type": "agent-review-prompt",
+                                "agent": "antigravity",
+                                "prompt": generated_review_prompt,
+                            }
+                        )
+                        for listener in tuple(server.completion_listeners)
+                    )
+                )
+
+            review_future = asyncio.run_coroutine_threadsafe(
+                broadcast_generated_review_prompt(), loop_ref[0]
+            )
+            review_future.result(timeout=5.0)
+            page.wait_for_function(
+                "window.__terminalInputFrames.some(frame => "
+                "frame.includes('Keep this generated review prefix.'))"
+            )
+            review_frame = page.evaluate(
+                "window.__terminalInputFrames.find(frame => "
+                "frame.includes('Keep this generated review prefix.'))"
+            )
+            assert generated_review_prompt in review_frame
+
             direct_dictation = (
                 "Keep this direct dictated prefix. "
                 + "Continue accepting direct voice input. " * 240

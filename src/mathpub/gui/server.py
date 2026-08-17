@@ -1070,7 +1070,13 @@ class WorkspaceServer:
 
         async def send_review_prompt(prompt: str) -> None:
             if active_agent_id is not None and pty.is_alive():
-                pty.write(prompt.encode() + b"\r")
+                await send_event(
+                    {
+                        "type": "agent-review-prompt",
+                        "agent": active_agent_id,
+                        "prompt": prompt,
+                    }
+                )
 
         watcher = (
             IncrementalPreviewWatcher(

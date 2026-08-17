@@ -571,6 +571,20 @@ document.addEventListener("DOMContentLoaded", () => {
       term.focus();
       return true;
     }
+    if (message.type === "agent-review-prompt") {
+      if (
+        ws.readyState === WebSocket.OPEN &&
+        typeof message.prompt === "string" &&
+        message.prompt.length > 0
+      ) {
+        // Route generated follow-ups through xterm's paste path. It applies bracketed-paste
+        // framing when the active agent requests it, so a long prompt is accepted as one input
+        // instead of being interpreted as an overflowing stream of individual keystrokes.
+        term.paste(message.prompt);
+        ws.send(JSON.stringify({ type: "input", data: "\r" }));
+      }
+      return true;
+    }
     if (message.type === "agent-toolchain-syncing") {
       agentStatus.textContent = "Checking library toolchain…";
       agentStatus.removeAttribute("title");

@@ -108,6 +108,34 @@ def test_pty_manager_supplies_workspace_tools_to_child(monkeypatch):
     assert b"available" in output
 
 
+def test_pty_manager_retries_partial_nonblocking_writes(monkeypatch):
+    pty = PTYManager(command=["true"])
+    pty.master_fd = 123
+    payload = b"one complete generated review prompt\r"
+    chunks = []
+    attempts = 0
+
+    def partial_write(fd, data):
+        nonlocal attempts
+        assert fd == 123
+        attempts += 1
+        if attempts == 2:
+            raise BlockingIOError
+        chunk = bytes(data[:7])
+        chunks.append(chunk)
+        return len(chunk)
+
+    monkeypatch.setattr("mathpub.gui.terminal.os.write", partial_write)
+    monkeypatch.setattr(
+        "mathpub.gui.terminal.select.select",
+        lambda readable, writable, exceptional, timeout: ([], writable, []),
+    )
+
+    assert pty.write(payload) is True
+    assert b"".join(chunks) == payload
+    assert attempts > 2
+
+
 @pytest.mark.parametrize(
     ("launch_environment", "launch_input"),
     (
