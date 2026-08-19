@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
 import threading
 
+import pytest
 from pypdf import PdfWriter
 
 from mathpub.config import find_project
+from mathpub.errors import MathpubError
 from mathpub.gui.watch import (
     IncrementalPreviewWatcher,
+    _build_in_authoring_environment,
     _changed_page_numbers,
     _pdf_page_fingerprints,
     _review_prompt,
@@ -156,6 +161,145 @@ id = "demo.question"
     assert build_call["incremental"] is True
     assert build_call["projections"] == ["student"]
     assert build_call["lesson_ids"] == ["lesson-one"]
+
+
+def test_preview_watcher_builds_in_library_development_environment(tmp_path, monkeypatch):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/demo.toml"
+    publication.write_text(
+        """schema = 1
+id = "demo"
+kind = "worksheet"
+title = "Demo"
+profile = "mathpub.exam"
+projections = ["student"]
+[[sections]]
+title = "Demo"
+questions = []
+"""
+    )
+    commands = []
+
+    def fake_run(command, **kwargs):
+        commands.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "schema": 1,
+                    "status": "ok",
+                    "command": "build",
+                    "data": {
+                        "edition": "build/demo/A",
+                        "outputs": [{"projection": "student", "path": "demo-A-student.pdf"}],
+                        "instance_cache": {"components_reused": 1},
+                        "latex_format": None,
+                    },
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("mathpub.gui.watch.shutil.which", lambda command: f"/nix/bin/{command}")
+    monkeypatch.setattr("mathpub.gui.watch.subprocess.run", fake_run)
+    watcher = IncrementalPreviewWatcher(
+        project,
+        lambda _event: None,
+        format_dumper=lambda *_args, **_kwargs: {"format": None},
+    )
+    selected = _selection(
+        project,
+        {
+            "publication_path": "publications/demo.toml",
+            "root_seed": "2026",
+            "variant": "A",
+            "projection": "student",
+            "font_family": "libertinus",
+            "page": 1,
+            "lesson_ids": ["lesson-one"],
+        },
+    )
+
+    assert selected is not None
+    result = watcher._build(selected)
+
+    assert result["edition"] == "build/demo/A"
+    assert len(commands) == 1
+    command, kwargs = commands[0]
+    assert command == [
+        "/nix/bin/nix",
+        "develop",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        "--command",
+        "mathpub",
+        "build",
+        "publications/demo.toml",
+        "--seed",
+        "2026",
+        "--variant",
+        "A",
+        "--projection",
+        "student",
+        "--font",
+        "libertinus",
+        "--replace",
+        "--json",
+        "--lesson",
+        "lesson-one",
+    ]
+    assert kwargs == {
+        "cwd": project.root,
+        "capture_output": True,
+        "text": True,
+        "check": False,
+    }
+
+
+def test_library_environment_build_preserves_mathpub_error(tmp_path, monkeypatch):
+    root = tmp_path / "project"
+    init_project(root)
+    project = find_project(root)
+    publication = root / "publications/demo.toml"
+    publication.write_text("fixture")
+    selected = _selection(
+        project,
+        {
+            "publication_path": "publications/demo.toml",
+            "root_seed": "2026",
+            "variant": "A",
+            "projection": "student",
+            "font_family": "libertinus",
+            "page": 1,
+        },
+    )
+    payload = {
+        "schema": 1,
+        "status": "error",
+        "error": {
+            "code": "MP-GEN-001",
+            "message": "Sage runner failed: qrencode was not found",
+            "details": {"question_id": "demo.question"},
+        },
+    }
+    monkeypatch.setattr("mathpub.gui.watch.shutil.which", lambda _command: "/nix/bin/nix")
+    monkeypatch.setattr(
+        "mathpub.gui.watch.subprocess.run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 1, stdout=json.dumps(payload), stderr=""
+        ),
+    )
+
+    assert selected is not None
+    with pytest.raises(MathpubError, match="qrencode was not found") as raised:
+        _build_in_authoring_environment(project, selected)
+
+    assert raised.value.code == "MP-GEN-001"
+    assert raised.value.details == {"question_id": "demo.question"}
 
 
 def test_preview_watcher_renders_changed_pages_and_prompts_agent(tmp_path):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from mathpub.config import Project, load_toml
+from mathpub.errors import MathpubError
 from mathpub.latex_format import dump_latex_format, publication_format_style
 from mathpub.publish import build
 from mathpub.styles import prepare_publication_style
@@ -174,6 +176,67 @@ def _review_prompt(review_pages: list[str], *, page_count_changed: bool) -> str:
     )
 
 
+def _build_in_authoring_environment(
+    project: Project,
+    selection: PreviewSelection,
+) -> dict[str, Any]:
+    """Build through the library shell so generators can use its extra packages."""
+    nix = shutil.which("nix")
+    if nix is None:
+        raise RuntimeError("Nix is unavailable; cannot enter the library authoring environment")
+    command = [
+        nix,
+        "develop",
+        "--no-write-lock-file",
+        "--no-warn-dirty",
+        "--quiet",
+        "--command",
+        "mathpub",
+        "build",
+        str(selection.publication_path.relative_to(project.root)),
+        "--seed",
+        selection.root_seed,
+        "--variant",
+        selection.variant,
+        "--projection",
+        selection.projection,
+        "--font",
+        selection.font_family,
+        "--replace",
+        "--json",
+    ]
+    for lesson_id in selection.lesson_ids:
+        command.extend(("--lesson", lesson_id))
+    process = subprocess.run(
+        command,
+        cwd=project.root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    try:
+        payload = json.loads(process.stdout)
+    except json.JSONDecodeError as error:
+        diagnostic = process.stderr.strip() or process.stdout.strip() or "no diagnostic output"
+        raise RuntimeError(f"library authoring environment build failed: {diagnostic}") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("library authoring environment build returned invalid JSON")
+    if process.returncode != 0 or payload.get("status") != "ok":
+        details = payload.get("error", {})
+        if not isinstance(details, dict):
+            details = {}
+        raise MathpubError(
+            str(details.get("code", "MP-GUI-024")),
+            str(details.get("message", process.stderr.strip() or "preview build failed")),
+            exit_code=process.returncode or 1,
+            details=details.get("details") if isinstance(details.get("details"), dict) else None,
+        )
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError("library authoring environment build returned invalid JSON data")
+    return data
+
+
 class IncrementalPreviewWatcher:
     """Poll authored inputs and rebuild the active PDF projection after changes."""
 
@@ -301,6 +364,8 @@ class IncrementalPreviewWatcher:
 
     def _build(self, selection: PreviewSelection) -> dict[str, Any]:
         self._prepare_format(selection)
+        if self.builder is build and (self.project.root / "flake.nix").is_file():
+            return _build_in_authoring_environment(self.project, selection)
         return self.builder(
             self.project,
             selection.publication_path,
