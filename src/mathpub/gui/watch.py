@@ -14,7 +14,7 @@ import tempfile
 import time
 import tomllib
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -237,6 +237,55 @@ def _build_in_authoring_environment(
     return data
 
 
+@dataclass
+class PendingReviewQueue:
+    """Coalesce watcher results until the agent asks to complete its task."""
+
+    review_pages: dict[str, None] = field(default_factory=dict)
+    page_count_changed: bool = False
+    review_error: str | None = None
+    unchanged_build: bool = False
+
+    def record(
+        self,
+        review_pages: list[str],
+        *,
+        page_count_changed: bool,
+        review_error: str | None,
+    ) -> None:
+        for path in review_pages:
+            self.review_pages[path] = None
+        self.page_count_changed = self.page_count_changed or page_count_changed
+        self.unchanged_build = self.unchanged_build or not review_pages
+        if review_error is not None:
+            self.review_error = review_error
+
+    def take_prompt(self) -> str | None:
+        if not self.review_pages and self.review_error is None and not self.unchanged_build:
+            return None
+        prompts = []
+        if self.review_pages:
+            prompts.append(
+                _review_prompt(
+                    list(self.review_pages),
+                    page_count_changed=self.page_count_changed,
+                )
+            )
+        elif self.unchanged_build and self.review_error is None:
+            prompts.append(_review_prompt([], page_count_changed=self.page_count_changed))
+        if self.review_error is not None:
+            prompts.append(
+                "MathPub's incremental build completed, but changed-page PNG generation failed: "
+                f"{self.review_error}. Investigate this review failure before declaring the task "
+                "complete."
+            )
+        self.review_pages.clear()
+        self.page_count_changed = False
+        self.review_error = None
+        self.unchanged_build = False
+        return "\n\n".join(prompts)
+
+
 class IncrementalPreviewWatcher:
     """Poll authored inputs and rebuild the active PDF projection after changes."""
 
@@ -250,7 +299,9 @@ class IncrementalPreviewWatcher:
         format_dumper: Callable[..., dict[str, Any]] = dump_latex_format,
         page_fingerprinter: Callable[[Path | None], tuple[str, ...]] = _pdf_page_fingerprints,
         page_renderer: Callable[[Path, int, Path], None] = _render_pdf_page,
-        send_review_prompt: Callable[[str], Awaitable[None]] | None = None,
+        record_review_request: (
+            Callable[[list[str], bool, str | None], Awaitable[None]] | None
+        ) = None,
     ) -> None:
         self.project = project
         self.send_event = send_event
@@ -259,7 +310,7 @@ class IncrementalPreviewWatcher:
         self.format_dumper = format_dumper
         self.page_fingerprinter = page_fingerprinter
         self.page_renderer = page_renderer
-        self.send_review_prompt = send_review_prompt
+        self.record_review_request = record_review_request
         self.selection: PreviewSelection | None = None
         self._snapshot: dict[Path, tuple[int, int]] = {}
         self._selection_revision = 0
@@ -473,15 +524,11 @@ class IncrementalPreviewWatcher:
                         "error": review_error,
                     }
                 )
-                if self.send_review_prompt is not None:
-                    await self.send_review_prompt(
-                        "MathPub's incremental build completed, but changed-page PNG generation "
-                        f"failed: {review_error}. Investigate this review failure before declaring "
-                        "the task complete."
-                    )
-            elif self.send_review_prompt is not None:
-                await self.send_review_prompt(
-                    _review_prompt(review_pages, page_count_changed=page_count_changed)
+            if self.record_review_request is not None:
+                await self.record_review_request(
+                    review_pages,
+                    page_count_changed,
+                    review_error,
                 )
 
     async def close(self) -> None:

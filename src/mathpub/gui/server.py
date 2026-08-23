@@ -45,7 +45,7 @@ from mathpub.gui.reference_import import REFERENCE_IMPORT_LIMIT, import_referenc
 from mathpub.gui.source_edit import SOURCE_EDIT_LIMIT, load_tex_source, save_tex_source
 from mathpub.gui.synctex import SyncTeXError, spatial_index
 from mathpub.gui.terminal import PTYManager
-from mathpub.gui.watch import IncrementalPreviewWatcher
+from mathpub.gui.watch import IncrementalPreviewWatcher, PendingReviewQueue
 
 STATIC_DIR = Path(__file__).parent / "static"
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -313,6 +313,7 @@ class WorkspaceServer:
         self.repository_edit_lock = asyncio.Lock()
         self.completion_token = secrets.token_urlsafe(32)
         self.completion_listeners: set[Callable[[dict[str, object]], Awaitable[None]]] = set()
+        self.review_listeners: set[Callable[[], str | None]] = set()
 
     async def _broadcast_completion(self, html: str) -> bool:
         listeners = tuple(self.completion_listeners)
@@ -321,6 +322,29 @@ class WorkspaceServer:
         event = {"type": "agent-completed", "html": html}
         await asyncio.gather(*(listener(event) for listener in listeners))
         return True
+
+    def _take_pending_review_prompt(self) -> str | None:
+        prompts = [
+            prompt
+            for listener in tuple(self.review_listeners)
+            if (prompt := listener()) is not None
+        ]
+        return "\n\n".join(prompts) if prompts else None
+
+    async def _deliver_completion(self, html: str) -> tuple[int, dict[str, object]]:
+        review_prompt = self._take_pending_review_prompt()
+        if review_prompt is not None:
+            return 409, {
+                "error": (
+                    "Generated pages still require review before completion. "
+                    "Process this request, then call complete_task again:\n\n"
+                    f"{review_prompt}"
+                ),
+                "pending_review": True,
+            }
+        if await self._broadcast_completion(html):
+            return 200, {"delivered": True}
+        return 409, {"error": "no interactive workspace is connected"}
 
     def _initial_project_root(self, project_root: Path | None) -> Path | None:
         try:
@@ -468,13 +492,9 @@ class WorkspaceServer:
                     )
                 elif len(html.encode("utf-8")) > COMPLETION_HTML_LIMIT:
                     response = _json_response(413, {"error": "completion summary is too large"})
-                elif await self._broadcast_completion(html):
-                    response = _json_response(200, {"delivered": True})
                 else:
-                    response = _json_response(
-                        409,
-                        {"error": "no interactive workspace is connected"},
-                    )
+                    status, payload = await self._deliver_completion(html)
+                    response = _json_response(status, payload)
             writer.write(response)
             await writer.drain()
             _close_writer(writer)
@@ -1067,16 +1087,26 @@ class WorkspaceServer:
         self.completion_listeners.add(send_event)
 
         active_agent_id: str | None = None
+        review_queue = PendingReviewQueue()
+        self.review_listeners.add(review_queue.take_prompt)
 
-        async def send_review_prompt(prompt: str) -> None:
+        async def record_review_request(
+            review_pages: list[str],
+            page_count_changed: bool,
+            review_error: str | None,
+        ) -> None:
             if active_agent_id is not None and pty.is_alive():
-                pty.write(prompt.encode() + b"\r")
+                review_queue.record(
+                    review_pages,
+                    page_count_changed=page_count_changed,
+                    review_error=review_error,
+                )
 
         watcher = (
             IncrementalPreviewWatcher(
                 project,
                 send_event,
-                send_review_prompt=send_review_prompt,
+                record_review_request=record_review_request,
             )
             if project is not None
             else None
@@ -1233,6 +1263,7 @@ class WorkspaceServer:
             await asyncio.gather(read_pty_to_ws(), read_ws_to_pty())
         finally:
             self.completion_listeners.discard(send_event)
+            self.review_listeners.discard(review_queue.take_prompt)
             if watcher is not None:
                 await watcher.close()
             pty.close()

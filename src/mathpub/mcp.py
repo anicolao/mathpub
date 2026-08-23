@@ -15,8 +15,10 @@ COMPLETE_TASK_TOOL = {
     "name": "complete_task",
     "title": "Complete MathPub task",
     "description": (
-        "REQUIRED FINAL ACTION: Call this tool exactly once after the user's requested work and "
+        "REQUIRED FINAL ACTION: Call this tool after the user's requested work and "
         "validation are genuinely complete, before giving the final conversational response. "
+        "If the tool returns pending generated-page reviews, process them and call it again; only "
+        "one successful call is expected. "
         "It opens the author's visible Completed! dialog and sounds a chime. Supply concise HTML "
         "covering what changed, what was validated, and what is ready to review. Never finish a "
         "successful task only with terminal prose; do not call this for progress, questions, "
@@ -87,9 +89,9 @@ def handle_mcp_message(message: object) -> dict[str, Any] | None:
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "mathpub-workspace", "version": display_version()},
                 "instructions": (
-                    "For every successfully completed user task, call complete_task exactly once "
-                    "before the final response. This is the required user-visible completion "
-                    "signal; terminal prose alone is not sufficient."
+                    "For every successfully completed user task, call complete_task before the "
+                    "final response. If it returns pending generated-page reviews, process them "
+                    "and retry; terminal prose alone is not a completion signal."
                 ),
             },
         )

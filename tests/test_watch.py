@@ -14,6 +14,7 @@ from mathpub.config import find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.watch import (
     IncrementalPreviewWatcher,
+    PendingReviewQueue,
     _build_in_authoring_environment,
     _changed_page_numbers,
     _pdf_page_fingerprints,
@@ -81,6 +82,31 @@ def test_review_prompt_requires_visual_content_and_diagram_checks():
     assert "page count also changed" in prompt
     assert "nothing is clipped, overlapping, or overcrowded" in prompt
     assert "diagram is clear, legible, and mathematically consistent" in prompt
+
+
+def test_pending_review_queue_coalesces_pages_and_clears_after_delivery():
+    queue = PendingReviewQueue()
+    queue.record(
+        ["build/demo/A/review-pages/page-002.png"],
+        page_count_changed=False,
+        review_error=None,
+    )
+    queue.record(
+        [
+            "build/demo/A/review-pages/page-002.png",
+            "build/demo/A/review-pages/page-003.png",
+        ],
+        page_count_changed=True,
+        review_error=None,
+    )
+
+    prompt = queue.take_prompt()
+
+    assert prompt is not None
+    assert prompt.count("page-002.png") == 1
+    assert prompt.count("page-003.png") == 1
+    assert "page count also changed" in prompt
+    assert queue.take_prompt() is None
 
 
 def test_preview_watcher_rebuilds_after_authored_change(tmp_path):
@@ -352,8 +378,8 @@ questions = []
         async def send_event(event):
             events.append(event)
 
-        async def send_review_prompt(prompt):
-            prompts.append(prompt)
+        async def record_review_request(review_pages, page_count_changed, review_error):
+            prompts.append((review_pages, page_count_changed, review_error))
 
         watcher = IncrementalPreviewWatcher(
             project,
@@ -363,7 +389,7 @@ questions = []
             format_dumper=lambda *_args, **_kwargs: {"format": None},
             page_fingerprinter=lambda _path: next(fingerprints),
             page_renderer=fake_renderer,
-            send_review_prompt=send_review_prompt,
+            record_review_request=record_review_request,
         )
         selected = await watcher.select(
             {
@@ -391,8 +417,7 @@ questions = []
     assert not stale.exists()
     assert (root / expected).read_bytes() == b"changed page"
     assert len(prompts) == 1
-    assert expected in prompts[0]
-    assert "do not declare the task complete" in prompts[0]
+    assert prompts[0] == ([expected], False, None)
 
 
 def test_preview_watcher_does_not_prepare_a_document_format_for_presentations(tmp_path):

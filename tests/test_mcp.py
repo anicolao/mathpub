@@ -46,10 +46,12 @@ def test_mcp_advertises_and_delivers_required_completion_tool(monkeypatch):
     assert len(responses) == 3
     initialized = responses[0]["result"]
     assert initialized["capabilities"] == {"tools": {}}
-    assert "call complete_task exactly once" in initialized["instructions"]
+    assert "call complete_task before the final response" in initialized["instructions"]
+    assert "pending generated-page reviews" in initialized["instructions"]
     tool = responses[1]["result"]["tools"][0]
     assert tool["name"] == "complete_task"
     assert "REQUIRED FINAL ACTION" in tool["description"]
+    assert "only one successful call is expected" in tool["description"]
     assert tool["inputSchema"]["required"] == ["html"]
     assert tool["inputSchema"]["additionalProperties"] is False
     assert delivered == [html]

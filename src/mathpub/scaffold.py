@@ -90,9 +90,10 @@ The open workspace owns preview rebuilds. Once the intended PDF is selected, edi
 component, question, slide, publication, or style source and let the workspace watcher rebuild it.
 The workspace header reports **Rebuilding preview…** and then **Preview updated**. Do not invoke
 `mathpub build` after each edit: a competing manual build does more work and can race the watcher.
-After every successful watcher build, inspect every changed-page PNG named in its follow-up prompt
-with an image-viewing tool. Check the content, formatting, page boundaries, and diagram clarity;
-fix problems in authored sources and review the next incremental result before completing the task.
+The workspace batches changed-page review requests rather than typing them into the terminal. When
+`complete_task` returns a pending review, inspect every named PNG with an image-viewing tool. Check
+the content, formatting, page boundaries, and diagram clarity; fix problems in authored sources,
+let the watcher rebuild, and call `complete_task` again after reviewing the incremental result.
 
 When no watched preview is available and a manual preview is necessary, build only the active
 projection. Builds reuse the matching edition by default:
