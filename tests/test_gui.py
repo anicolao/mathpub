@@ -40,6 +40,7 @@ from mathpub.gui.server import (
 )
 from mathpub.gui.source_edit import load_tex_source, save_tex_source
 from mathpub.gui.terminal import PTYManager
+from mathpub.gui.watch import PendingReviewQueue
 from mathpub.scaffold import init_project
 
 
@@ -208,6 +209,37 @@ def test_feedback_prompt_is_single_line_and_validated():
     )
 
 
+def test_completion_delivers_coalesced_reviews_to_agent_before_summary(tmp_path):
+    async def exercise():
+        server = WorkspaceServer(project_root=tmp_path, lock_libraries=False)
+        review_queue = PendingReviewQueue()
+        review_queue.record(
+            ["build/demo/A/review-pages/page-002.png"],
+            page_count_changed=False,
+            review_error=None,
+        )
+        server.review_listeners.add(review_queue.take_prompt)
+        completion_events = []
+
+        async def receive_completion(event):
+            completion_events.append(event)
+
+        server.completion_listeners.add(receive_completion)
+
+        status, payload = await server._deliver_completion("<p>Ready.</p>")
+        assert status == 409
+        assert payload["pending_review"] is True
+        assert "page-002.png" in str(payload["error"])
+        assert completion_events == []
+
+        status, payload = await server._deliver_completion("<p>Ready.</p>")
+        assert status == 200
+        assert payload == {"delivered": True}
+        assert completion_events == [{"type": "agent-completed", "html": "<p>Ready.</p>"}]
+
+    asyncio.run(exercise())
+
+
 def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch):
     monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
     configuration = AgentConfiguration.from_environment()
@@ -215,7 +247,8 @@ def test_agent_configuration_defaults_to_pinned_antigravity_launcher(monkeypatch
     assert "Never use `--full-rebuild` unless cached output appears wrong" in (
         AGENT_BOOTSTRAP_PROMPT
     )
-    assert "inspect every changed-page PNG" in AGENT_BOOTSTRAP_PROMPT
+    assert "batches generated-page review requests" in AGENT_BOOTSTRAP_PROMPT
+    assert "complete_task returns a pending review" in AGENT_BOOTSTRAP_PROMPT
     assert configuration.label == "Antigravity"
     assert configuration.synchronize_mathpub is True
     assert configuration.command == (
@@ -317,11 +350,14 @@ def test_library_mathpub_sync_avoids_update_when_revision_matches(tmp_path, monk
 def test_library_mathpub_sync_refreshes_mismatched_revision(tmp_path, monkeypatch):
     calls = []
     versions = iter(("mathpub 0.1.0 (1111111)\n", "mathpub 0.1.0 (8aafec7)\n"))
+    (tmp_path / "flake.lock").write_text("old lock")
     monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda command: "/nix/bin/nix")
 
     def run(command, **kwargs):
         calls.append(command)
         stdout = next(versions) if command[1] == "run" else ""
+        if command[1:3] == ["flake", "update"]:
+            (tmp_path / command[command.index("--output-lock-file") + 1]).write_text("new lock")
         return subprocess.CompletedProcess(command, 0, stdout, "")
 
     monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
@@ -334,14 +370,30 @@ def test_library_mathpub_sync_refreshes_mismatched_revision(tmp_path, monkeypatc
         "previous_revision": "1111111",
         "revision": "8aafec7",
     }
-    assert calls[1] == ["/nix/bin/nix", "flake", "update", "--refresh", "mathpub"]
+    assert calls[1][:9] == [
+        "/nix/bin/nix",
+        "flake",
+        "update",
+        "--refresh",
+        "--override-input",
+        "mathpub",
+        "github:anicolao/mathpub/8aafec7",
+        "--output-lock-file",
+        calls[1][8],
+    ]
+    assert calls[1][-1] == "mathpub"
+    assert calls[2][2:4] == ["--reference-lock-file", calls[1][8]]
+    assert (tmp_path / "flake.lock").read_text() == "new lock"
 
 
 def test_library_mathpub_sync_rejects_still_mismatched_update(tmp_path, monkeypatch):
+    (tmp_path / "flake.lock").write_text("old lock")
     monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda command: "/nix/bin/nix")
 
     def run(command, **kwargs):
         stdout = "mathpub 0.1.0 (1111111)\n" if command[1] == "run" else ""
+        if command[1:3] == ["flake", "update"]:
+            (tmp_path / command[command.index("--output-lock-file") + 1]).write_text("new lock")
         return subprocess.CompletedProcess(command, 0, stdout, "")
 
     monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
@@ -351,6 +403,8 @@ def test_library_mathpub_sync_rejects_still_mismatched_update(tmp_path, monkeypa
 
     assert error.value.code == "MP-GUI-023"
     assert error.value.details["expected_revision"] == "8aafec7"
+    assert (tmp_path / "flake.lock").read_text() == "old lock"
+    assert not list(tmp_path.glob(".mathpub-flake-lock-*.json"))
 
 
 def test_library_mathpub_sync_skips_unversioned_gui_build(tmp_path, monkeypatch):

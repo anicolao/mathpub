@@ -89,9 +89,10 @@ def capability_data(project: Project) -> dict[str, Any]:
             ),
             "availability": "GUI-launched Antigravity sessions",
             "required_final_action": (
-                "Call complete_task exactly once after the requested work and validation are "
-                "genuinely complete and before the final conversational response. Do not finish "
-                "a successful task with terminal prose alone."
+                "Call complete_task after the requested work and validation are genuinely "
+                "complete and before the final conversational response. If it returns pending "
+                "generated-page reviews, process them and call it again; only one successful call "
+                "is expected. Do not finish a successful task with terminal prose alone."
             ),
             "allowed_html": [
                 "p",
@@ -169,9 +170,11 @@ style changes; the GUI watcher includes style sources in incremental rebuilds.
     completion_section = r"""## Report completed work to the author
 
 When the requested work and its validation are genuinely complete, call the `complete_task` tool
-from the `mathpub-workspace` tool server exactly once, before your final conversational response.
-Pass it a concise `html` summary of what changed, what was validated, and which review artifact is
-ready. Do not omit this tool call and finish a successful task with terminal prose alone.
+from the `mathpub-workspace` tool server before your final conversational response. Pass it a
+concise `html` summary of what changed, what was validated, and which review artifact is ready. If
+the tool returns pending generated-page reviews, process every review and call it again; only one
+successful call is expected. Do not omit this tool call and finish a successful task with terminal
+prose alone.
 
 Only if `complete_task` is unavailable, use the CLI fallback:
 

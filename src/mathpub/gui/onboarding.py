@@ -7,6 +7,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,12 +25,13 @@ AGENT_BOOTSTRAP_PROMPT = (
     "every requested publication, first identify the requested document type, and operate the "
     "framework autonomously on the author's behalf. Do not build merely to orient yourself at "
     "startup. Let the workspace watcher handle edits; manual builds are incremental by default. "
-    "After each watcher build, use an image-viewing tool to inspect every changed-page PNG named "
-    "in its follow-up prompt and correct content, formatting, clipping, or diagram problems before "
-    "finishing. "
+    "The workspace batches generated-page review requests. When complete_task returns a pending "
+    "review instead of accepting completion, use an image-viewing tool to inspect every named "
+    "changed-page PNG, correct content, formatting, clipping, or diagram problems, and then call "
+    "complete_task again. "
     "Never use `--full-rebuild` unless cached output appears wrong or corrupt, clean reproduction "
     "is explicitly required, or the author asks for it. When the requested work and validation "
-    "are genuinely complete, call the `complete_task` tool exactly once before your final response "
+    "are genuinely complete, call the `complete_task` tool before your final response "
     "so the author receives the visible summary and chime. Use the capability contract's CLI "
     "fallback only if that tool is unavailable."
 )
@@ -255,18 +257,20 @@ def synchronize_library_mathpub(
             "Nix is unavailable; cannot verify the library MathPub toolchain",
         )
 
-    version_command = [
-        nix,
-        "run",
-        "--no-write-lock-file",
-        "--no-warn-dirty",
-        "--quiet",
-        ".#mathpub",
-        "--",
-        "--version",
-    ]
-
-    def cli_revision(*, stage: str) -> str | None:
+    def cli_revision(*, stage: str, reference_lock_file: Path | None = None) -> str | None:
+        version_command = [nix, "run"]
+        if reference_lock_file is not None:
+            version_command.extend(("--reference-lock-file", reference_lock_file.name))
+        version_command.extend(
+            (
+                "--no-write-lock-file",
+                "--no-warn-dirty",
+                "--quiet",
+                ".#mathpub",
+                "--",
+                "--version",
+            )
+        )
         try:
             result = subprocess.run(
                 version_command,
@@ -303,7 +307,26 @@ def synchronize_library_mathpub(
             "revision": previous_revision,
         }
 
-    update_command = [nix, "flake", "update", "--refresh", "mathpub"]
+    with tempfile.NamedTemporaryFile(
+        dir=project_root,
+        prefix=".mathpub-flake-lock-",
+        suffix=".json",
+        delete=False,
+    ) as temporary_lock:
+        updated_lock_file = Path(temporary_lock.name)
+    updated_lock_file.unlink()
+    update_command = [
+        nix,
+        "flake",
+        "update",
+        "--refresh",
+        "--override-input",
+        "mathpub",
+        f"github:anicolao/mathpub/{expected_revision}",
+        "--output-lock-file",
+        updated_lock_file.name,
+        "mathpub",
+    ]
     try:
         subprocess.run(
             update_command,
@@ -313,6 +336,21 @@ def synchronize_library_mathpub(
             text=True,
             timeout=300,
         )
+        revision = cli_revision(
+            stage="Verifying the updated library MathPub version",
+            reference_lock_file=updated_lock_file,
+        )
+        if not revisions_match(revision):
+            raise MathpubError(
+                "MP-GUI-023",
+                "the library MathPub toolchain still does not match this GUI build",
+                details={
+                    "stage": "Verifying the updated library MathPub version",
+                    "expected_revision": expected_revision,
+                    "actual_revision": revision or "unavailable",
+                },
+            )
+        os.replace(updated_lock_file, project_root / "flake.lock")
     except (OSError, subprocess.SubprocessError) as error:
         raise MathpubError(
             "MP-GUI-023",
@@ -323,18 +361,8 @@ def synchronize_library_mathpub(
                 command=update_command,
             ),
         ) from error
-
-    revision = cli_revision(stage="Verifying the updated library MathPub version")
-    if not revisions_match(revision):
-        raise MathpubError(
-            "MP-GUI-023",
-            "the library MathPub toolchain still does not match this GUI build",
-            details={
-                "stage": "Verifying the updated library MathPub version",
-                "expected_revision": expected_revision,
-                "actual_revision": revision or "unavailable",
-            },
-        )
+    finally:
+        updated_lock_file.unlink(missing_ok=True)
     return {
         "skipped": False,
         "updated": True,
