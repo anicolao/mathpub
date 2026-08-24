@@ -35,6 +35,10 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 
 ![Page Two](./screenshots/003-page-two.png)
 
+## Direct Page Navigation
+
+![Page Jump Dialog](./screenshots/003-page-jump-dialog.png)
+
 ## Quick TeX Editor
 
 ![Quick TeX Editor](./screenshots/004-quick-tex-editor.png)
@@ -42,6 +46,10 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 ## Quick Edit Committed and Preview Updated
 
 ![Quick Edit Preview](./screenshots/005-quick-edit-preview-updated.png)
+
+## Recently Modified Pages
+
+![Recently Modified Pages](./screenshots/005-recent-pages.png)
 
 ## Presentation Slide Quick Editor
 
@@ -63,6 +71,9 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 - [x] Clicking a mapped region opens source-aware feedback controls
 - [x] Feedback is inserted into the PTY for review without being executed
 - [x] Multipage navigation loads page-specific PDF content and mappings
+- [x] Left and right arrow keys flip pages outside authoring inputs
+- [x] Clicking the page number opens a direct page-jump control
+- [x] Recently modified pages are listed and can be opened directly
 - [x] A mapped TeX source can be edited directly in the GUI
 - [x] Saving commits only that source file in Git
 - [x] The committed edit reuses instances and hot-swaps the active page within budget

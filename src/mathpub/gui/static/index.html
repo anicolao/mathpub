@@ -69,8 +69,24 @@
         <div class="preview-controls">
           <div class="page-controls" aria-label="PDF page navigation">
             <button id="page-previous" type="button" aria-label="Previous page" disabled>‹</button>
-            <span id="page-position" aria-live="polite">Page 0 of 0</span>
+            <button
+              id="page-position"
+              class="page-position"
+              type="button"
+              aria-label="Jump to a PDF page"
+              aria-haspopup="dialog"
+              disabled
+            >Page 0 of 0</button>
             <button id="page-next" type="button" aria-label="Next page" disabled>›</button>
+            <button
+              id="recent-pages"
+              class="recent-pages-toggle"
+              type="button"
+              aria-label="Show recently modified pages"
+              aria-haspopup="dialog"
+              hidden
+              disabled
+            >Changes</button>
           </div>
           <button
             id="mapped-regions-toggle"
@@ -90,7 +106,12 @@
           </select>
         </div>
       </div>
-      <div class="pdf-viewer-wrapper" id="pdf-wrapper">
+      <div
+        class="pdf-viewer-wrapper"
+        id="pdf-wrapper"
+        tabindex="0"
+        aria-label="PDF preview. Use the left and right arrow keys to change pages."
+      >
         <img id="pdf-preview" class="pdf-preview" alt="First page of the selected PDF">
         <svg
           id="synctex-overlay"
@@ -111,6 +132,42 @@
       </div>
     </section>
   </main>
+
+  <dialog
+    id="page-navigation-dialog"
+    class="page-navigation-dialog"
+    aria-labelledby="page-navigation-title"
+  >
+    <form id="page-navigation-form">
+      <div class="feedback-heading">
+        <div>
+          <span class="feedback-kicker">Document preview</span>
+          <h2 id="page-navigation-title">Go to page</h2>
+        </div>
+        <button
+          id="page-navigation-close"
+          class="feedback-close"
+          type="button"
+          aria-label="Close page navigation"
+        >×</button>
+      </div>
+
+      <div class="page-jump-row">
+        <label for="page-jump-input">Page</label>
+        <input id="page-jump-input" name="page" type="number" min="1" step="1" required>
+        <span id="page-jump-total" class="page-jump-total">of 0</span>
+        <button class="button-primary" type="submit">Go</button>
+      </div>
+
+      <section class="recent-pages-panel" aria-labelledby="recent-pages-title">
+        <h3 id="recent-pages-title">Most recently modified pages</h3>
+        <div id="recent-pages-list" class="recent-pages-list"></div>
+        <p id="recent-pages-empty" class="recent-pages-empty">
+          No rendered page changes have been recorded for this PDF yet.
+        </p>
+      </section>
+    </form>
+  </dialog>
 
   <dialog id="library-dialog" class="library-dialog" aria-labelledby="library-title">
     <form id="library-form">

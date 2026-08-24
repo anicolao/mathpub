@@ -157,6 +157,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const previousPage = document.getElementById("page-previous");
   const nextPage = document.getElementById("page-next");
   const pagePosition = document.getElementById("page-position");
+  const recentPages = document.getElementById("recent-pages");
+  const pdfWrapper = document.getElementById("pdf-wrapper");
+  const pageNavigationDialog = document.getElementById("page-navigation-dialog");
+  const pageNavigationForm = document.getElementById("page-navigation-form");
+  const pageNavigationClose = document.getElementById("page-navigation-close");
+  const pageJumpInput = document.getElementById("page-jump-input");
+  const pageJumpTotal = document.getElementById("page-jump-total");
+  const recentPagesList = document.getElementById("recent-pages-list");
+  const recentPagesEmpty = document.getElementById("recent-pages-empty");
   const openNativePreview = document.getElementById("open-native-preview");
   const mappedRegionsToggle = document.getElementById("mapped-regions-toggle");
   const synctexOverlay = document.getElementById("synctex-overlay");
@@ -236,6 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let mappingRequestId = 0;
   let previewBuildRequestId = 0;
   let currentPage = 1;
+  const recentPagesByPath = new Map();
   let workspaceState = null;
   let completionAudioContext = null;
   let completionPreviousAgentStatus = null;
@@ -549,6 +559,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return true;
     }
     if (message.type === "preview-built") {
+      recordRecentlyModifiedPages(message.path, message.review_pages);
       const buildRequestId = ++previewBuildRequestId;
       const cache = message.instance_cache || {};
       const reused =
@@ -867,6 +878,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function reviewPageNumbers(reviewPages) {
+    if (!Array.isArray(reviewPages)) return [];
+    const pages = reviewPages
+      .map((path) => {
+        const match =
+          typeof path === "string" ? path.match(/-page-(\d+)\.png$/) : null;
+        return match ? Number(match[1]) : null;
+      })
+      .filter((page) => Number.isInteger(page) && page > 0);
+    return [...new Set(pages)].sort((left, right) => left - right);
+  }
+
+  function recordRecentlyModifiedPages(path, reviewPages) {
+    if (typeof path !== "string" || !path) return;
+    const pages = reviewPageNumbers(reviewPages);
+    if (pages.length > 0) recentPagesByPath.set(path, pages);
+    if (currentPublication?.path === path) updatePageControls();
+  }
+
+  function currentRecentPages() {
+    if (!currentPublication) return [];
+    return (recentPagesByPath.get(currentPublication.path) || []).filter(
+      (page) => page <= pageCount()
+    );
+  }
+
+  function renderPageNavigationDialog() {
+    const pages = pageCount();
+    pageJumpInput.min = "1";
+    pageJumpInput.max = String(pages);
+    pageJumpInput.value = String(currentPage);
+    pageJumpTotal.textContent = `of ${pages}`;
+    recentPagesList.replaceChildren();
+    const modifiedPages = currentRecentPages();
+    recentPagesEmpty.hidden = modifiedPages.length > 0;
+    modifiedPages.forEach((page) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `Page ${page}`;
+      button.dataset.page = String(page);
+      if (page === currentPage) button.setAttribute("aria-current", "page");
+      button.addEventListener("click", () => {
+        pageNavigationDialog.close();
+        showPage(page);
+        pdfWrapper.focus();
+      });
+      recentPagesList.appendChild(button);
+    });
+  }
+
+  function openPageNavigation(preferRecentPages = false) {
+    if (!currentPublication) return;
+    renderPageNavigationDialog();
+    if (!pageNavigationDialog.open) pageNavigationDialog.showModal();
+    const firstRecentPage = recentPagesList.querySelector("button");
+    if (preferRecentPages && firstRecentPage) firstRecentPage.focus();
+    else pageJumpInput.focus();
+  }
+
   function pageCount() {
     const pages = Number(currentPublication?.pages || 1);
     return Number.isInteger(pages) && pages > 0 ? pages : 1;
@@ -876,16 +946,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const nativeViewer = workspaceState?.native_pdf_viewer || {};
     if (!currentPublication) {
       pagePosition.textContent = "Page 0 of 0";
+      pagePosition.disabled = true;
+      pagePosition.classList.add("is-empty");
       previousPage.disabled = true;
       nextPage.disabled = true;
+      recentPages.hidden = true;
+      recentPages.disabled = true;
+      recentPages.textContent = "Changes";
+      recentPages.classList.remove("has-changes");
       openNativePreview.disabled = true;
       openNativePreview.title = "Select a built PDF first";
       return;
     }
     const pages = pageCount();
     pagePosition.textContent = `Page ${currentPage} of ${pages}`;
+    pagePosition.disabled = false;
+    pagePosition.classList.remove("is-empty");
+    pagePosition.title = "Jump to a page";
     previousPage.disabled = currentPage <= 1;
     nextPage.disabled = currentPage >= pages;
+    const modifiedPages = currentRecentPages();
+    recentPages.hidden = false;
+    recentPages.disabled = modifiedPages.length === 0;
+    recentPages.textContent = modifiedPages.length
+      ? `Changes (${modifiedPages.length})`
+      : "Changes";
+    recentPages.classList.toggle("has-changes", modifiedPages.length > 0);
+    recentPages.title = modifiedPages.length
+      ? `Review recently modified ${modifiedPages.length === 1 ? "page" : "pages"}: ` +
+        modifiedPages.join(", ")
+      : "No recently modified pages for this PDF";
     openNativePreview.disabled = nativeViewer.available !== true;
     openNativePreview.title =
       nativeViewer.available === true
@@ -942,6 +1032,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
   previousPage.addEventListener("click", () => showPage(currentPage - 1));
   nextPage.addEventListener("click", () => showPage(currentPage + 1));
+  pagePosition.addEventListener("click", () => openPageNavigation(false));
+  recentPages.addEventListener("click", () => openPageNavigation(true));
+  pageNavigationClose.addEventListener("click", () => pageNavigationDialog.close());
+  pageNavigationForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const requestedPage = Number(pageJumpInput.value);
+    if (!Number.isInteger(requestedPage)) return;
+    pageNavigationDialog.close();
+    showPage(requestedPage);
+    pdfWrapper.focus();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (
+      !currentPublication ||
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      (event.key !== "ArrowLeft" && event.key !== "ArrowRight") ||
+      document.querySelector("dialog[open]")
+    ) return;
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest('input, textarea, select, [contenteditable="true"], .xterm')
+    ) return;
+    event.preventDefault();
+    showPage(currentPage + (event.key === "ArrowLeft" ? -1 : 1));
+  });
   openNativePreview.addEventListener("click", async () => {
     if (!currentPublication || openNativePreview.disabled) return;
     openNativePreview.disabled = true;
