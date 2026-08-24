@@ -337,6 +337,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert page.locator("#page-position").text_content() == "Page 1 of 2"
             assert page.locator("#page-previous").is_disabled()
             assert page.locator("#page-next").is_enabled()
+            assert page.locator("#recent-pages").is_disabled()
 
             boxes_response = page.request.get(
                 f"http://127.0.0.1:{bound_port}/api/synctex/boxes"
@@ -552,8 +553,23 @@ source = "gui-slide-editing/01-editable-slide.tex"
 
             steps.verify(page, "003-feedback-inserted-in-terminal")
 
-            # 9. Navigate to page two and verify page-specific content and mappings.
-            page.locator("#page-next").click()
+            # 9. Jump to a page and verify left/right keyboard navigation and page mappings.
+            page.locator("#page-position").click()
+            page_navigation_dialog = page.locator("#page-navigation-dialog")
+            assert page_navigation_dialog.is_visible()
+            assert page.locator("#page-jump-total").text_content() == "of 2"
+            steps.verify(page, "003-page-jump-dialog")
+            page.locator("#page-jump-input").fill("2")
+            page.locator("#page-jump-input").press("Enter")
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 2 of 2'"
+            )
+            page.locator("#pdf-wrapper").focus()
+            page.keyboard.press("ArrowLeft")
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 1 of 2'"
+            )
+            page.keyboard.press("ArrowRight")
             page.wait_for_function(
                 "document.getElementById('page-position').textContent === 'Page 2 of 2'"
             )
@@ -652,6 +668,20 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "physics.practice-A-student-page-001.png"
             ]
             assert document_review_pages[0].stat().st_size > 0
+            page.wait_for_function("!document.getElementById('recent-pages').disabled")
+            assert page.locator("#recent-pages").text_content() == "Changes (1)"
+            page.locator("#recent-pages").click()
+            recent_page = page.locator('#recent-pages-list button[data-page="1"]')
+            assert recent_page.text_content() == "Page 1"
+            steps.verify(page, "005-recent-pages")
+            recent_page.click()
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 1 of 2'"
+            )
+            page.keyboard.press("ArrowRight")
+            page.wait_for_function(
+                "document.getElementById('page-position').textContent === 'Page 2 of 2'"
+            )
 
             commit_after = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
@@ -860,10 +890,14 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "![Feedback Inserted](./screenshots/003-feedback-inserted-in-terminal.png)\n\n"
                 "## Page Two with Page-Specific SyncTeX Mappings\n\n"
                 "![Page Two](./screenshots/003-page-two.png)\n\n"
+                "## Direct Page Navigation\n\n"
+                "![Page Jump Dialog](./screenshots/003-page-jump-dialog.png)\n\n"
                 "## Quick TeX Editor\n\n"
                 "![Quick TeX Editor](./screenshots/004-quick-tex-editor.png)\n\n"
                 "## Quick Edit Committed and Preview Updated\n\n"
                 "![Quick Edit Preview](./screenshots/005-quick-edit-preview-updated.png)\n\n"
+                "## Recently Modified Pages\n\n"
+                "![Recently Modified Pages](./screenshots/005-recent-pages.png)\n\n"
                 "## Presentation Slide Quick Editor\n\n"
                 "![Presentation Slide Editor]"
                 "(./screenshots/006-presentation-slide-editor.png)\n\n"
@@ -883,6 +917,9 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "- [x] Clicking a mapped region opens source-aware feedback controls\n"
                 "- [x] Feedback is inserted into the PTY for review without being executed\n"
                 "- [x] Multipage navigation loads page-specific PDF content and mappings\n"
+                "- [x] Left and right arrow keys flip pages outside authoring inputs\n"
+                "- [x] Clicking the page number opens a direct page-jump control\n"
+                "- [x] Recently modified pages are listed and can be opened directly\n"
                 "- [x] A mapped TeX source can be edited directly in the GUI\n"
                 "- [x] Saving commits only that source file in Git\n"
                 "- [x] The committed edit reuses instances and hot-swaps the active page "
