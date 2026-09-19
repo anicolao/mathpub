@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "id", "profile_date", "interior_manifest", "projection",
+               "trim_width_pt", "trim_height_pt", "spine_per_page_pt", "bleed_pt", "safe_pt"],
+  "properties": {
+    "schema": {"const": 1}, "id": {"type": "string"},
+    "profile_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "interior_manifest": {"type": "string"}, "projection": {"type": "string"},
+    "trim_width_pt": {"type": "number", "exclusiveMinimum": 0},
+    "trim_height_pt": {"type": "number", "exclusiveMinimum": 0},
+    "spine_per_page_pt": {"type": "number", "exclusiveMinimum": 0},
+    "bleed_pt": {"type": "number", "minimum": 0},
+    "safe_pt": {"type": "number", "minimum": 0},
+    "round_pages_to": {"type": "integer", "minimum": 1, "maximum": 16},
+    "min_pages": {"type": "integer", "minimum": 1},
+    "max_pages": {"type": "integer", "minimum": 1},
+    "barcode_box_pt": {"type": "array", "minItems": 4, "maxItems": 4,
+                       "items": {"type": "number", "minimum": 0}},
+    "printing": {"type": "object", "additionalProperties": false,
+      "properties": {"format": {"const": "paperback"}, "ink": {"type": "string"},
+                     "paper": {"type": "string"}, "bleed": {"type": "boolean"},
+                     "finish": {"type": "string"}}}
+  }
+}

@@ -9,6 +9,7 @@
     "kind": {"enum": ["test", "worksheet", "textbook", "presentation"]},
     "title": {"type": "string"},
     "identity": {"type": "string", "minLength": 1},
+    "cover_spec": {"type": "string", "minLength": 1},
     "subtitle": {"type": "string"},
     "course": {"type": "string"},
     "author": {"type": "string"},
