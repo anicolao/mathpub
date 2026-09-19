@@ -252,6 +252,10 @@ def parser() -> argparse.ArgumentParser:
     release.add_argument("source", type=Path)
     release.add_argument("--output", type=Path)
     _json_flag(release)
+    identity = commands.add_parser("identity", help="validate canonical identity and PDF drift")
+    identity.add_argument("source", type=Path)
+    identity.add_argument("--pdf", type=Path, action="append", default=[])
+    _json_flag(identity)
     return result
 
 
@@ -327,6 +331,11 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "identity":
+        from mathpub.identity import check_identity
+
+        return "identity", check_identity(args.source, args.pdf)
+
     if args.command == "release":
         from mathpub.releases import assemble_release, check_release, verify_release
 

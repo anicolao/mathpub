@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "id", "title", "author"],
+  "properties": {
+    "schema": {"const": 1}, "id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1}, "subtitle": {"type": "string"},
+    "author": {"type": "string", "minLength": 1}, "publisher": {"type": "string"},
+    "isbn": {"type": "string", "pattern": "^[0-9-]+$"},
+    "edition": {"type": "string"}, "year": {"type": "integer", "minimum": 1},
+    "collection": {"type": "string"},
+    "display": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"title": {"type": "string", "minLength": 1},
+                     "spine_title": {"type": "string"}, "build_label": {"type": "string"}}
+    }
+  }
+}
