@@ -14,7 +14,13 @@ dependencies = [
   "jsonschema",
   "numpy",
   "pypdf",
+  "pillow",
+  "qrcode",
+  "zxing-cpp",
 ]
+
+[project.optional-dependencies]
+kdp = ["playwright"]
 
 [project.scripts]
 mathpub = "mathpub.cli:main"

@@ -23,7 +23,17 @@ from mathpub.config import load_toml, schema_definition
 from mathpub.errors import MathpubError
 
 IDENTITY = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-RULES = ("page_count", "trim", "embedded_fonts", "min_font", "min_stroke")
+RULES = (
+    "page_count",
+    "trim",
+    "embedded_fonts",
+    "min_font",
+    "min_stroke",
+    "text_safe",
+    "blank_pages",
+    "grayscale",
+    "content",
+)
 
 
 def _multiply(a, b):
@@ -310,6 +320,89 @@ def preflight_pdf(path: Path, profile: dict[str, Any] | None = None) -> dict[str
                 else:
                     status = "unresolved"
                 check(rule, number, value, profile[key], status)
+    if any(
+        key in profile
+        for key in (
+            "text_safe_margin_pt",
+            "allowed_blank_pages",
+            "require_grayscale",
+            "content_expectations",
+        )
+    ):
+        from mathpub.pdf_render import raster_measurements, text_pages
+
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != report["artifact"]["sha256"]:
+            raise MathpubError("MP-PREFLIGHT-001", "PDF changed during inspection")
+        if "text_safe_margin_pt" in profile or "content_expectations" in profile:
+            pages = text_pages(data)
+            if len(pages) != report["page_count"]:
+                raise MathpubError("MP-PREFLIGHT-001", "text extractor page count mismatch")
+            for number, page in enumerate(pages, 1):
+                if "text_safe_margin_pt" in profile:
+                    left, top, right, bottom = profile["text_safe_margin_pt"]
+                    safe = [left, top, page["width_pt"] - right, page["height_pt"] - bottom]
+                    outside = [
+                        word
+                        for word in page["words"]
+                        if not (
+                            word["box"][0] >= safe[0] - tolerance
+                            and word["box"][1] >= safe[1] - tolerance
+                            and word["box"][2] <= safe[2] + tolerance
+                            and word["box"][3] <= safe[3] + tolerance
+                        )
+                    ]
+                    check(
+                        "text_safe",
+                        number,
+                        outside,
+                        safe,
+                        "pass"
+                        if not outside and safe[0] < safe[2] and safe[1] < safe[3]
+                        else "fail",
+                    )
+            for expected in profile.get("content_expectations", []):
+                number = expected["page"]
+                actual = (
+                    pages[number - 1]["text"].count(" ".join(expected["text"].split()))
+                    if number <= len(pages)
+                    else None
+                )
+                check(
+                    "content",
+                    number,
+                    {"id": expected["id"], "count": actual},
+                    expected,
+                    "pass" if actual == expected.get("count", 1) else "fail",
+                )
+        if "allowed_blank_pages" in profile or profile.get("require_grayscale"):
+            raster = raster_measurements(
+                data,
+                report["page_count"],
+                profile.get("raster_dpi", 150),
+                profile.get("ink_threshold", 250),
+                profile.get("color_tolerance", 2),
+            )
+            report["raster"] = raster
+            for page in raster:
+                if "allowed_blank_pages" in profile:
+                    check(
+                        "blank_pages",
+                        page["page"],
+                        page["ink_pixels"],
+                        {"allowed_blank": page["page"] in profile["allowed_blank_pages"]},
+                        "pass"
+                        if page["ink_pixels"] or page["page"] in profile["allowed_blank_pages"]
+                        else "fail",
+                    )
+                if profile.get("require_grayscale"):
+                    check(
+                        "grayscale",
+                        page["page"],
+                        page["color_pixels"],
+                        0,
+                        "pass" if not page["color_pixels"] else "fail",
+                    )
     report.update(
         {
             "profile": profile,
@@ -319,7 +412,7 @@ def preflight_pdf(path: Path, profile: dict[str, Any] | None = None) -> dict[str
             "skipped_rules": sorted(set(RULES) - enabled),
             "limitations": [
                 "Not PDF/X certification, printer acceptance, or editorial approval.",
-                "Text bounds, blank pages, folios, raster color and artwork safety are unchecked.",
+                "Text bounds are not artwork safety; raster color is not PDF color-space proof.",
                 "Font size is the transformed text em height, not visible glyph bounds.",
                 "Stroke bounds are conservative; uncertain widths fail closed.",
                 "Clipping, optional visibility, and text rendered as outlines are not interpreted.",
