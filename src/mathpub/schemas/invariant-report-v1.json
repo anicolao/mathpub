@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "before_manifest_sha256", "after_manifest_sha256", "checks"],
+  "properties": {
+    "schema": {"const": 1},
+    "before_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "after_manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "checks": {"type": "array", "items": {
+      "type": "object", "required": ["id", "placement", "passed", "note"],
+      "properties": {"id": {"type": "string"}, "placement": {"type": "string"},
+                     "passed": {"type": "boolean"}, "note": {"type": "string", "minLength": 1},
+                     "measured": {}, "expected": {}, "source": {"type": "string"}},
+      "additionalProperties": false
+    }}
+  }
+}

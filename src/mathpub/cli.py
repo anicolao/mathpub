@@ -284,6 +284,23 @@ def parser() -> argparse.ArgumentParser:
     navigation.add_argument("pdf", type=Path)
     navigation.add_argument("--expectations", type=Path, required=True)
     _json_flag(navigation)
+    invariants = commands.add_parser("invariants", help="compare placement-bound layout invariants")
+    invariants.add_argument("before", type=Path)
+    invariants.add_argument("after", type=Path)
+    invariants.add_argument("--evidence", type=Path, action="append", default=[])
+    _json_flag(invariants)
+    specimen = commands.add_parser("specimen", help="build actual-size component/style specimens")
+    specimen.add_argument("identifier")
+    specimen.add_argument("--component", action="append", required=True, dest="components")
+    specimen.add_argument("--output", type=Path, required=True)
+    specimen.add_argument("--style", default="mathpub")
+    specimen.add_argument(
+        "--projection",
+        default="student",
+        choices=("student", "answers", "solutions", "validation", "parent"),
+    )
+    specimen.add_argument("--seed", default="2026")
+    _json_flag(specimen)
     return result
 
 
@@ -359,6 +376,23 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "invariants":
+        from mathpub.layout_tools import compare_invariants
+
+        return "invariants", compare_invariants(args.before, args.after, args.evidence)
+    if args.command == "specimen":
+        from mathpub.layout_tools import specimen
+
+        return "specimen", specimen(
+            find_project(),
+            args.identifier,
+            args.components,
+            args.output,
+            style=args.style,
+            projection=args.projection,
+            seed=args.seed,
+        )
+
     if args.command in ("qr", "audit-navigation"):
         from mathpub.navigation_audit import audit_navigation, render_qr
 
