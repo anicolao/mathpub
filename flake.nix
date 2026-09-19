@@ -104,6 +104,7 @@
             postInstall = ''
               wrapProgram $out/bin/mathpub \
                 --set MATHPUB_BUILD_REVISION ${buildRevision} \
+                --set-default PLAYWRIGHT_BROWSERS_PATH ${pkgs.playwright-driver.browsers} \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bun pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
               makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
                 --add-flags "workspace"

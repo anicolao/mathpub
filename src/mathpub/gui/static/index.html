@@ -18,6 +18,7 @@
       <span class="library-name" id="library-name">No library open</span>
     </div>
     <div class="header-status">
+      <button id="publishing-tools" class="header-action" type="button">Publishing tools</button>
       <button id="open-library" class="header-action" type="button">
         Open library
       </button>
@@ -133,6 +134,11 @@
     </section>
   </main>
 
+  <dialog id="publishing-dialog" style="width:90vw;height:90vh;padding:12px;border-radius:8px">
+    <button id="publishing-close" type="button">Close publishing tools</button>
+    <iframe id="publishing-frame" title="Publishing tools" style="width:100%;height:94%;border:0"></iframe>
+  </dialog>
+  <script src="./publishing-launcher.js"></script>
   <dialog
     id="page-navigation-dialog"
     class="page-navigation-dialog"

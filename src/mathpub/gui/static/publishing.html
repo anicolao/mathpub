@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MathPub publishing tools</title>
+<style>
+body{font:16px system-ui;color:#202838;background:#f6f7fa;margin:24px}
+section{background:white;padding:20px;margin-bottom:20px;border-radius:8px}
+label{display:block;margin:12px 0}input:not([type=checkbox]){display:block;width:95%;padding:8px}
+button{padding:10px;margin:8px 8px 8px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+iframe{width:100%;height:70vh;border:1px solid #ddd}[hidden]{display:none}.warning{color:#7c3300}
+</style></head><body>
+<h1>Publishing tools</h1><p>Paths are relative to the open authoring library. Existing outputs are never overwritten.</p>
+<section><h2>Compare editions</h2><form id="review-form">
+<label>Saved baseline PDF<input id="before" required placeholder="reviews/baseline.pdf"></label>
+<label>Revised PDF<input id="after" required placeholder="build/book/A/book-A-student.pdf"></label>
+<label>New review directory<input id="review-output" required placeholder="reviews/revision-b"></label>
+<button>Create paired review</button></form><iframe id="review-view" title="Edition review" hidden></iframe></section>
+<section><h2>KDP existing paperback draft</h2>
+<p class="warning">This uploads files and saves the selected draft. It never approves Previewer, orders proofs, sets pricing, or publishes.</p>
+<label>KDP configuration<input id="config" placeholder="kdp/book.toml"></label>
+<button id="login">Open browser for manual login / MFA</button>
+<p>Sign in to the intended account in the configured browser profile, then close that browser window.</p>
+<form id="plan-form">
+<label>Verified release directory<input id="release" required placeholder="releases/autumn"></label>
+<label>Book ID<input id="book" required></label>
+<label>New plan file<input id="plan" required placeholder="kdp/plan.json"></label>
+<button>Prepare submission plan</button></form>
+<pre id="plan-preview"></pre>
+<label>Attempt directory<input id="attempt" placeholder="kdp/attempt-one"></label>
+<label><input id="resume" type="checkbox">Resume an existing attempt after reinspecting the draft</label>
+<label><input id="retry" type="checkbox">I inspected an uncertain attempt and authorize replacement uploads where needed</label>
+<button id="load-plan">Load existing plan for review / resume</button>
+<label><input id="confirm" type="checkbox" disabled>I verified the displayed account, exact draft URL, identity, print settings, and file hashes</label>
+<button id="upload" disabled>Upload to this existing draft</button>
+</section><pre id="status" role="status"></pre><script src="publishing.js"></script></body></html>

@@ -59,6 +59,10 @@ The committed images below are exact Playwright WebKit renderer baselines. On Li
 
 ![Updated Presentation Slide](./screenshots/007-presentation-slide-updated.png)
 
+## Publishing Tools
+
+![Publishing tools](./screenshots/008-publishing-tools.png)
+
 **Verifications:**
 - [x] Header brand and subtitle render correctly
 - [x] The package version and build Git revision are visible
