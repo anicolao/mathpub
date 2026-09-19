@@ -301,6 +301,23 @@ def parser() -> argparse.ArgumentParser:
     )
     specimen.add_argument("--seed", default="2026")
     _json_flag(specimen)
+    kdp = commands.add_parser("kdp", help="plan or upload a verified release to an existing draft")
+    kdp_actions = kdp.add_subparsers(dest="action", required=True)
+    kdp_plan = kdp_actions.add_parser("plan")
+    kdp_plan.add_argument("release", type=Path)
+    kdp_plan.add_argument("--book", required=True)
+    kdp_plan.add_argument("--config", type=Path, required=True)
+    kdp_plan.add_argument("--output", type=Path, required=True)
+    _json_flag(kdp_plan)
+    kdp_login = kdp_actions.add_parser("login")
+    kdp_login.add_argument("config", type=Path)
+    _json_flag(kdp_login)
+    kdp_upload = kdp_actions.add_parser("upload")
+    kdp_upload.add_argument("plan", type=Path)
+    kdp_upload.add_argument("--output", type=Path, required=True)
+    kdp_upload.add_argument("--resume", action="store_true")
+    kdp_upload.add_argument("--retry-uncertain", action="store_true")
+    _json_flag(kdp_upload)
     return result
 
 
@@ -376,6 +393,19 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "kdp":
+        from mathpub.kdp import create_plan, login, upload_draft
+
+        if args.action == "plan":
+            result = create_plan(args.release, args.book, args.config, args.output)
+        elif args.action == "login":
+            result = login(args.config)
+        else:
+            result = upload_draft(
+                args.plan, args.output, resume=args.resume, retry_uncertain=args.retry_uncertain
+            )
+        return f"kdp {args.action}", result
+
     if args.command == "invariants":
         from mathpub.layout_tools import compare_invariants
 

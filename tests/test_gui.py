@@ -946,6 +946,22 @@ def test_workspace_server_http(tmp_path):
         assert workspace_data["agent"]["environment"] == "nix develop"
         assert "Outline my first book" in workspace_data["starter_prompt"]
 
+        tools_page = urllib.request.urlopen("http://127.0.0.1:8912/publishing.html")
+        assert b"KDP existing paperback draft" in tools_page.read()
+        tools_request = urllib.request.Request(
+            "http://127.0.0.1:8912/api/tools",
+            data=b'{"action":"kdp-upload"}',
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(HTTPError) as forbidden_tools:
+            urllib.request.urlopen(tools_request)
+        assert forbidden_tools.value.code == 403
+        tools_request.add_header("Origin", "http://127.0.0.1:8912")
+        tools_request.add_header("X-Mathpub-Publishing", "1")
+        with pytest.raises(HTTPError) as missing_plan:
+            urllib.request.urlopen(tools_request)
+        assert missing_plan.value.code == 400
+
         # Test static file serving (index.html)
         req_root = urllib.request.urlopen("http://127.0.0.1:8912/")
         assert req_root.status == 200

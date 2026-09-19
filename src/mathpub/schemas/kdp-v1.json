@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "locale", "url", "profile_dir", "account_selector", "account_text"],
+  "properties": {
+    "schema": {"const": 1}, "locale": {"const": "en-US"},
+    "url": {"type": "string"}, "profile_dir": {"type": "string", "minLength": 1},
+    "account_selector": {"type": "string", "minLength": 1},
+    "account_text": {"type": "string", "minLength": 1},
+    "browser_executable": {"type": "string"},
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600}
+  }
+}

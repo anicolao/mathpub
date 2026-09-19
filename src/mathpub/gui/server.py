@@ -18,7 +18,7 @@ import sys
 import webbrowser
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from mathpub import display_version
 from mathpub.completion import (
@@ -439,6 +439,68 @@ class WorkspaceServer:
                 return
 
         # Handle HTTP API & Static File Requests
+        if path == "/api/tools" and method == "POST":
+            from mathpub.gui.publishing import publishing_operation, trusted_request
+
+            project = self._project()
+            try:
+                length = int(headers.get("content-length", "0"))
+                if not trusted_request(headers):
+                    response = _json_response(
+                        403, {"error": "same-origin publishing request required"}
+                    )
+                elif project is None:
+                    response = _json_response(404, {"error": "open an authoring library first"})
+                elif not 0 < length <= REQUEST_BODY_LIMIT:
+                    response = _json_response(400, {"error": "invalid publishing request size"})
+                else:
+                    body = initial_body
+                    if len(body) < length:
+                        body += await reader.readexactly(length - len(body))
+                    payload = json.loads(body[:length])
+                    if not isinstance(payload, dict):
+                        raise ValueError("publishing request must be an object")
+                    result = await asyncio.to_thread(publishing_operation, project, payload)
+                    response = _json_response(200, result)
+            except MathpubError as error:
+                response = _json_response(
+                    400, {"error": error.message, "code": error.code, "details": error.details}
+                )
+            except (OSError, ValueError, asyncio.IncompleteReadError):
+                response = _json_response(400, {"error": "invalid publishing request or file"})
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path.startswith("/api/tools/reviews/") and method == "GET":
+            from mathpub.releases import inside
+
+            project = self._project()
+            try:
+                if project is None:
+                    raise ValueError("no library")
+                target = inside(project.root, unquote(path.removeprefix("/api/tools/reviews/")))
+                if not re.fullmatch(
+                    r"index\.html|review\.json|(?:before|after)\.pdf|(?:before|after)-[0-9]+\.png",
+                    target.name,
+                ):
+                    raise ValueError("not a review asset")
+                if not (target.parent / "review.json").is_file():
+                    raise ValueError("not a review bundle")
+                data = target.read_bytes()
+                mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+                response = (
+                    f"HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\n"
+                    f"Content-Length: {len(data)}\r\n\r\n"
+                ).encode() + data
+            except (ValueError, OSError):
+                response = _json_response(404, {"error": "review asset not found"})
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
         if path == "/api/health":
             body = json.dumps({"status": "ok", "version": self.build_version}).encode()
             response = (
