@@ -16,6 +16,10 @@ COMMANDS = (
     ("new", "Scaffold a component, question, or library-defined style."),
     ("check", "Validate a project, component, question, or publication."),
     ("preflight", "Inspect an existing PDF against an opt-in TOML print policy."),
+    (
+        "export-print",
+        "Derive a separately verified print PDF and receipt from a manifest projection.",
+    ),
     ("preview", "Build all requested projections for one question in isolation."),
     ("build", "Build a deterministic publication edition."),
     ("variants", "Build several named deterministic variants."),
