@@ -26,6 +26,7 @@ from pypdf.generic import (
 
 from mathpub import __version__
 from mathpub.errors import MathpubError
+from mathpub.provenance import verify_stamp
 
 POLICY = "remove-invisible-links-v1"
 
@@ -173,6 +174,9 @@ def export_print(manifest_path: Path, projection: str, destination: Path, *, pol
             raise ValueError("encrypted PDFs are not supported")
         if not reader.pages or len(reader.pages) != output["pages"]:
             raise ValueError("PDF page count does not match the manifest")
+        if manifest.get("source_stable") is not True:
+            raise ValueError("export requires a source-stable build; rebuild legacy editions")
+        verify_stamp(reader, manifest, projection)
         root = reader.root_object
         if any(key in root for key in ("/AcroForm", "/StructTreeRoot", "/Perms")):
             raise ValueError(
@@ -240,7 +244,7 @@ def export_print(manifest_path: Path, projection: str, destination: Path, *, pol
                     "page_labels",
                 ],
                 "limitations": [
-                    "Manifest provenance is unsigned; no embedded source stamp is required yet.",
+                    "Manifest and embedded provenance are unsigned consistency evidence.",
                     "Decoded resources are compared, not compression bytes or rendered pixels.",
                     "This is not a security sanitizer or a printer-acceptance certification.",
                     "A full projection does not establish a complete multi-artifact release.",

@@ -45,9 +45,9 @@ verification scope. Errors use `MP-EXPORT-001` and exit code 3.
 ## Limits
 
 These checks establish consistency with an **unsigned manifest**, not authenticity.
-Artifact-bound source stamping and multi-artifact release completeness are the
-next survey entry; legacy PDFs do not yet need an embedded source stamp. A full
-student projection does not prove all required cover/proof artifacts exist.
+An embedded source stamp and source-stable build are now required; rebuild legacy
+editions first. Use [release sets](releases.md) to check all required cover/proof
+artifacts; exporting one full student projection does not establish that completeness.
 
 Decoded resources, not compression bytes or rendered pixels, are compared. This
 is not a security sanitizer: surviving document structures may contain actions.

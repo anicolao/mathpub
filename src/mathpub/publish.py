@@ -26,6 +26,7 @@ from mathpub.instance import (
     instantiate_component,
 )
 from mathpub.latex_format import find_latex_format
+from mathpub.provenance import source_snapshot, stamp_tex
 from mathpub.render import (
     SOURCE_BEGIN,
     SOURCE_END,
@@ -121,13 +122,7 @@ def _generator_source_hash(entry: Entry) -> str:
 
 
 def _git_source(project: Project) -> dict[str, Any]:
-    def git(*arguments: str) -> str:
-        process = subprocess.run(
-            ["git", *arguments], cwd=project.root, capture_output=True, text=True, check=False
-        )
-        return process.stdout.strip() if process.returncode == 0 else ""
-
-    return {"git_commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
+    return source_snapshot(project.root)
 
 
 def _toolchain() -> dict[str, str]:
@@ -658,8 +653,12 @@ def build(
     reproduction_override: dict[str, Any] | None = None,
     lesson_ids: list[str] | None = None,
     incremental: bool = True,
+    require_clean: bool = False,
 ) -> dict[str, Any]:
     started = time.monotonic()
+    source_before = _git_source(project)
+    if require_clean and source_before["dirty"] is not False:
+        raise MathpubError("MP-BUILD-003", "release build requires a known, clean Git tree")
     publication_path = _publication_path(project, publication_source)
     publication = _select_publication_lessons(
         load_toml(publication_path, "publication"),
@@ -805,6 +804,14 @@ def build(
                 )
             else:
                 source = document_tex(publication, projection, rendered, selected_font)
+            stamp = {
+                "schema": 1,
+                "publication_id": publication["id"],
+                "projection": projection,
+                "lesson_ids": lesson_ids or [],
+                "source": source_before,
+            }
+            source = stamp_tex(source, stamp, tex_engine)
             tex_path.write_text(source, encoding="utf-8")
             source_map = _generated_source_map(project, tex_path, source)
             generated_source_maps[projection] = source_map
@@ -876,7 +883,7 @@ def build(
             "instance_cache": cache_report,
             "latex_format": relative(project, latex_format) if latex_format else None,
             "source": {
-                **_git_source(project),
+                **source_before,
                 "publication_sha256": _file_hash(publication_path),
                 "style_sources": resolved_style.source_hashes(project),
                 "question_sources": {
@@ -925,6 +932,10 @@ def build(
             ],
             "outputs": outputs,
         }
+        source_after = _git_source(project)
+        manifest["source_stable"] = source_after == source_before
+        if require_clean and not manifest["source_stable"]:
+            raise MathpubError("MP-BUILD-004", "source changed during release build")
         if reproduction_override is not None:
             manifest["reproduction_override"] = reproduction_override
         (temporary / "manifest.json").write_text(canonical_json(manifest), encoding="utf-8")
