@@ -241,6 +241,12 @@ def parser() -> argparse.ArgumentParser:
     preflight.add_argument("pdf", type=Path)
     preflight.add_argument("--profile", type=Path, help="versioned TOML preflight policy")
     _json_flag(preflight)
+    export = commands.add_parser("export-print", help="derive a verified print PDF and receipt")
+    export.add_argument("manifest", type=Path)
+    export.add_argument("--projection", required=True)
+    export.add_argument("--output", type=Path, required=True, help="new export bundle directory")
+    export.add_argument("--policy", choices=("remove-invisible-links-v1",), required=True)
+    _json_flag(export)
     return result
 
 
@@ -316,6 +322,13 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "export-print":
+        from mathpub.print_export import export_print
+
+        return "export-print", export_print(
+            args.manifest, args.projection, args.output, policy=args.policy
+        )
+
     if args.command == "preflight":
         from mathpub.preflight import preflight_command
 
