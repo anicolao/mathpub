@@ -20,6 +20,14 @@
           pkgs = pkgsFor system;
           python = pkgs.python312;
           pythonPackages = pkgs.python312Packages;
+          pypdf = pythonPackages.pypdf.overridePythonAttrs (old: {
+            # This upstream throughput benchmark allocates roughly 0.5 GB and
+            # enforces a five-second deadline, which flakes on macOS CI hosts.
+            # Keep the dependency's functional tests and all MathPub tests enabled.
+            disabledTests = (old.disabledTests or [ ]) ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              "test_flatedecode__decode_png_prediction__speed"
+            ];
+          });
           mathpubSource = pkgs.lib.fileset.toSource {
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
@@ -86,7 +94,7 @@
             dependencies = [
               pythonPackages.jsonschema
               pythonPackages.numpy
-              pythonPackages.pypdf
+              pypdf
             ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
