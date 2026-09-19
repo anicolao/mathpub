@@ -17,7 +17,7 @@ from pypdf.generic import DecodedStreamObject
 
 from mathpub.config import load_toml
 from mathpub.errors import MathpubError
-from mathpub.pdf_render import render_page
+from mathpub.pdf_render import render_page, renderer_versions
 from mathpub.releases import sha256
 
 
@@ -225,6 +225,7 @@ def audit_navigation(pdf: Path, expectation_path: Path) -> dict:
         "schema": 1,
         "pdf_sha256": sha256(data),
         "expectations_sha256": sha256(expectation_path.read_bytes()),
+        "tools": renderer_versions() if "qr" in config else {},
         "dpi": config.get("dpi", 300),
         "checks": checks,
         "passed": all(c["passed"] for c in checks),

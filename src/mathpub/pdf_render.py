@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from mathpub.errors import MathpubError
@@ -15,6 +16,19 @@ def run_pdf_tool(command: list[str], timeout: int = 120):
         return subprocess.run(command, capture_output=True, check=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as error:
         raise MathpubError("MP-PDF-020", f"PDF measurement failed: {command[0]}") from error
+
+
+def renderer_versions() -> dict[str, str]:
+    result = run_pdf_tool(["pdftocairo", "-v"])
+    versions = {
+        "poppler": (result.stdout or result.stderr).decode(errors="replace").splitlines()[0]
+    }
+    for distribution in ("Pillow", "qrcode", "zxing-cpp"):
+        try:
+            versions[distribution] = version(distribution)
+        except PackageNotFoundError:
+            versions[distribution] = "unknown"
+    return versions
 
 
 def render_page(pdf: Path, page: int, target: Path, dpi: int = 150) -> None:

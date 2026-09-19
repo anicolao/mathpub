@@ -64,3 +64,20 @@ def test_metadata_and_macros_are_not_tex_injection(tmp_path):
     assert r"A \& B \%" in source
     assert r"\MathpubISBN" in source
     assert "/MathpubIdentity" in source
+
+
+@pytest.mark.parametrize("engine,hyperref", [("pdflatex", False), ("lualatex", True)])
+def test_identity_metadata_survives_real_tex_rendering(tmp_path, engine, hyperref):
+    from mathpub.render import compile_pdf
+
+    path = identity_file(tmp_path)
+    identity = load_identity(path)
+    source = (
+        r"\documentclass{article}"
+        + (r"\usepackage{hyperref}" if hyperref else "")
+        + r"\begin{document}Short display title.\end{document}"
+    )
+    tex = tmp_path / "identity.tex"
+    tex.write_text(identity_tex(source, identity, engine))
+    pdf, _ = compile_pdf(tex, tmp_path, "computer-modern", tex_engine=engine)
+    assert check_identity(path, [pdf])["passed"]

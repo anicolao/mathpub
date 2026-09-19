@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -148,7 +149,7 @@ def assemble_release(config_path: Path, destination: Path) -> dict:
             # Reserve rather than overwrite a previous nonempty bundle.
             destination.mkdir()
             try:
-                for child in staging.iterdir():
+                for child in sorted(staging.iterdir(), key=lambda p: p.name == "release.json"):
                     child.rename(destination / child.name)
             except OSError:
                 # An incomplete bundle never has a valid set of artifact hashes.
@@ -182,6 +183,14 @@ def verify_release(directory: Path) -> dict:
                 verify_stamp(reader, manifest, stamp["projection"])
                 if stamp["lesson_ids"] or stamp["source"]["dirty"] is not False:
                     raise ValueError("release contains scoped or dirty-source artifact")
+                if not re.fullmatch(
+                    r"[a-f0-9]{40}|[a-f0-9]{64}", stamp["source"].get("git_commit") or ""
+                ) or not re.fullmatch(r"[a-f0-9]{64}", stamp["source"].get("tree_sha256") or ""):
+                    raise ValueError("release has unknown source provenance")
+                if (reader.metadata or {}).get("/MathpubArtifactRole") == "proof" and artifact[
+                    "role"
+                ] != "proof":
+                    raise ValueError("proof assigned to an upload role")
                 if len(reader.pages) != artifact["pages"]:
                     raise ValueError("release page count mismatch")
                 sources.add(json.dumps(stamp["source"], sort_keys=True))

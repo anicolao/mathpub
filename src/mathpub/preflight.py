@@ -329,7 +329,9 @@ def preflight_pdf(path: Path, profile: dict[str, Any] | None = None) -> dict[str
             "content_expectations",
         )
     ):
-        from mathpub.pdf_render import raster_measurements, text_pages
+        from mathpub.pdf_render import raster_measurements, renderer_versions, text_pages
+
+        report["tools"].update(renderer_versions())
 
         data = path.read_bytes()
         if hashlib.sha256(data).hexdigest() != report["artifact"]["sha256"]:
