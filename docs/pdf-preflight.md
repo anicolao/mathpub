@@ -64,11 +64,29 @@ reports without embedding book titles, chapter phrases, or fixed trims in MathPu
 
 ## Current limits
 
-This first increment covers geometry and vector text/stroke measurements. It does
-not yet implement text-safe bounding boxes, raster blank/color checks, folios,
-or semantic content grouping from survey entry 1. These are explicitly listed as
-limitations in every report and are not accepted profile keys. Adding them must
-include renderer-backed fixtures, not assumptions that a textless page is blank.
+Optional Poppler-backed checks are now available:
+
+```toml
+text_safe_margin_pt = [36, 36, 36, 36] # left, top, right, bottom of displayed CropBox
+allowed_blank_pages = [2] # omitting this rule disables blank-page checks
+require_grayscale = true
+raster_dpi = 150
+ink_threshold = 250 # any channel below this is ink
+color_tolerance = 2 # maximum RGB channel difference
+[[content_expectations]]
+id = "chapter-heading"
+page = 3
+text = "Chapter One"
+count = 1
+```
+
+Text bounds use Poppler word boxes in the displayed CropBox coordinate system,
+with top-left origin. Content expectations can check folios and library-specific
+headings/counts without built-in book phrases. Raster checks detect graphics-only
+pages, not just extractable text. They run only when requested and record DPI,
+ink/color pixel counts. Grayscale pixels are not PDF color-space certification;
+word boxes do not establish artwork safety. These tools do not certify print
+acceptance or exact semantic relationships between nearby words.
 
 Annotation appearances, patterns, soft masks, stroked text, Type 3 glyph drawing, and transforms
 changed within a path are reported as unsupported; requested font/stroke policies

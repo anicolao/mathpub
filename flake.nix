@@ -95,6 +95,10 @@
               pythonPackages.jsonschema
               pythonPackages.numpy
               pypdf
+              pythonPackages.pillow
+              pythonPackages.qrcode
+              pythonPackages.zxing-cpp
+              pythonPackages.playwright
             ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''

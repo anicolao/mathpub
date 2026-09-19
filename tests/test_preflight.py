@@ -38,7 +38,7 @@ def pdf(tmp_path, content=b"", *, width=432, height=648, configure=None):
     )
     stream = DecodedStreamObject()
     stream.set_data(content)
-    page[NameObject("/Contents")] = stream
+    page.replace_contents(stream)
     if configure:
         configure(page)
     path = tmp_path / "sample.pdf"
@@ -60,7 +60,7 @@ def test_inspection_is_hash_bound_read_only_and_has_no_printer_defaults(tmp_path
     report = preflight_pdf(path)
     assert report["passed"]
     assert report["checked_rules"] == []
-    assert len(report["skipped_rules"]) == 5
+    assert len(report["skipped_rules"]) == 9
     assert report["artifact"]["sha256"] == hashlib.sha256(original).hexdigest()
     assert report["artifact"]["bytes"] == len(original)
     assert report["pages"][0]["trim_width_pt"] == 432
