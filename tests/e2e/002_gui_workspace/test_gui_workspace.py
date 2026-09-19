@@ -595,6 +595,9 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 f"document.querySelectorAll('.synctex-region').length === {len(second_page_boxes)}"
             )
 
+            # The pointer remains over the page-jump button after closing its
+            # dialog; move it away so WebKit's hover timing cannot change pixels.
+            page.mouse.move(0, 0)
             steps.verify(page, "003-page-two")
 
             # 10. Quick-edit the mapped TeX source, commit only it, and hot-swap the preview.
