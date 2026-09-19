@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Opt-in PDF preflight policy (PDF points, physical pages)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id"],
+  "properties": {
+    "schema": {"const": 1},
+    "id": {"type": "string", "minLength": 1},
+    "page_count": {"type": "integer", "minimum": 1},
+    "width_pt": {"type": "number", "exclusiveMinimum": 0},
+    "height_pt": {"type": "number", "exclusiveMinimum": 0},
+    "tolerance_pt": {"type": "number", "minimum": 0, "default": 0.01},
+    "require_embedded_fonts": {"type": "boolean", "default": false},
+    "min_font_pt": {"type": "number", "exclusiveMinimum": 0},
+    "min_stroke_pt": {"type": "number", "exclusiveMinimum": 0}
+  },
+  "dependentRequired": {
+    "width_pt": ["height_pt"],
+    "height_pt": ["width_pt"]
+  }
+}
