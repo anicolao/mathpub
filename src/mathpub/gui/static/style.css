@@ -223,8 +223,9 @@ body {
   min-width: 0;
   height: auto;
   padding: 0;
-  border-color: transparent;
+  border: 0;
   background: transparent;
+  color: var(--text-muted);
   opacity: 1;
 }
 
