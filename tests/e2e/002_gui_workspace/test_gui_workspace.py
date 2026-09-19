@@ -558,6 +558,9 @@ source = "gui-slide-editing/01-editable-slide.tex"
             page_navigation_dialog = page.locator("#page-navigation-dialog")
             assert page_navigation_dialog.is_visible()
             assert page.locator("#page-jump-total").text_content() == "of 2"
+            # xterm renders its unfocused cursor asynchronously after the dialog
+            # takes focus; capture the settled outline, not the previous block.
+            page.locator(".xterm-cursor-outline").wait_for(state="visible")
             steps.verify(page, "003-page-jump-dialog")
             page.locator("#page-jump-input").fill("2")
             page.locator("#page-jump-input").press("Enter")
