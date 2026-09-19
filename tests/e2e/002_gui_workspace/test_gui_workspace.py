@@ -561,6 +561,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
             # xterm renders its unfocused cursor asynchronously after the dialog
             # takes focus; capture the settled outline, not the previous block.
             page.locator(".xterm-cursor-outline").wait_for(state="visible")
+            page.mouse.move(0, 0)
             steps.verify(page, "003-page-jump-dialog")
             page.locator("#page-jump-input").fill("2")
             page.locator("#page-jump-input").press("Enter")
@@ -679,6 +680,7 @@ source = "gui-slide-editing/01-editable-slide.tex"
             page.locator("#recent-pages").click()
             recent_page = page.locator('#recent-pages-list button[data-page="1"]')
             assert recent_page.text_content() == "Page 1"
+            page.mouse.move(0, 0)
             steps.verify(page, "005-recent-pages")
             recent_page.click()
             page.wait_for_function(
