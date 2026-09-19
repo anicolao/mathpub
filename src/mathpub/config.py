@@ -121,6 +121,10 @@ def load_toml(path: Path, schema: str) -> dict[str, Any]:
             f"invalid {schema} metadata in {path} at {location}: {error.message}{suggestion}",
             details=details,
         ) from error
+    if schema == "publication" and "identity" in data:
+        from mathpub.identity import resolve_identity
+
+        data = resolve_identity(data, path)
     return data
 
 

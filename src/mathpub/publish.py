@@ -19,6 +19,7 @@ from mathpub import __version__
 from mathpub.catalog import Catalog, Entry
 from mathpub.config import Project, load_toml, relative
 from mathpub.errors import MathpubError
+from mathpub.identity import identity_tex
 from mathpub.instance import (
     canonical_json,
     instance_hash,
@@ -143,7 +144,7 @@ def _inspect_pdf(path: Path, title: str) -> dict[str, Any]:
     if not reader.pages:
         raise MathpubError("MP-PDF-001", f"PDF has no pages: {path}", exit_code=7)
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    if title not in text:
+    if " ".join(title.split()) not in " ".join(text.split()):
         raise MathpubError("MP-PDF-002", f"PDF does not contain its title: {path}", exit_code=7)
     return {"pages": len(reader.pages), "sha256": _file_hash(path)}
 
@@ -780,6 +781,17 @@ def build(
         )
         latex_format = find_latex_format(project, publication, selected_font)
         for projection in selected:
+            render_publication = dict(publication)
+            if identity := publication.get("_identity"):
+                from mathpub.render import _tex_escape
+
+                render_publication.update(
+                    {
+                        "title": _tex_escape(publication["_display_title"]).replace("\n", r"\\"),
+                        "subtitle": _tex_escape(publication.get("subtitle", "")),
+                        "author": _tex_escape(publication.get("author", "")),
+                    }
+                )
             rendered = [
                 question_tex(entry, instance, projection, selection.get("points"))
                 for entry, instance, selection in ordered
@@ -791,19 +803,21 @@ def build(
                     catalog, publication, projection, component_instances
                 )
                 source = textbook_tex(
-                    publication,
+                    render_publication,
                     projection,
                     chapters,
                     selected_font,
                 )
             elif publication["kind"] == "presentation":
                 source = presentation_tex(
-                    publication,
+                    render_publication,
                     _presentation_slides(project, publication_path, publication),
                     selected_font,
                 )
             else:
-                source = document_tex(publication, projection, rendered, selected_font)
+                source = document_tex(render_publication, projection, rendered, selected_font)
+            if identity:
+                source = identity_tex(source, identity, tex_engine)
             stamp = {
                 "schema": 1,
                 "publication_id": publication["id"],
@@ -854,7 +868,7 @@ def build(
                         final_pdf,
                         publication["component_chapters"][0]["lessons"][0]["title"]
                         if publication_style_base(publication) == "anna"
-                        else publication["title"],
+                        else publication.get("_display_title", publication["title"]),
                     ),
                 }
             )
@@ -870,6 +884,8 @@ def build(
             "publication_id": publication["id"],
             "publication_path": relative(project, publication_path),
             "publication_kind": publication["kind"],
+            "identity": publication.get("_identity"),
+            "identity_sha256": publication.get("_identity_sha256"),
             "publication_style": resolved_style.identifier,
             "style_base": resolved_style.base,
             "variant": variant,
