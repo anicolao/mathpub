@@ -273,6 +273,17 @@ def parser() -> argparse.ArgumentParser:
     review.add_argument("--cache", type=Path)
     review.add_argument("--label", default="Edition comparison")
     _json_flag(review)
+    qr = commands.add_parser("qr", help="render a vector QR asset (PDF, SVG or TeX)")
+    qr.add_argument("payload")
+    qr.add_argument("--output", type=Path, required=True)
+    qr.add_argument("--size-pt", type=float, default=72)
+    _json_flag(qr)
+    navigation = commands.add_parser(
+        "audit-navigation", help="verify rendered QR, links and bookmarks"
+    )
+    navigation.add_argument("pdf", type=Path)
+    navigation.add_argument("--expectations", type=Path, required=True)
+    _json_flag(navigation)
     return result
 
 
@@ -348,6 +359,15 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command in ("qr", "audit-navigation"):
+        from mathpub.navigation_audit import audit_navigation, render_qr
+
+        return args.command, (
+            render_qr(args.payload, args.output, args.size_pt)
+            if args.command == "qr"
+            else audit_navigation(args.pdf, args.expectations)
+        )
+
     if args.command == "review":
         from mathpub.edition_review import create_review
 
