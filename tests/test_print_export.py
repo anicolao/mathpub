@@ -20,11 +20,22 @@ from tests.test_preflight import pdf
 
 def edition(tmp_path, *, configure=None, patch=None):
     path = pdf(tmp_path, b"0.5 w 0 0 m 20 20 l S BT /F1 12 Tf (Example) Tj ET", configure=configure)
+    writer = PdfWriter(clone_from=path)
+    stamp = {
+        "schema": 1,
+        "publication_id": "synthetic.book",
+        "projection": "student",
+        "lesson_ids": [],
+        "source": {"git_commit": "a" * 40, "dirty": False, "tree_sha256": "c" * 64},
+    }
+    writer.add_metadata({"/MathpubProvenance": json.dumps(stamp)})
+    writer.write(path)
     manifest = {
+        "source_stable": True,
         "schema": 1,
         "publication_id": "synthetic.book",
         "lesson_ids": [],
-        "source": {"git_commit": "a" * 40, "dirty": False},
+        "source": stamp["source"],
         "outputs": [
             {"projection": "answers", "path": "not-selected.pdf", "sha256": "b" * 64, "pages": 2},
             {

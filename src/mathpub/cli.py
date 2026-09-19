@@ -247,6 +247,11 @@ def parser() -> argparse.ArgumentParser:
     export.add_argument("--output", type=Path, required=True, help="new export bundle directory")
     export.add_argument("--policy", choices=("remove-invisible-links-v1",), required=True)
     _json_flag(export)
+    release = commands.add_parser("release", help="check, assemble, or verify a release set")
+    release.add_argument("action", choices=("check", "assemble", "verify"))
+    release.add_argument("source", type=Path)
+    release.add_argument("--output", type=Path)
+    _json_flag(release)
     return result
 
 
@@ -322,6 +327,17 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "release":
+        from mathpub.releases import assemble_release, check_release, verify_release
+
+        if args.action == "assemble":
+            if args.output is None:
+                raise MathpubError("MP-CLI-003", "release assemble requires --output")
+            return "release assemble", assemble_release(args.source, args.output)
+        return f"release {args.action}", (
+            verify_release(args.source) if args.action == "verify" else check_release(args.source)
+        )
+
     if args.command == "export-print":
         from mathpub.print_export import export_print
 
@@ -476,6 +492,7 @@ placement = {json.dumps(placement)}
             replace=args.replace,
             lesson_ids=args.lesson_ids,
             incremental=args.incremental,
+            require_clean=args.require_clean,
         )
     if args.command == "variants":
         if args.count < 1:
