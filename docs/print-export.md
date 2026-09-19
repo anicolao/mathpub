@@ -28,7 +28,7 @@ Forms, tagged PDFs, and signed/restricted documents require future distinct
 policies and are rejected rather than silently losing their semantics.
 
 The exporter clones the document, then verifies the staged output before exposing
-the final PDF. It compares decoded drawing instructions and resource streams,
+the final PDF. It compares decoded drawing instructions and decoded/encoded resource streams,
 all five page boxes, rotation, UserUnit, metadata, and page labels. It preserves
 the original PDF and its review links. It does not use private pypdf stream data.
 
@@ -49,7 +49,7 @@ An embedded source stamp and source-stable build are now required; rebuild legac
 editions first. Use [release sets](releases.md) to check all required cover/proof
 artifacts; exporting one full student projection does not establish that completeness.
 
-Decoded resources, not compression bytes or rendered pixels, are compared. This
+Decoded and encoded resources, but not rendered pixels, are compared. This
 is not a security sanitizer: surviving document structures may contain actions.
 Nor is export a PDF/X, printer-acceptance, or editorial certificate. Run the
 appropriate [preflight policy](pdf-preflight.md) on the resulting print PDF too.

@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import DecodedStreamObject
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from mathpub.config import load_toml
 from mathpub.errors import MathpubError
@@ -43,6 +43,8 @@ def cover_geometry(spec_path: Path) -> dict:
                 raise ValueError("every interior page must match the profile trim")
         multiple = spec.get("round_pages_to", 2)
         production_pages = math.ceil(pages / multiple) * multiple
+        if production_pages > spec.get("max_pages", 10000):
+            raise ValueError("rounded production page count exceeds profile maximum")
         spine = production_pages * spec["spine_per_page_pt"]
         bleed, safe = spec["bleed_pt"], spec["safe_pt"]
         if 2 * safe >= min(width, height):
@@ -88,7 +90,25 @@ def cover_preamble(geometry: dict) -> str:
 def _guides(geometry: dict, target: Path):
     writer = PdfWriter()
     page = writer.add_blank_page(geometry["width_pt"], geometry["height_pt"])
-    commands = ["1 0 0 RG 0.5 w"]
+    page[NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject(
+                {
+                    NameObject("/Proof"): DictionaryObject(
+                        {
+                            NameObject("/Type"): NameObject("/Font"),
+                            NameObject("/Subtype"): NameObject("/Type1"),
+                            NameObject("/BaseFont"): NameObject("/Helvetica"),
+                        }
+                    )
+                }
+            )
+        }
+    )
+    commands = [
+        "1 0 0 RG 0.5 w",
+        "BT /Proof 12 Tf 24 12 Td (DIMENSION PROOF - NOT FOR UPLOAD) Tj ET",
+    ]
     for x in geometry["folds_pt"]:
         commands.append(f"{x} 0 m {x} {geometry['height_pt']} l S")
     for left, bottom, right, top in geometry["safe_panels_pt"]:
@@ -132,6 +152,8 @@ def check_cover(spec_path: Path, artwork: Path, prepared: Path | None = None) ->
     if len(reader.pages) != 1:
         raise MathpubError("MP-COVER-003", "cover artwork must have exactly one page")
     page = reader.pages[0]
+    if list(page.cropbox) != list(page.mediabox) or page.mediabox.left or page.mediabox.bottom:
+        raise MathpubError("MP-COVER-003", "cover requires an unshifted, uncropped wrap page")
     if (
         page.rotation
         or page.user_unit != 1

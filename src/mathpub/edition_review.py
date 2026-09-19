@@ -6,6 +6,7 @@ import hashlib
 import html
 import io
 import json
+import math
 import shutil
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from PIL import Image
 from pypdf import PdfReader
 
 from mathpub.errors import MathpubError
-from mathpub.pdf_render import render_page, text_pages
+from mathpub.pdf_render import render_page, renderer_versions, text_pages
 
 
 def _shingles(text: str) -> set:
@@ -57,7 +58,11 @@ def create_review(
     cache: Path | None = None,
     label: str = "Edition comparison",
 ) -> dict:
-    if not 36 <= dpi <= 300 or len(crop_pt) != 4 or any(v < 0 for v in crop_pt):
+    if (
+        not 36 <= dpi <= 300
+        or len(crop_pt) != 4
+        or any(not math.isfinite(v) or v < 0 for v in crop_pt)
+    ):
         raise MathpubError("MP-REVIEW-001", "invalid review DPI or crop margins")
     if output.exists():
         raise MathpubError("MP-REVIEW-001", "review output already exists")
@@ -66,13 +71,18 @@ def create_review(
         hashes = [hashlib.sha256(value).hexdigest() for value in data]
         extracted = [text_pages(value) for value in data]
         readers = [PdfReader(io.BytesIO(value)) for value in data]
-        key = hashlib.sha256(json.dumps([hashes, dpi, crop_pt, pages]).encode()).hexdigest()
+        versions = renderer_versions()
+        render_key = hashlib.sha256(json.dumps(versions, sort_keys=True).encode()).hexdigest()[:16]
+        key = hashlib.sha256(
+            json.dumps([hashes, dpi, crop_pt, pages, versions]).encode()
+        ).hexdigest()
         report = {
             "schema": 1,
             "label": label,
             "key": key,
             "pdf_sha256": hashes,
             "dpi": dpi,
+            "tools": versions,
             "excluded_margins_pt": crop_pt,
             "pairs": [],
             "alignment": "Nearby text-shingle heuristic; inspect unmatched and modified pages.",
@@ -89,7 +99,7 @@ def create_review(
             if index is None:
                 return None
             name = f"{('before', 'after')[side]}-{index + 1}.png"
-            cached = cache / f"{hashes[side]}-{index + 1}-{dpi}.png"
+            cached = cache / f"{hashes[side]}-{index + 1}-{dpi}-{render_key}.png"
             if not cached.is_file():
                 render_page(output / ("before.pdf", "after.pdf")[side], index + 1, cached, dpi)
             shutil.copyfile(cached, output / name)

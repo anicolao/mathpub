@@ -115,31 +115,9 @@ def _pdf_page_fingerprints(pdf_path: Path | None) -> tuple[str, ...]:
 
 def _render_pdf_page(pdf_path: Path, page: int, target: Path) -> None:
     """Render one review page to a stable PNG path using the Nix-provided Poppler tool."""
-    pdftocairo = shutil.which("pdftocairo")
-    if pdftocairo is None:
-        raise RuntimeError("pdftocairo is unavailable; cannot render incremental review pages")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    prefix = target.with_suffix("")
-    subprocess.run(
-        [
-            pdftocairo,
-            "-png",
-            "-singlefile",
-            "-f",
-            str(page),
-            "-l",
-            str(page),
-            "-r",
-            "150",
-            str(pdf_path),
-            str(prefix),
-        ],
-        check=True,
-        capture_output=True,
-        timeout=30,
-    )
-    if not target.is_file():
-        raise RuntimeError(f"pdftocairo did not create review image: {target}")
+    from mathpub.pdf_render import render_page
+
+    render_page(pdf_path, page, target, dpi=150)
 
 
 def _changed_page_numbers(

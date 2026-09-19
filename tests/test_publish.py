@@ -10,6 +10,7 @@ from mathpub.config import find_project
 from mathpub.errors import MathpubError
 from mathpub.gui.synctex import spatial_index
 from mathpub.latex_format import dump_latex_format, find_latex_format
+from mathpub.provenance import verify_stamp
 from mathpub.publish import _select_publication_lessons, build, reproduce
 from mathpub.scaffold import init_project, new_question
 
@@ -317,6 +318,7 @@ placement = "review.fixed"
     }
     for output in manifest["outputs"]:
         assert len(PdfReader(edition / output["path"]).pages) >= 1
+        verify_stamp(PdfReader(edition / output["path"]), manifest, output["projection"])
         assert (edition / output["synctex"]).is_file()
     student_pdf = next(
         output for output in manifest["outputs"] if output["projection"] == "student"

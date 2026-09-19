@@ -94,6 +94,11 @@ def _canonical(value, ancestors=()):
         }
         if isinstance(value, StreamObject):
             result["decoded_sha256"] = _hash(value.get_data())
+            # Serialize through the public API; do not reach into pypdf._data.
+            serialized = io.BytesIO()
+            value.write_to_stream(serialized)
+            encoded = serialized.getvalue().split(b"\nstream\n", 1)[1].rsplit(b"\nendstream", 1)[0]
+            result["encoded_sha256"] = _hash(encoded)
         return result
     if isinstance(value, ArrayObject):
         return [_canonical(item, ancestors) for item in value]
@@ -240,12 +245,13 @@ def export_print(manifest_path: Path, projection: str, destination: Path, *, pol
                     "rotation",
                     "user_unit",
                     "decoded_content_and_resources",
+                    "encoded_resource_streams",
                     "metadata",
                     "page_labels",
                 ],
                 "limitations": [
                     "Manifest and embedded provenance are unsigned consistency evidence.",
-                    "Decoded resources are compared, not compression bytes or rendered pixels.",
+                    "Drawing and resource streams are compared, not rendered pixels.",
                     "This is not a security sanitizer or a printer-acceptance certification.",
                     "A full projection does not establish a complete multi-artifact release.",
                 ],
