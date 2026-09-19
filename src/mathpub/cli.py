@@ -256,6 +256,13 @@ def parser() -> argparse.ArgumentParser:
     identity.add_argument("source", type=Path)
     identity.add_argument("--pdf", type=Path, action="append", default=[])
     _json_flag(identity)
+    cover = commands.add_parser("cover", help="prepare or check an interior-linked paperback cover")
+    cover.add_argument("action", choices=("prepare", "check"))
+    cover.add_argument("spec", type=Path)
+    cover.add_argument("--output", type=Path)
+    cover.add_argument("--artwork", type=Path)
+    cover.add_argument("--prepared", type=Path)
+    _json_flag(cover)
     return result
 
 
@@ -331,6 +338,17 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "cover":
+        from mathpub.covers import check_cover, prepare_cover
+
+        if args.action == "prepare" and args.output is not None:
+            return "cover prepare", prepare_cover(args.spec, args.output)
+        if args.action == "check" and args.artwork is not None:
+            return "cover check", check_cover(args.spec, args.artwork, args.prepared)
+        raise MathpubError(
+            "MP-CLI-003", "cover prepare needs --output; cover check needs --artwork"
+        )
+
     if args.command == "identity":
         from mathpub.identity import check_identity
 

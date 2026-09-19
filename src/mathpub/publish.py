@@ -666,6 +666,11 @@ def build(
         lesson_ids,
     )
     resolved_style = prepare_publication_style(project, publication)
+    cover = None
+    if publication.get("cover_spec"):
+        from mathpub.covers import cover_geometry
+
+        cover = cover_geometry(publication_path.parent / publication["cover_spec"])
     if resolved_style.source == "library" and publication["kind"] != "textbook":
         raise MathpubError(
             "MP-STYLE-004", "library-defined styles currently support textbook publications"
@@ -818,6 +823,11 @@ def build(
                 source = document_tex(render_publication, projection, rendered, selected_font)
             if identity:
                 source = identity_tex(source, identity, tex_engine)
+            if cover:
+                from mathpub.covers import cover_preamble
+
+                marker = r"\begin{document}"
+                source = source.replace(marker, cover_preamble(cover) + "\n" + marker, 1)
             stamp = {
                 "schema": 1,
                 "publication_id": publication["id"],
@@ -886,6 +896,7 @@ def build(
             "publication_kind": publication["kind"],
             "identity": publication.get("_identity"),
             "identity_sha256": publication.get("_identity_sha256"),
+            "cover": cover,
             "publication_style": resolved_style.identifier,
             "style_base": resolved_style.base,
             "variant": variant,

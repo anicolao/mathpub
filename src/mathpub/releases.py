@@ -73,6 +73,10 @@ def check_release(config_path: Path) -> dict:
                     receipt_hash = sha256(receipt_data)
                 revisions.add((stamp["source"]["git_commit"], stamp["source"]["tree_sha256"]))
                 reader = PdfReader(io.BytesIO(data))
+                if (reader.metadata or {}).get("/MathpubArtifactRole") == "proof" and item[
+                    "role"
+                ] != "proof":
+                    raise ValueError("a dimension proof cannot be assigned an upload role")
                 if len(reader.pages) != output["pages"]:
                     raise ValueError("page count differs from manifest")
                 artifacts.append(
@@ -85,6 +89,8 @@ def check_release(config_path: Path) -> dict:
                         "stamp": stamp,
                         "manifest_sha256": manifest_hash,
                         "receipt_sha256": receipt_hash,
+                        "source_artifact_sha256": output["sha256"],
+                        "cover": manifest.get("cover"),
                     }
                 )
             if len(revisions) != 1:
@@ -93,6 +99,17 @@ def check_release(config_path: Path) -> dict:
                 )
             if not set(book["required_roles"]).issubset(roles):
                 raise ValueError("release is missing a required artifact role")
+            interior = next((a for a in artifacts if a["role"] == "interior"), None)
+            cover = next((a for a in artifacts if a["role"] == "cover"), None)
+            if (
+                cover
+                and cover["cover"]
+                and (
+                    not interior
+                    or cover["cover"]["interior"]["sha256"] != interior["source_artifact_sha256"]
+                )
+            ):
+                raise ValueError("cover was prepared against a different interior")
             books.append(
                 {"id": book["id"], "required_roles": book["required_roles"], "artifacts": artifacts}
             )
