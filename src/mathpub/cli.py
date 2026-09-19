@@ -263,6 +263,16 @@ def parser() -> argparse.ArgumentParser:
     cover.add_argument("--artwork", type=Path)
     cover.add_argument("--prepared", type=Path)
     _json_flag(cover)
+    review = commands.add_parser("review", help="create a portable before/after edition review")
+    review.add_argument("before", type=Path)
+    review.add_argument("after", type=Path)
+    review.add_argument("--output", type=Path, required=True)
+    review.add_argument("--dpi", type=int, default=150)
+    review.add_argument("--crop", type=float, nargs=4, default=(0, 0, 0, 0))
+    review.add_argument("--page", type=int, action="append", dest="pages")
+    review.add_argument("--cache", type=Path)
+    review.add_argument("--label", default="Edition comparison")
+    _json_flag(review)
     return result
 
 
@@ -338,6 +348,20 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "review":
+        from mathpub.edition_review import create_review
+
+        return "review", create_review(
+            args.before,
+            args.after,
+            args.output,
+            dpi=args.dpi,
+            crop_pt=args.crop,
+            pages=args.pages,
+            cache=args.cache,
+            label=args.label,
+        )
+
     if args.command == "cover":
         from mathpub.covers import check_cover, prepare_cover
 
