@@ -237,6 +237,10 @@ def parser() -> argparse.ArgumentParser:
     clean = commands.add_parser("clean", help="remove generated build output")
     clean.add_argument("--edition")
     _json_flag(clean)
+    preflight = commands.add_parser("preflight", help="inspect a PDF against an opt-in policy")
+    preflight.add_argument("pdf", type=Path)
+    preflight.add_argument("--profile", type=Path, help="versioned TOML preflight policy")
+    _json_flag(preflight)
     return result
 
 
@@ -312,6 +316,11 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "preflight":
+        from mathpub.preflight import preflight_command
+
+        return "preflight", preflight_command(args.pdf, args.profile)
+
     if args.command == "init":
         return "init", init_project(
             args.directory,

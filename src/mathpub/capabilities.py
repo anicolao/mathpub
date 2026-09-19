@@ -15,6 +15,7 @@ COMMANDS = (
     ("show", "Inspect one catalog entry, including a built-in or library style."),
     ("new", "Scaffold a component, question, or library-defined style."),
     ("check", "Validate a project, component, question, or publication."),
+    ("preflight", "Inspect an existing PDF against an opt-in TOML print policy."),
     ("preview", "Build all requested projections for one question in isolation."),
     ("build", "Build a deterministic publication edition."),
     ("variants", "Build several named deterministic variants."),

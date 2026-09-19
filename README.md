@@ -23,6 +23,9 @@ publishing and formal-proof direction.
 
 ## Quick start
 
+Existing PDFs can be inspected with `mathpub preflight PDF --profile POLICY.toml --json`.
+See [PDF preflight](docs/pdf-preflight.md) for opt-in rules, reports, and limitations.
+
 No host Python, SageMath, TeX installation, or font installation is used. With Nix flakes enabled:
 
 ```console
