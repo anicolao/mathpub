@@ -94,6 +94,19 @@ evidence without adding scale commentary to student-facing figures.
 
 Useful authoring commands include:
 
+When a library opens in the GUI, the built-in agent workflow refreshes only its
+declared `mathpub` flake input with `nix flake update --refresh mathpub`. This runs
+once per library per GUI process, including after restarting the GUI, rather than
+pinning the library back to the GUI binary's revision. The candidate lock is
+verified before replacing `flake.lock`; failures preserve the old lock and appear
+in the workspace. Starting an agent retries a failed refresh before launching.
+The resulting lock change is left for normal source control review, not committed
+automatically. Explicit input revisions stay pinned, and configured branches stay
+on those branches. To use unmerged capabilities, select the relevant branch in the
+library input; restarting cannot make unpublished changes appear on `main`.
+Custom agent commands opt out of managed synchronization. Updating the library
+CLI does not replace an already-installed GUI executable.
+
 ```console
 nix run .#mathpub -- list components --json
 nix run .#mathpub -- capabilities --json

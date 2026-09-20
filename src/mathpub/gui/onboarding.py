@@ -243,11 +243,16 @@ class AgentConfiguration:
 
 def synchronize_library_mathpub(
     project_root: Path,
-    expected_revision: str,
+    expected_revision: str | None = None,
 ) -> dict[str, object]:
-    """Refresh a library's MathPub input when it differs from the GUI build."""
-    expected_revision = expected_revision.strip()
-    if GIT_REVISION_RE.fullmatch(expected_revision) is None:
+    """Refresh the declared input, or explicitly synchronize a requested revision.
+
+    Normal GUI startup follows the library's configured branch, not the GUI binary's age.
+    Explicit revision synchronization remains available for reproducible callers.
+    """
+    if expected_revision is not None:
+        expected_revision = expected_revision.strip()
+    if expected_revision is not None and GIT_REVISION_RE.fullmatch(expected_revision) is None:
         return {"skipped": True, "updated": False, "revision": None}
 
     nix = shutil.which("nix")
@@ -296,11 +301,15 @@ def synchronize_library_mathpub(
     def revisions_match(actual: str | None) -> bool:
         if actual is None:
             return False
-        expected = expected_revision.lower()
+        expected = (expected_revision or "").lower()
         return actual.startswith(expected) or expected.startswith(actual)
 
-    previous_revision = cli_revision(stage="Checking the library MathPub version")
-    if revisions_match(previous_revision):
+    previous_revision = (
+        cli_revision(stage="Checking the library MathPub version")
+        if expected_revision is not None
+        else None
+    )
+    if expected_revision is not None and revisions_match(previous_revision):
         return {
             "skipped": False,
             "updated": False,
@@ -320,13 +329,17 @@ def synchronize_library_mathpub(
         "flake",
         "update",
         "--refresh",
-        "--override-input",
-        "mathpub",
-        f"github:anicolao/mathpub/{expected_revision}",
+        *(
+            ["--override-input", "mathpub", f"github:anicolao/mathpub/{expected_revision}"]
+            if expected_revision is not None
+            else []
+        ),
         "--output-lock-file",
         updated_lock_file.name,
         "mathpub",
     ]
+    original_lock = project_root / "flake.lock"
+    original_bytes = original_lock.read_bytes() if original_lock.exists() else None
     try:
         subprocess.run(
             update_command,
@@ -340,7 +353,7 @@ def synchronize_library_mathpub(
             stage="Verifying the updated library MathPub version",
             reference_lock_file=updated_lock_file,
         )
-        if not revisions_match(revision):
+        if expected_revision is not None and not revisions_match(revision):
             raise MathpubError(
                 "MP-GUI-023",
                 "the library MathPub toolchain still does not match this GUI build",
@@ -350,7 +363,13 @@ def synchronize_library_mathpub(
                     "actual_revision": revision or "unavailable",
                 },
             )
-        os.replace(updated_lock_file, project_root / "flake.lock")
+        lock_file = project_root / "flake.lock"
+        current_bytes = lock_file.read_bytes() if lock_file.exists() else None
+        if current_bytes != original_bytes:
+            raise MathpubError("MP-GUI-023", "library lock changed during refresh; retry")
+        changed = not lock_file.exists() or lock_file.read_bytes() != updated_lock_file.read_bytes()
+        if changed:
+            os.replace(updated_lock_file, lock_file)
     except (OSError, subprocess.SubprocessError) as error:
         raise MathpubError(
             "MP-GUI-023",
@@ -365,7 +384,7 @@ def synchronize_library_mathpub(
         updated_lock_file.unlink(missing_ok=True)
     return {
         "skipped": False,
-        "updated": True,
+        "updated": changed,
         "previous_revision": previous_revision,
         "revision": revision,
     }

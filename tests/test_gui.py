@@ -420,6 +420,135 @@ def test_library_mathpub_sync_skips_unversioned_gui_build(tmp_path, monkeypatch)
     }
 
 
+def test_library_refresh_follows_declared_input_even_when_gui_is_old(tmp_path, monkeypatch):
+    calls = []
+    (tmp_path / "flake.lock").write_text("old lock")
+    monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda _: "/nix/bin/nix")
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[1:3] == ["flake", "update"]:
+            (tmp_path / command[command.index("--output-lock-file") + 1]).write_text("new lock")
+        return subprocess.CompletedProcess(command, 0, "mathpub 0.1.0 (abcdef0)\n", "")
+
+    monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
+    result = synchronize_library_mathpub(tmp_path)
+    assert result["updated"] is True
+    assert calls[0][1:4] == ["flake", "update", "--refresh"]
+    assert calls[0][-1] == "mathpub"
+    assert "--override-input" not in calls[0]
+    assert "--reference-lock-file" in calls[1]
+    assert (tmp_path / "flake.lock").read_text() == "new lock"
+
+
+@pytest.mark.parametrize("concurrent_edit", [False, True])
+def test_library_refresh_preserves_lock_on_failure(tmp_path, monkeypatch, concurrent_edit):
+    (tmp_path / "flake.lock").write_text("old lock")
+    monkeypatch.setattr("mathpub.gui.onboarding.shutil.which", lambda _: "/nix/bin/nix")
+
+    def run(command, **kwargs):
+        if command[1:3] == ["flake", "update"]:
+            (tmp_path / command[command.index("--output-lock-file") + 1]).write_text("candidate")
+        elif concurrent_edit:
+            (tmp_path / "flake.lock").write_text("author edit")
+        else:
+            raise subprocess.CalledProcessError(1, command, stderr="verification failed")
+        return subprocess.CompletedProcess(command, 0, "mathpub 0.1.0 (abcdef0)\n", "")
+
+    monkeypatch.setattr("mathpub.gui.onboarding.subprocess.run", run)
+    with pytest.raises(MathpubError):
+        synchronize_library_mathpub(tmp_path)
+    assert (tmp_path / "flake.lock").read_text() == (
+        "author edit" if concurrent_edit else "old lock"
+    )
+    assert not list(tmp_path.glob(".mathpub-flake-lock-*.json"))
+
+
+def test_workspace_refreshes_once_per_process_and_retries_failures(tmp_path, monkeypatch):
+    (tmp_path / "flake.lock").write_text(
+        json.dumps(
+            {
+                "root": "root",
+                "nodes": {"root": {"inputs": {"mathpub": "mathpub"}}},
+            }
+        )
+    )
+    calls = []
+
+    def refresh(root):
+        calls.append(root)
+        if len(calls) == 1:
+            raise MathpubError("MP-GUI-023", "offline")
+        return {"updated": True, "revision": "abcdef0"}
+
+    monkeypatch.setattr("mathpub.gui.server.synchronize_library_mathpub", refresh)
+
+    async def exercise():
+        server = WorkspaceServer(agent_command=["true"], codex_command=["true"])
+        with pytest.raises(MathpubError):
+            await server._refresh_library_mathpub(tmp_path)
+        await server._refresh_library_mathpub(tmp_path)
+        await server._refresh_library_mathpub(tmp_path)
+        assert len(calls) == 2
+        restarted = WorkspaceServer(agent_command=["true"], codex_command=["true"])
+        await restarted._refresh_library_mathpub(tmp_path)
+        assert len(calls) == 3
+
+    asyncio.run(exercise())
+
+
+def test_terminal_startup_refreshes_before_accepting_agent_input(monkeypatch):
+    events = []
+
+    class Terminal:
+        def __init__(self, **kwargs):
+            pass
+
+        def start(self, **kwargs):
+            pass
+
+        def is_alive(self):
+            return False
+
+        def close(self):
+            pass
+
+    class Writer:
+        def get_extra_info(self, name):
+            return None
+
+        def write(self, frame):
+            for _, payload in _decode_ws_frames(bytearray(frame)):
+                events.append(json.loads(payload))
+
+        async def drain(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("mathpub.gui.server.PTYManager", Terminal)
+
+    async def exercise():
+        server = WorkspaceServer()
+
+        async def refresh(root):
+            assert events[-1]["type"] == "agent-toolchain-syncing"
+            assert events[-1]["startup"] is True
+            return {"updated": True, "revision": "abcdef0"}
+
+        monkeypatch.setattr(server, "_refresh_library_mathpub", refresh)
+        await server._run_terminal_websocket(asyncio.StreamReader(), Writer())
+        assert events[-1] == {
+            "type": "agent-toolchain-synced",
+            "startup": True,
+            "updated": True,
+            "revision": "abcdef0",
+        }
+
+    asyncio.run(exercise())
+
+
 def test_default_agent_is_confined_to_a_fresh_library_project(tmp_path, monkeypatch):
     monkeypatch.delenv("MATHPUB_AGENT_COMMAND", raising=False)
     (tmp_path / "flake.nix").write_text("{}")

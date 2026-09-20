@@ -589,6 +589,14 @@ document.addEventListener("DOMContentLoaded", () => {
       return true;
     }
     if (message.type === "agent-toolchain-synced") {
+      if (message.startup) {
+        agentStatus.textContent = message.updated
+          ? "Library toolchain refreshed"
+          : "Library toolchain current";
+        agentStatus.title = message.revision ? `MathPub ${message.revision}` : "";
+        updateAgentAvailability();
+        return true;
+      }
       agentStatus.textContent = message.updated
         ? `Library toolchain updated — starting ${message.label || "agent"}…`
         : `Library toolchain current — starting ${message.label || "agent"}…`;
