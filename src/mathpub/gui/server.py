@@ -311,9 +311,28 @@ class WorkspaceServer:
         )
         self.native_preview_opener = native_preview_opener or _default_native_preview_opener()
         self.repository_edit_lock = asyncio.Lock()
+        self.refreshed_libraries: dict[Path, dict[str, object]] = {}
         self.completion_token = secrets.token_urlsafe(32)
         self.completion_listeners: set[Callable[[dict[str, object]], Awaitable[None]]] = set()
         self.review_listeners: set[Callable[[], str | None]] = set()
+
+    async def _refresh_library_mathpub(self, root: Path) -> dict[str, object]:
+        """Refresh once per GUI process/library; failures remain retryable."""
+        async with self.repository_edit_lock:
+            if root not in self.refreshed_libraries:
+                lock = root / "flake.lock"
+                try:
+                    data = json.loads(lock.read_text())
+                    inputs = data["nodes"][data["root"]].get("inputs", {})
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise MathpubError(
+                        "MP-GUI-023", "cannot inspect the library toolchain lock"
+                    ) from error
+                if "mathpub" not in inputs:
+                    return {"skipped": True, "updated": False, "revision": None}
+                result = await asyncio.to_thread(synchronize_library_mathpub, root)
+                self.refreshed_libraries[root] = result
+            return self.refreshed_libraries[root]
 
     async def _broadcast_completion(self, html: str) -> bool:
         listeners = tuple(self.completion_listeners)
@@ -1133,8 +1152,6 @@ class WorkspaceServer:
             cwd=str(terminal_root),
             environment=terminal_environment,
         )
-        pty.start(rows=24, cols=80)
-
         loop = asyncio.get_running_loop()
         write_lock = asyncio.Lock()
 
@@ -1146,8 +1163,31 @@ class WorkspaceServer:
             except (ConnectionResetError, BrokenPipeError):
                 return
 
-        self.completion_listeners.add(send_event)
+        if project is not None and any(a.synchronize_mathpub for a in self.agents.values()):
+            await send_event({"type": "agent-toolchain-syncing", "startup": True})
+            try:
+                synchronization = await self._refresh_library_mathpub(project.root)
+            except MathpubError as error:
+                await send_event(
+                    {
+                        "type": "agent-toolchain-sync-failed",
+                        "startup": True,
+                        "error": error.message,
+                        "code": error.code,
+                        "details": error.details,
+                    }
+                )
+            else:
+                await send_event(
+                    {
+                        "type": "agent-toolchain-synced",
+                        "startup": True,
+                        **synchronization,
+                    }
+                )
 
+        pty.start(rows=24, cols=80)
+        self.completion_listeners.add(send_event)
         active_agent_id: str | None = None
         review_queue = PendingReviewQueue()
         self.review_listeners.add(review_queue.take_prompt)
@@ -1237,12 +1277,11 @@ class WorkspaceServer:
                                                 }
                                             )
                                             try:
-                                                async with self.repository_edit_lock:
-                                                    synchronization = await asyncio.to_thread(
-                                                        synchronize_library_mathpub,
-                                                        project.root,
-                                                        self.build_revision,
+                                                synchronization = (
+                                                    await self._refresh_library_mathpub(
+                                                        project.root
                                                     )
+                                                )
                                             except MathpubError as error:
                                                 await send_event(
                                                     {
