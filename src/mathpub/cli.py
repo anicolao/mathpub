@@ -26,6 +26,7 @@ from mathpub.latex_format import (
 )
 from mathpub.output import emit
 from mathpub.publish import build, reproduce
+from mathpub.publishing_capabilities import WORKFLOWS, publishing_manual
 from mathpub.render import validate_fragment_source
 from mathpub.scaffold import (
     COLLECTIONS,
@@ -74,6 +75,12 @@ def parser() -> argparse.ArgumentParser:
         help="discover the version-matched framework contract and library extensions",
     )
     _json_flag(capabilities)
+    for discovery in (capabilities, agent_guide):
+        discovery.add_argument(
+            "--topic",
+            choices=[row[0] for row in WORKFLOWS],
+            help="read an installed, version-matched publishing manual",
+        )
 
     commands.add_parser("mcp", help="serve workspace agent tools over MCP stdio")
 
@@ -511,6 +518,12 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
 
     project = find_project()
     if args.command in {"agent-guide", "capabilities"}:
+        if args.topic:
+            manual = publishing_manual(args.topic)
+            return "capabilities", {
+                "topic": args.topic,
+                "manual": manual,
+            } if args.as_json else manual
         data = capability_data(project) if args.as_json else framework_guide(project)
         return "capabilities", data
     if args.command == "dump-format":

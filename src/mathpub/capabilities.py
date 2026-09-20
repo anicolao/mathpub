@@ -6,6 +6,7 @@ from typing import Any
 
 from mathpub import display_version
 from mathpub.config import Project, schema_enum
+from mathpub.publishing_capabilities import publishing_data, publishing_guide
 from mathpub.scaffold import FRAMEWORK_GUIDE, QUESTION_TEMPLATES
 from mathpub.styles import StyleCatalog
 
@@ -47,6 +48,7 @@ def capability_data(project: Project) -> dict[str, Any]:
         "authoring_root": str(project.root),
         "refresh_command": "nix run .#mathpub -- capabilities",
         "commands": [{"name": name, "purpose": purpose} for name, purpose in COMMANDS],
+        "publishing": publishing_data(),
         "publication_kinds": list(schema_enum("publication", "kind")),
         "publication_authoring": {
             "textbook_source_model": "component_chapters",
@@ -207,4 +209,4 @@ questions, or blocked work. After the author reviews the summary, they can retur
 terminal prompt and continue the conversation.
 """
     guide = FRAMEWORK_GUIDE.replace("## Presentations", f"{style_section}\n\n## Presentations")
-    return f"{guide.rstrip()}\n\n{completion_section}"
+    return f"{guide.rstrip()}\n\n{publishing_guide()}\n\n{completion_section}"
