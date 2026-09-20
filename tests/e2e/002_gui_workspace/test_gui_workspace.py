@@ -878,6 +878,17 @@ source = "gui-slide-editing/01-editable-slide.tex"
             assert tools_frame.get_by_role(
                 "button", name="Upload to this existing draft"
             ).is_disabled()
+            # Native WebKit input borders and OS accent rings differ between CI and hosts.
+            # Keep keyboard focus visible, but require author-defined control styling.
+            assert (
+                tools_frame.locator("#before").evaluate("e => getComputedStyle(e).appearance")
+                == "none"
+            )
+            page.locator("#publishing-close").focus()
+            assert (
+                page.locator("#publishing-close").evaluate("e => getComputedStyle(e).outlineColor")
+                == "rgb(38, 116, 217)"
+            )
             page.mouse.move(0, 0)
             steps.verify(page, "008-publishing-tools")
             page.get_by_role("button", name="Close publishing tools", exact=True).click()

@@ -22,9 +22,10 @@
           pythonPackages = pkgs.python312Packages;
           pypdf = pythonPackages.pypdf.overridePythonAttrs (old: {
             # This upstream throughput benchmark allocates roughly 0.5 GB and
-            # enforces a five-second deadline, which flakes on macOS CI hosts.
+            # enforces a five-second deadline, which flakes on shared CI hosts
+            # on both Linux and macOS. This is not a functional correctness test.
             # Keep the dependency's functional tests and all MathPub tests enabled.
-            disabledTests = (old.disabledTests or [ ]) ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            disabledTests = (old.disabledTests or [ ]) ++ [
               "test_flatedecode__decode_png_prediction__speed"
             ];
           });
