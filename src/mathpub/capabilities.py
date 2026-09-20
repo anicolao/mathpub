@@ -6,6 +6,7 @@ from typing import Any
 
 from mathpub import display_version
 from mathpub.config import Project, schema_enum
+from mathpub.publishing_capabilities import publishing_data, publishing_guide
 from mathpub.scaffold import FRAMEWORK_GUIDE, QUESTION_TEMPLATES
 from mathpub.styles import StyleCatalog
 
@@ -15,6 +16,24 @@ COMMANDS = (
     ("show", "Inspect one catalog entry, including a built-in or library style."),
     ("new", "Scaffold a component, question, or library-defined style."),
     ("check", "Validate a project, component, question, or publication."),
+    ("preflight", "Inspect an existing PDF against an opt-in TOML print policy."),
+    ("release", "Check, assemble and verify portable per-book release sets."),
+    ("cover", "Derive profile-driven cover geometry and check interior-linked artwork."),
+    ("identity", "Validate canonical bibliographic identity and non-mutating PDF drift."),
+    ("review", "Create durable before/after PDF reviews with hash-bound progress."),
+    (
+        "review-set",
+        "Review several publication pairs with shared navigation and evidence attachments.",
+    ),
+    ("qr", "Render actual-size vector QR assets for normal publication components."),
+    ("audit-navigation", "Audit rendered QR, link and bookmark occurrence inventories."),
+    ("invariants", "Compare placement-bound canonical values and library evidence."),
+    ("specimen", "Render actual-size specimens with source-mapped physical inventory."),
+    ("kdp", "Plan and explicitly upload verified pairs to existing paperback drafts."),
+    (
+        "export-print",
+        "Derive a separately verified print PDF and receipt from a manifest projection.",
+    ),
     ("preview", "Build all requested projections for one question in isolation."),
     ("build", "Build a deterministic publication edition."),
     ("variants", "Build several named deterministic variants."),
@@ -33,6 +52,7 @@ def capability_data(project: Project) -> dict[str, Any]:
         "authoring_root": str(project.root),
         "refresh_command": "nix run .#mathpub -- capabilities",
         "commands": [{"name": name, "purpose": purpose} for name, purpose in COMMANDS],
+        "publishing": publishing_data(),
         "publication_kinds": list(schema_enum("publication", "kind")),
         "publication_authoring": {
             "textbook_source_model": "component_chapters",
@@ -193,4 +213,4 @@ questions, or blocked work. After the author reviews the summary, they can retur
 terminal prompt and continue the conversation.
 """
     guide = FRAMEWORK_GUIDE.replace("## Presentations", f"{style_section}\n\n## Presentations")
-    return f"{guide.rstrip()}\n\n{completion_section}"
+    return f"{guide.rstrip()}\n\n{publishing_guide()}\n\n{completion_section}"

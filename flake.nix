@@ -22,9 +22,10 @@
           pythonPackages = pkgs.python312Packages;
           pypdf = pythonPackages.pypdf.overridePythonAttrs (old: {
             # This upstream throughput benchmark allocates roughly 0.5 GB and
-            # enforces a five-second deadline, which flakes on macOS CI hosts.
+            # enforces a five-second deadline, which flakes on shared CI hosts
+            # on both Linux and macOS. This is not a functional correctness test.
             # Keep the dependency's functional tests and all MathPub tests enabled.
-            disabledTests = (old.disabledTests or [ ]) ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            disabledTests = (old.disabledTests or [ ]) ++ [
               "test_flatedecode__decode_png_prediction__speed"
             ];
           });
@@ -32,6 +33,7 @@
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
               ./README.md
+              ./docs
               ./components
               ./mathpub.toml
               ./publications
@@ -95,11 +97,16 @@
               pythonPackages.jsonschema
               pythonPackages.numpy
               pypdf
+              pythonPackages.pillow
+              pythonPackages.qrcode
+              pythonPackages.zxing-cpp
+              pythonPackages.playwright
             ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/mathpub \
                 --set MATHPUB_BUILD_REVISION ${buildRevision} \
+                --set-default PLAYWRIGHT_BROWSERS_PATH ${pkgs.playwright-driver.browsers} \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bun pkgs.git pkgs.nix sage tex pkgs.poppler-utils ]}
               makeWrapper $out/bin/mathpub $out/bin/mathpub-workspace \
                 --add-flags "workspace"

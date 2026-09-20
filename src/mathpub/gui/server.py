@@ -18,7 +18,7 @@ import sys
 import webbrowser
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from mathpub import display_version
 from mathpub.completion import (
@@ -311,9 +311,28 @@ class WorkspaceServer:
         )
         self.native_preview_opener = native_preview_opener or _default_native_preview_opener()
         self.repository_edit_lock = asyncio.Lock()
+        self.refreshed_libraries: dict[Path, dict[str, object]] = {}
         self.completion_token = secrets.token_urlsafe(32)
         self.completion_listeners: set[Callable[[dict[str, object]], Awaitable[None]]] = set()
         self.review_listeners: set[Callable[[], str | None]] = set()
+
+    async def _refresh_library_mathpub(self, root: Path) -> dict[str, object]:
+        """Refresh once per GUI process/library; failures remain retryable."""
+        async with self.repository_edit_lock:
+            if root not in self.refreshed_libraries:
+                lock = root / "flake.lock"
+                try:
+                    data = json.loads(lock.read_text())
+                    inputs = data["nodes"][data["root"]].get("inputs", {})
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise MathpubError(
+                        "MP-GUI-023", "cannot inspect the library toolchain lock"
+                    ) from error
+                if "mathpub" not in inputs:
+                    return {"skipped": True, "updated": False, "revision": None}
+                result = await asyncio.to_thread(synchronize_library_mathpub, root)
+                self.refreshed_libraries[root] = result
+            return self.refreshed_libraries[root]
 
     async def _broadcast_completion(self, html: str) -> bool:
         listeners = tuple(self.completion_listeners)
@@ -439,6 +458,69 @@ class WorkspaceServer:
                 return
 
         # Handle HTTP API & Static File Requests
+        if path == "/api/tools" and method == "POST":
+            from mathpub.gui.publishing import publishing_operation, trusted_request
+
+            project = self._project()
+            try:
+                length = int(headers.get("content-length", "0"))
+                if not trusted_request(headers):
+                    response = _json_response(
+                        403, {"error": "same-origin publishing request required"}
+                    )
+                elif project is None:
+                    response = _json_response(404, {"error": "open an authoring library first"})
+                elif not 0 < length <= REQUEST_BODY_LIMIT:
+                    response = _json_response(400, {"error": "invalid publishing request size"})
+                else:
+                    body = initial_body
+                    if len(body) < length:
+                        body += await reader.readexactly(length - len(body))
+                    payload = json.loads(body[:length])
+                    if not isinstance(payload, dict):
+                        raise ValueError("publishing request must be an object")
+                    result = await asyncio.to_thread(publishing_operation, project, payload)
+                    response = _json_response(200, result)
+            except MathpubError as error:
+                response = _json_response(
+                    400, {"error": error.message, "code": error.code, "details": error.details}
+                )
+            except (OSError, ValueError, asyncio.IncompleteReadError):
+                response = _json_response(400, {"error": "invalid publishing request or file"})
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
+        if path.startswith("/api/tools/reviews/") and method == "GET":
+            from mathpub.releases import inside
+
+            project = self._project()
+            try:
+                if project is None:
+                    raise ValueError("no library")
+                target = inside(project.root, unquote(path.removeprefix("/api/tools/reviews/")))
+                if not re.fullmatch(
+                    r"index\.html|review\.json|evidence-[0-9]+\.bin|(?:before|after)\.pdf|"
+                    r"(?:before|after)-[0-9]+\.png",
+                    target.name,
+                ):
+                    raise ValueError("not a review asset")
+                if not (target.parent / "review.json").is_file():
+                    raise ValueError("not a review bundle")
+                data = target.read_bytes()
+                mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+                response = (
+                    f"HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\n"
+                    f"Content-Length: {len(data)}\r\n\r\n"
+                ).encode() + data
+            except (ValueError, OSError):
+                response = _json_response(404, {"error": "review asset not found"})
+            writer.write(response)
+            await writer.drain()
+            _close_writer(writer)
+            return
+
         if path == "/api/health":
             body = json.dumps({"status": "ok", "version": self.build_version}).encode()
             response = (
@@ -1071,8 +1153,6 @@ class WorkspaceServer:
             cwd=str(terminal_root),
             environment=terminal_environment,
         )
-        pty.start(rows=24, cols=80)
-
         loop = asyncio.get_running_loop()
         write_lock = asyncio.Lock()
 
@@ -1084,8 +1164,31 @@ class WorkspaceServer:
             except (ConnectionResetError, BrokenPipeError):
                 return
 
-        self.completion_listeners.add(send_event)
+        if project is not None and any(a.synchronize_mathpub for a in self.agents.values()):
+            await send_event({"type": "agent-toolchain-syncing", "startup": True})
+            try:
+                synchronization = await self._refresh_library_mathpub(project.root)
+            except MathpubError as error:
+                await send_event(
+                    {
+                        "type": "agent-toolchain-sync-failed",
+                        "startup": True,
+                        "error": error.message,
+                        "code": error.code,
+                        "details": error.details,
+                    }
+                )
+            else:
+                await send_event(
+                    {
+                        "type": "agent-toolchain-synced",
+                        "startup": True,
+                        **synchronization,
+                    }
+                )
 
+        pty.start(rows=24, cols=80)
+        self.completion_listeners.add(send_event)
         active_agent_id: str | None = None
         review_queue = PendingReviewQueue()
         self.review_listeners.add(review_queue.take_prompt)
@@ -1175,12 +1278,11 @@ class WorkspaceServer:
                                                 }
                                             )
                                             try:
-                                                async with self.repository_edit_lock:
-                                                    synchronization = await asyncio.to_thread(
-                                                        synchronize_library_mathpub,
-                                                        project.root,
-                                                        self.build_revision,
+                                                synchronization = (
+                                                    await self._refresh_library_mathpub(
+                                                        project.root
                                                     )
+                                                )
                                             except MathpubError as error:
                                                 await send_event(
                                                     {

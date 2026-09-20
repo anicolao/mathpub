@@ -23,6 +23,19 @@ publishing and formal-proof direction.
 
 ## Quick start
 
+Existing PDFs can be inspected with `mathpub preflight PDF --profile POLICY.toml --json`.
+See [PDF preflight](docs/pdf-preflight.md) for opt-in rules, reports, and limitations.
+For separate print PDFs with derivation receipts, see [verified print export](docs/print-export.md).
+
+For the complete review, release, cover, navigation and retailer workflow, see
+[publishing tools](docs/publishing-tools.md).
+Both `mathpub capabilities` and `mathpub capabilities --json` explain when to use
+these workflows, prerequisites, examples and approval boundaries. Read a bundled,
+version-matched manual with `mathpub capabilities --topic kdp` (or `preflight`,
+`export-print`, `release`, `cover`, `review`, `identity`, `navigation`, `layout`).
+These manuals are available from installed MathPub inside authoring libraries;
+agents do not need a checkout of the framework documentation.
+
 No host Python, SageMath, TeX installation, or font installation is used. With Nix flakes enabled:
 
 ```console
@@ -80,6 +93,19 @@ assumptions, status, and plain-language justification notes. Diagram scales are 
 evidence without adding scale commentary to student-facing figures.
 
 Useful authoring commands include:
+
+When a library opens in the GUI, the built-in agent workflow refreshes only its
+declared `mathpub` flake input with `nix flake update --refresh mathpub`. This runs
+once per library per GUI process, including after restarting the GUI, rather than
+pinning the library back to the GUI binary's revision. The candidate lock is
+verified before replacing `flake.lock`; failures preserve the old lock and appear
+in the workspace. Starting an agent retries a failed refresh before launching.
+The resulting lock change is left for normal source control review, not committed
+automatically. Explicit input revisions stay pinned, and configured branches stay
+on those branches. To use unmerged capabilities, select the relevant branch in the
+library input; restarting cannot make unpublished changes appear on `main`.
+Custom agent commands opt out of managed synchronization. Updating the library
+CLI does not replace an already-installed GUI executable.
 
 ```console
 nix run .#mathpub -- list components --json

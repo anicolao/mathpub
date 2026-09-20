@@ -1,12 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema", "id", "kind", "title", "profile"],
+  "required": ["schema", "id", "kind", "profile"],
+  "anyOf": [{"required": ["title"]}, {"required": ["identity"]}],
   "properties": {
     "schema": {"const": 1},
     "id": {"type": "string"},
     "kind": {"enum": ["test", "worksheet", "textbook", "presentation"]},
     "title": {"type": "string"},
+    "identity": {"type": "string", "minLength": 1},
+    "cover_spec": {"type": "string", "minLength": 1},
     "subtitle": {"type": "string"},
     "course": {"type": "string"},
     "author": {"type": "string"},

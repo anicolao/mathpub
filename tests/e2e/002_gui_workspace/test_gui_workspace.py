@@ -872,6 +872,27 @@ source = "gui-slide-editing/01-editable-slide.tex"
             )
             assert opened_pdfs == [(project.root / presentation_pdf).resolve()]
 
+            page.get_by_role("button", name="Publishing tools", exact=True).click()
+            tools_frame = page.frame_locator("#publishing-frame")
+            tools_frame.get_by_role("heading", name="Publishing tools", exact=True).wait_for()
+            assert tools_frame.get_by_role(
+                "button", name="Upload to this existing draft"
+            ).is_disabled()
+            # Native WebKit input borders and OS accent rings differ between CI and hosts.
+            # Keep keyboard focus visible, but require author-defined control styling.
+            assert (
+                tools_frame.locator("#before").evaluate("e => getComputedStyle(e).appearance")
+                == "none"
+            )
+            page.locator("#publishing-close").focus()
+            assert (
+                page.locator("#publishing-close").evaluate("e => getComputedStyle(e).outlineColor")
+                == "rgb(38, 116, 217)"
+            )
+            page.mouse.move(0, 0)
+            steps.verify(page, "008-publishing-tools")
+            page.get_by_role("button", name="Close publishing tools", exact=True).click()
+
             # 13. Generate Walkthrough README.md
             readme_path = scenario_dir / "README.md"
             readme_content = (
@@ -912,6 +933,8 @@ source = "gui-slide-editing/01-editable-slide.tex"
                 "## Presentation Slide Committed and Rebuilt\n\n"
                 "![Updated Presentation Slide]"
                 "(./screenshots/007-presentation-slide-updated.png)\n\n"
+                "## Publishing Tools\n\n"
+                "![Publishing tools](./screenshots/008-publishing-tools.png)\n\n"
                 "**Verifications:**\n"
                 "- [x] Header brand and subtitle render correctly\n"
                 "- [x] The package version and build Git revision are visible\n"

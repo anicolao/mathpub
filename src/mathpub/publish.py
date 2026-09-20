@@ -19,6 +19,7 @@ from mathpub import __version__
 from mathpub.catalog import Catalog, Entry
 from mathpub.config import Project, load_toml, relative
 from mathpub.errors import MathpubError
+from mathpub.identity import identity_tex
 from mathpub.instance import (
     canonical_json,
     instance_hash,
@@ -26,6 +27,7 @@ from mathpub.instance import (
     instantiate_component,
 )
 from mathpub.latex_format import find_latex_format
+from mathpub.provenance import source_snapshot, stamp_tex
 from mathpub.render import (
     SOURCE_BEGIN,
     SOURCE_END,
@@ -121,13 +123,7 @@ def _generator_source_hash(entry: Entry) -> str:
 
 
 def _git_source(project: Project) -> dict[str, Any]:
-    def git(*arguments: str) -> str:
-        process = subprocess.run(
-            ["git", *arguments], cwd=project.root, capture_output=True, text=True, check=False
-        )
-        return process.stdout.strip() if process.returncode == 0 else ""
-
-    return {"git_commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
+    return source_snapshot(project.root)
 
 
 def _toolchain() -> dict[str, str]:
@@ -148,7 +144,7 @@ def _inspect_pdf(path: Path, title: str) -> dict[str, Any]:
     if not reader.pages:
         raise MathpubError("MP-PDF-001", f"PDF has no pages: {path}", exit_code=7)
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    if title not in text:
+    if " ".join(title.split()) not in " ".join(text.split()):
         raise MathpubError("MP-PDF-002", f"PDF does not contain its title: {path}", exit_code=7)
     return {"pages": len(reader.pages), "sha256": _file_hash(path)}
 
@@ -658,14 +654,23 @@ def build(
     reproduction_override: dict[str, Any] | None = None,
     lesson_ids: list[str] | None = None,
     incremental: bool = True,
+    require_clean: bool = False,
 ) -> dict[str, Any]:
     started = time.monotonic()
+    source_before = _git_source(project)
+    if require_clean and source_before["dirty"] is not False:
+        raise MathpubError("MP-BUILD-003", "release build requires a known, clean Git tree")
     publication_path = _publication_path(project, publication_source)
     publication = _select_publication_lessons(
         load_toml(publication_path, "publication"),
         lesson_ids,
     )
     resolved_style = prepare_publication_style(project, publication)
+    cover = None
+    if publication.get("cover_spec"):
+        from mathpub.covers import cover_geometry
+
+        cover = cover_geometry(publication_path.parent / publication["cover_spec"])
     if resolved_style.source == "library" and publication["kind"] != "textbook":
         raise MathpubError(
             "MP-STYLE-004", "library-defined styles currently support textbook publications"
@@ -781,6 +786,17 @@ def build(
         )
         latex_format = find_latex_format(project, publication, selected_font)
         for projection in selected:
+            render_publication = dict(publication)
+            if identity := publication.get("_identity"):
+                from mathpub.render import _tex_escape
+
+                render_publication.update(
+                    {
+                        "title": _tex_escape(publication["_display_title"]).replace("\n", r"\\"),
+                        "subtitle": _tex_escape(publication.get("subtitle", "")),
+                        "author": _tex_escape(publication.get("author", "")),
+                    }
+                )
             rendered = [
                 question_tex(entry, instance, projection, selection.get("points"))
                 for entry, instance, selection in ordered
@@ -792,19 +808,34 @@ def build(
                     catalog, publication, projection, component_instances
                 )
                 source = textbook_tex(
-                    publication,
+                    render_publication,
                     projection,
                     chapters,
                     selected_font,
                 )
             elif publication["kind"] == "presentation":
                 source = presentation_tex(
-                    publication,
+                    render_publication,
                     _presentation_slides(project, publication_path, publication),
                     selected_font,
                 )
             else:
-                source = document_tex(publication, projection, rendered, selected_font)
+                source = document_tex(render_publication, projection, rendered, selected_font)
+            if identity:
+                source = identity_tex(source, identity, tex_engine)
+            if cover:
+                from mathpub.covers import cover_preamble
+
+                marker = r"\begin{document}"
+                source = source.replace(marker, cover_preamble(cover) + "\n" + marker, 1)
+            stamp = {
+                "schema": 1,
+                "publication_id": publication["id"],
+                "projection": projection,
+                "lesson_ids": lesson_ids or [],
+                "source": source_before,
+            }
+            source = stamp_tex(source, stamp, tex_engine)
             tex_path.write_text(source, encoding="utf-8")
             source_map = _generated_source_map(project, tex_path, source)
             generated_source_maps[projection] = source_map
@@ -847,7 +878,7 @@ def build(
                         final_pdf,
                         publication["component_chapters"][0]["lessons"][0]["title"]
                         if publication_style_base(publication) == "anna"
-                        else publication["title"],
+                        else publication.get("_display_title", publication["title"]),
                     ),
                 }
             )
@@ -863,6 +894,9 @@ def build(
             "publication_id": publication["id"],
             "publication_path": relative(project, publication_path),
             "publication_kind": publication["kind"],
+            "identity": publication.get("_identity"),
+            "identity_sha256": publication.get("_identity_sha256"),
+            "cover": cover,
             "publication_style": resolved_style.identifier,
             "style_base": resolved_style.base,
             "variant": variant,
@@ -876,7 +910,7 @@ def build(
             "instance_cache": cache_report,
             "latex_format": relative(project, latex_format) if latex_format else None,
             "source": {
-                **_git_source(project),
+                **source_before,
                 "publication_sha256": _file_hash(publication_path),
                 "style_sources": resolved_style.source_hashes(project),
                 "question_sources": {
@@ -925,6 +959,10 @@ def build(
             ],
             "outputs": outputs,
         }
+        source_after = _git_source(project)
+        manifest["source_stable"] = source_after == source_before
+        if require_clean and not manifest["source_stable"]:
+            raise MathpubError("MP-BUILD-004", "source changed during release build")
         if reproduction_override is not None:
             manifest["reproduction_override"] = reproduction_override
         (temporary / "manifest.json").write_text(canonical_json(manifest), encoding="utf-8")

@@ -26,6 +26,7 @@ from mathpub.latex_format import (
 )
 from mathpub.output import emit
 from mathpub.publish import build, reproduce
+from mathpub.publishing_capabilities import WORKFLOWS, publishing_manual
 from mathpub.render import validate_fragment_source
 from mathpub.scaffold import (
     COLLECTIONS,
@@ -74,6 +75,12 @@ def parser() -> argparse.ArgumentParser:
         help="discover the version-matched framework contract and library extensions",
     )
     _json_flag(capabilities)
+    for discovery in (capabilities, agent_guide):
+        discovery.add_argument(
+            "--topic",
+            choices=[row[0] for row in WORKFLOWS],
+            help="read an installed, version-matched publishing manual",
+        )
 
     commands.add_parser("mcp", help="serve workspace agent tools over MCP stdio")
 
@@ -237,6 +244,98 @@ def parser() -> argparse.ArgumentParser:
     clean = commands.add_parser("clean", help="remove generated build output")
     clean.add_argument("--edition")
     _json_flag(clean)
+    preflight = commands.add_parser("preflight", help="inspect a PDF against an opt-in policy")
+    preflight.add_argument("pdf", type=Path)
+    preflight.add_argument("--profile", type=Path, help="versioned TOML preflight policy")
+    _json_flag(preflight)
+    export = commands.add_parser("export-print", help="derive a verified print PDF and receipt")
+    export.add_argument("manifest", type=Path)
+    export.add_argument("--projection", required=True)
+    export.add_argument("--output", type=Path, required=True, help="new export bundle directory")
+    export.add_argument("--policy", choices=("remove-invisible-links-v1",), required=True)
+    _json_flag(export)
+    release = commands.add_parser("release", help="check, assemble, or verify a release set")
+    release.add_argument("action", choices=("check", "assemble", "verify"))
+    release.add_argument("source", type=Path)
+    release.add_argument("--output", type=Path)
+    _json_flag(release)
+    identity = commands.add_parser("identity", help="validate canonical identity and PDF drift")
+    identity.add_argument("source", type=Path)
+    identity.add_argument("--pdf", type=Path, action="append", default=[])
+    _json_flag(identity)
+    cover = commands.add_parser("cover", help="prepare or check an interior-linked paperback cover")
+    cover.add_argument("action", choices=("prepare", "check"))
+    cover.add_argument("spec", type=Path)
+    cover.add_argument("--output", type=Path)
+    cover.add_argument("--artwork", type=Path)
+    cover.add_argument("--prepared", type=Path)
+    _json_flag(cover)
+    review = commands.add_parser("review", help="create a portable before/after edition review")
+    review.add_argument("before", type=Path)
+    review.add_argument("after", type=Path)
+    review.add_argument("--output", type=Path, required=True)
+    review.add_argument("--dpi", type=int, default=150)
+    review.add_argument("--crop", type=float, nargs=4, default=(0, 0, 0, 0))
+    review.add_argument("--page", type=int, action="append", dest="pages")
+    review.add_argument("--cache", type=Path)
+    review.add_argument("--label", default="Edition comparison")
+    review.add_argument("--notes", default="")
+    review.add_argument(
+        "--baseline-revision", default="", help="author-supplied, not verified provenance"
+    )
+    review.add_argument("--attach", type=Path, action="append", default=[], dest="attachments")
+    _json_flag(review)
+    review_set = commands.add_parser(
+        "review-set", help="review multiple publication pairs together"
+    )
+    review_set.add_argument("config", type=Path)
+    review_set.add_argument("--output", type=Path, required=True)
+    _json_flag(review_set)
+    qr = commands.add_parser("qr", help="render a vector QR asset (PDF, SVG or TeX)")
+    qr.add_argument("payload")
+    qr.add_argument("--output", type=Path, required=True)
+    qr.add_argument("--size-pt", type=float, default=72)
+    _json_flag(qr)
+    navigation = commands.add_parser(
+        "audit-navigation", help="verify rendered QR, links and bookmarks"
+    )
+    navigation.add_argument("pdf", type=Path)
+    navigation.add_argument("--expectations", type=Path, required=True)
+    _json_flag(navigation)
+    invariants = commands.add_parser("invariants", help="compare placement-bound layout invariants")
+    invariants.add_argument("before", type=Path)
+    invariants.add_argument("after", type=Path)
+    invariants.add_argument("--evidence", type=Path, action="append", default=[])
+    _json_flag(invariants)
+    specimen = commands.add_parser("specimen", help="build actual-size component/style specimens")
+    specimen.add_argument("identifier")
+    specimen.add_argument("--component", action="append", required=True, dest="components")
+    specimen.add_argument("--output", type=Path, required=True)
+    specimen.add_argument("--style", default="mathpub")
+    specimen.add_argument(
+        "--projection",
+        default="student",
+        choices=("student", "answers", "solutions", "validation", "parent"),
+    )
+    specimen.add_argument("--seed", default="2026")
+    _json_flag(specimen)
+    kdp = commands.add_parser("kdp", help="plan or upload a verified release to an existing draft")
+    kdp_actions = kdp.add_subparsers(dest="action", required=True)
+    kdp_plan = kdp_actions.add_parser("plan")
+    kdp_plan.add_argument("release", type=Path)
+    kdp_plan.add_argument("--book", required=True)
+    kdp_plan.add_argument("--config", type=Path, required=True)
+    kdp_plan.add_argument("--output", type=Path, required=True)
+    _json_flag(kdp_plan)
+    kdp_login = kdp_actions.add_parser("login")
+    kdp_login.add_argument("config", type=Path)
+    _json_flag(kdp_login)
+    kdp_upload = kdp_actions.add_parser("upload")
+    kdp_upload.add_argument("plan", type=Path)
+    kdp_upload.add_argument("--output", type=Path, required=True)
+    kdp_upload.add_argument("--resume", action="store_true")
+    kdp_upload.add_argument("--retry-uncertain", action="store_true")
+    _json_flag(kdp_upload)
     return result
 
 
@@ -312,6 +411,106 @@ def _require_clean(project) -> None:
 
 
 def run(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "kdp":
+        from mathpub.kdp import create_plan, login, upload_draft
+
+        if args.action == "plan":
+            result = create_plan(args.release, args.book, args.config, args.output)
+        elif args.action == "login":
+            result = login(args.config)
+        else:
+            result = upload_draft(
+                args.plan, args.output, resume=args.resume, retry_uncertain=args.retry_uncertain
+            )
+        return f"kdp {args.action}", result
+
+    if args.command == "invariants":
+        from mathpub.layout_tools import compare_invariants
+
+        return "invariants", compare_invariants(args.before, args.after, args.evidence)
+    if args.command == "specimen":
+        from mathpub.layout_tools import specimen
+
+        return "specimen", specimen(
+            find_project(),
+            args.identifier,
+            args.components,
+            args.output,
+            style=args.style,
+            projection=args.projection,
+            seed=args.seed,
+        )
+
+    if args.command in ("qr", "audit-navigation"):
+        from mathpub.navigation_audit import audit_navigation, render_qr
+
+        return args.command, (
+            render_qr(args.payload, args.output, args.size_pt)
+            if args.command == "qr"
+            else audit_navigation(args.pdf, args.expectations)
+        )
+
+    if args.command == "review":
+        from mathpub.edition_review import create_review
+
+        return "review", create_review(
+            args.before,
+            args.after,
+            args.output,
+            dpi=args.dpi,
+            crop_pt=args.crop,
+            pages=args.pages,
+            cache=args.cache,
+            label=args.label,
+            notes=args.notes,
+            baseline_revision=args.baseline_revision,
+            attachments=args.attachments,
+        )
+
+    if args.command == "review-set":
+        from mathpub.edition_review import create_review_set
+
+        return "review-set", create_review_set(args.config, args.output)
+
+    if args.command == "cover":
+        from mathpub.covers import check_cover, prepare_cover
+
+        if args.action == "prepare" and args.output is not None:
+            return "cover prepare", prepare_cover(args.spec, args.output)
+        if args.action == "check" and args.artwork is not None:
+            return "cover check", check_cover(args.spec, args.artwork, args.prepared)
+        raise MathpubError(
+            "MP-CLI-003", "cover prepare needs --output; cover check needs --artwork"
+        )
+
+    if args.command == "identity":
+        from mathpub.identity import check_identity
+
+        return "identity", check_identity(args.source, args.pdf)
+
+    if args.command == "release":
+        from mathpub.releases import assemble_release, check_release, verify_release
+
+        if args.action == "assemble":
+            if args.output is None:
+                raise MathpubError("MP-CLI-003", "release assemble requires --output")
+            return "release assemble", assemble_release(args.source, args.output)
+        return f"release {args.action}", (
+            verify_release(args.source) if args.action == "verify" else check_release(args.source)
+        )
+
+    if args.command == "export-print":
+        from mathpub.print_export import export_print
+
+        return "export-print", export_print(
+            args.manifest, args.projection, args.output, policy=args.policy
+        )
+
+    if args.command == "preflight":
+        from mathpub.preflight import preflight_command
+
+        return "preflight", preflight_command(args.pdf, args.profile)
+
     if args.command == "init":
         return "init", init_project(
             args.directory,
@@ -338,6 +537,12 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
 
     project = find_project()
     if args.command in {"agent-guide", "capabilities"}:
+        if args.topic:
+            manual = publishing_manual(args.topic)
+            return "capabilities", {
+                "topic": args.topic,
+                "manual": manual,
+            } if args.as_json else manual
         data = capability_data(project) if args.as_json else framework_guide(project)
         return "capabilities", data
     if args.command == "dump-format":
@@ -454,6 +659,7 @@ placement = {json.dumps(placement)}
             replace=args.replace,
             lesson_ids=args.lesson_ids,
             incremental=args.incremental,
+            require_clean=args.require_clean,
         )
     if args.command == "variants":
         if args.count < 1:
