@@ -7,6 +7,12 @@ not implied by upload. Ordinary builds never open a retailer session.
 
 ## Prepare
 
+The two upload files are the complete **interior PDF** and a separate **full-wrap
+cover PDF** (back cover + spine + front cover on one wide page). An interior title
+page, a front-only cover image, or a geometry proof is not the cover upload.
+Follow the [print pipeline](publishing-tools.md#print-pipeline); retain manifests,
+release metadata and receipts connecting the cover to the exact interior.
+
 Build source-stable clean editions with canonical identity, an ISBN, and a linked
 cover specification. Export both print artifacts, then assemble a verified release
 with `interior` and `cover` roles and the export receipts. Set explicit printing

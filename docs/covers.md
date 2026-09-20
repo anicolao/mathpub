@@ -1,4 +1,28 @@
-# Paperback cover geometry
+# KDP paperback full-wrap cover
+
+In MathPub's print workflow, **cover means a separate full-wrap PDF**, not a
+decorative first page inside the book. Unless the author explicitly asks for a
+different deliverable, produce one wide PDF page containing
+**back cover + spine + front cover**, with the back on the left and front on the right for the ordinary
+left-to-right paperback layout supported here. The complete interior is a different
+PDF. An interior title page, a front-only image, or the generated dimension proof
+does not fulfill a request for a KDP cover.
+
+The cover is not complete merely because it looks correct: its metadata must
+connect it to the exact interior edition. Use `cover_spec` in a normal authored
+cover publication. The resulting cover manifest's `cover.interior` record contains
+the interior PDF SHA-256, interior manifest SHA-256, page count, source record and
+identity. Release metadata retains that link; export receipts connect source PDFs
+to the separate print-export bytes. The PDFs also carry source-provenance and
+canonical-identity metadata. The exact interior linkage is in the accompanying
+manifest/release metadata, not inferred from the PDF filename or title.
+
+Retain these metadata files with both PDFs. If interior bytes change, regenerate
+the linked geometry and rebuild the cover even if its dimensions remain unchanged.
+If its page count, trim or paper changes, recheck the physical layout as well.
+See the [print pipeline](publishing-tools.md#print-pipeline) for final build order.
+
+## Geometry and authored artwork
 
 Printer policy is explicit and dated, never a built-in stock multiplier:
 

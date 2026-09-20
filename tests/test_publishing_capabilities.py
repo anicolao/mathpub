@@ -17,6 +17,15 @@ def test_startup_and_json_share_all_publishing_workflows(tmp_path):
     data = capability_data(project)["publishing"]
     assert len(data["workflows"]) == 9
     assert data["policy"] in guide
+    assert data["print_goal"] in guide
+    assert "print-ready PDFs for KDP" in data["print_goal"]
+    assert len(data["print_pipeline"]) == 6
+    for step in data["print_pipeline"]:
+        assert step in guide
+    cover = next(w for w in data["workflows"] if w["topic"] == "cover")
+    assert "back cover + spine + front cover" in cover["requirements_and_boundaries"]
+    assert "NOT an interior title page" in cover["requirements_and_boundaries"]
+    assert "exact interior PDF hash" in cover["requirements_and_boundaries"]
     for workflow in data["workflows"]:
         assert workflow["when"] in guide
         assert workflow["requirements_and_boundaries"] in guide
