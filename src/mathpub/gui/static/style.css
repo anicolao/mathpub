@@ -10,6 +10,21 @@
   --border: #334155;
 }
 
+/* Keep the publishing dialog independent of OS-native control/accent styling. */
+#publishing-close {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid #b8bec8;
+  border-radius: 2px;
+  background: #edf0f5;
+  color: #202838;
+}
+
+#publishing-close:focus-visible {
+  outline: 2px solid #2674d9;
+  outline-offset: 2px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
