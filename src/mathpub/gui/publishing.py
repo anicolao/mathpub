@@ -35,13 +35,20 @@ def publishing_operation(project, payload: dict) -> dict:
 
     action = payload.get("action")
     if action == "review":
-        from mathpub.edition_review import create_review
+        from mathpub.edition_review import create_review, create_review_set
 
-        result = create_review(
-            path("before"),
-            path("after"),
-            path("output"),
-            label=str(payload.get("label", "Edition comparison")),
+        result = (
+            create_review_set(path("review_config"), path("output"), allowed_root=project.root)
+            if payload.get("review_config")
+            else create_review(
+                path("before"),
+                path("after"),
+                path("output"),
+                label=str(payload.get("label", "Edition comparison")),
+                notes=str(payload.get("notes", "")),
+                baseline_revision=str(payload.get("baseline_revision", "")),
+                attachments=[path("attachment")] if payload.get("attachment") else [],
+            )
         )
         return {
             "report": result,

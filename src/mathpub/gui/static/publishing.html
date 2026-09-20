@@ -12,8 +12,14 @@ iframe{width:100%;height:70vh;border:1px solid #ddd}[hidden]{display:none}.warni
 </style></head><body>
 <h1>Publishing tools</h1><p>Paths are relative to the open authoring library. Existing outputs are never overwritten.</p>
 <section><h2>Compare editions</h2><form id="review-form">
-<label>Saved baseline PDF<input id="before" required placeholder="reviews/baseline.pdf"></label>
-<label>Revised PDF<input id="after" required placeholder="build/book/A/book-A-student.pdf"></label>
+<label>Saved baseline PDF<input id="before" placeholder="reviews/baseline.pdf"></label>
+<label>Revised PDF<input id="after" placeholder="build/book/A/book-A-student.pdf"></label>
+<details><summary>Multiple publications and review context</summary>
+<label>Review-set TOML (instead of the PDF pair)<input id="review-config" placeholder="reviews/catalog.toml"></label>
+<label>Review notes<input id="review-notes"></label>
+<label>Baseline revision (author supplied, not verified)<input id="baseline-revision"></label>
+<label>Evidence attachment (snapshotted, not executed)<input id="review-attachment" placeholder="reviews/source.patch"></label>
+<p>For a review set, put per-publication notes and attachments in its TOML.</p></details>
 <label>New review directory<input id="review-output" required placeholder="reviews/revision-b"></label>
 <button>Create paired review</button></form><iframe id="review-view" title="Edition review" hidden></iframe></section>
 <section><h2>KDP existing paperback draft</h2>

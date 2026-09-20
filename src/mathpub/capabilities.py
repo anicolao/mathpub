@@ -21,6 +21,10 @@ COMMANDS = (
     ("cover", "Derive profile-driven cover geometry and check interior-linked artwork."),
     ("identity", "Validate canonical bibliographic identity and non-mutating PDF drift."),
     ("review", "Create durable before/after PDF reviews with hash-bound progress."),
+    (
+        "review-set",
+        "Review several publication pairs with shared navigation and evidence attachments.",
+    ),
     ("qr", "Render actual-size vector QR assets for normal publication components."),
     ("audit-navigation", "Audit rendered QR, link and bookmark occurrence inventories."),
     ("invariants", "Compare placement-bound canonical values and library evidence."),
