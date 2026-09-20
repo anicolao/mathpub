@@ -501,7 +501,8 @@ class WorkspaceServer:
                     raise ValueError("no library")
                 target = inside(project.root, unquote(path.removeprefix("/api/tools/reviews/")))
                 if not re.fullmatch(
-                    r"index\.html|review\.json|(?:before|after)\.pdf|(?:before|after)-[0-9]+\.png",
+                    r"index\.html|review\.json|evidence-[0-9]+\.bin|(?:before|after)\.pdf|"
+                    r"(?:before|after)-[0-9]+\.png",
                     target.name,
                 ):
                     raise ValueError("not a review asset")

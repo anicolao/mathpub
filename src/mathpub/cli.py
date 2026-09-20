@@ -279,7 +279,18 @@ def parser() -> argparse.ArgumentParser:
     review.add_argument("--page", type=int, action="append", dest="pages")
     review.add_argument("--cache", type=Path)
     review.add_argument("--label", default="Edition comparison")
+    review.add_argument("--notes", default="")
+    review.add_argument(
+        "--baseline-revision", default="", help="author-supplied, not verified provenance"
+    )
+    review.add_argument("--attach", type=Path, action="append", default=[], dest="attachments")
     _json_flag(review)
+    review_set = commands.add_parser(
+        "review-set", help="review multiple publication pairs together"
+    )
+    review_set.add_argument("config", type=Path)
+    review_set.add_argument("--output", type=Path, required=True)
+    _json_flag(review_set)
     qr = commands.add_parser("qr", help="render a vector QR asset (PDF, SVG or TeX)")
     qr.add_argument("payload")
     qr.add_argument("--output", type=Path, required=True)
@@ -451,7 +462,15 @@ def run(args: argparse.Namespace) -> tuple[str, object]:
             pages=args.pages,
             cache=args.cache,
             label=args.label,
+            notes=args.notes,
+            baseline_revision=args.baseline_revision,
+            attachments=args.attachments,
         )
+
+    if args.command == "review-set":
+        from mathpub.edition_review import create_review_set
+
+        return "review-set", create_review_set(args.config, args.output)
 
     if args.command == "cover":
         from mathpub.covers import check_cover, prepare_cover

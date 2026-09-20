@@ -35,3 +35,23 @@ def test_upload_requires_confirmation_of_exact_plan_and_confines_paths(tmp_path,
     assert len(calls) == 1
     with pytest.raises(MathpubError, match="inside"):
         publishing_operation(project, {**payload, "plan": "../outside.json"})
+
+
+def test_review_set_cannot_escape_library_through_config(tmp_path):
+    config = tmp_path / "review.toml"
+    config.write_text("""schema = 1
+[[books]]
+label = "Outside"
+before = "../outside.pdf"
+after = "after.pdf"
+""")
+    with pytest.raises(MathpubError, match="inside the library"):
+        publishing_operation(
+            Project(tmp_path, {}),
+            {
+                "action": "review",
+                "review_config": "review.toml",
+                "output": "review",
+            },
+        )
+    assert not (tmp_path / "review").exists()

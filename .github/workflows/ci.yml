@@ -41,7 +41,7 @@ jobs:
         run: nix develop --command pytest tests/e2e/003_agentic_onboarding/test_agentic_onboarding.py
 
       - name: Run Guarded Publishing Browser Fixtures
-        run: nix develop --command pytest tests/test_kdp.py
+        run: nix develop --command pytest tests/test_kdp.py tests/test_edition_review.py
 
       - name: Upload Visual Regression Diffs on Failure
         if: failure()

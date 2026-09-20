@@ -61,8 +61,14 @@ WORKFLOWS = (
         "changed, "
         "inserted and deleted pages; alignment is heuristic. Progress marks are not approval. "
         "Use explicit --page, --crop and --cache only when appropriate; "
-        "excluded margins are recorded.",
-        ("review baseline.pdf revised.pdf --output reviews/revision-one --json",),
+        "excluded margins are recorded. Use review-set for multiple publications. "
+        "Use --notes, --baseline-revision and --attach for author-supplied context/evidence; "
+        "these are not verified PDF provenance. The viewer retains percentage zoom and offers "
+        "direct page selection, filtered progress counts and links to frozen full PDFs.",
+        (
+            "review baseline.pdf revised.pdf --output reviews/revision-one --json",
+            "review-set review.toml --output reviews/catalog --json",
+        ),
         "edition-review.md",
     ),
     (

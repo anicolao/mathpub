@@ -23,7 +23,9 @@ function showPlan(value) {
   $('confirm').disabled = false; $('confirm').checked = false; $('upload').disabled = true;
 }
 $('review-form').onsubmit = handle(async () => {
-  const result = await request({action:'review',before:$('before').value,after:$('after').value,output:$('review-output').value});
+  const result = await request({action:'review',before:$('before').value,after:$('after').value,output:$('review-output').value,
+    review_config:$('review-config').value,notes:$('review-notes').value,
+    baseline_revision:$('baseline-revision').value,attachment:$('review-attachment').value});
   $('review-view').src = result.url; $('review-view').hidden = false;
 });
 $('login').onclick = handle(() => request({action:'kdp-login',config:$('config').value}));
