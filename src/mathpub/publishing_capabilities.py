@@ -42,10 +42,17 @@ WORKFLOWS = (
     ),
     (
         "cover",
-        "Prepare a paperback cover or recheck it after the interior page count changes.",
+        "Prepare the separate KDP paperback full-wrap cover PDF or recheck its interior link.",
+        "In this print workflow, 'cover' means back cover + spine + front cover on one wide "
+        "PDF page, separate from the interior PDF. It is NOT an interior title page, "
+        "a front-only image, or a dimension proof. Unless the author explicitly requests another "
+        "kind of cover, deliver the full wrap. "
         "Use an explicit dated printer profile and the exact clean interior manifest. "
         "The generated dimension proof is NOT upload artwork. Author artwork through a normal "
-        "component-backed publication with cover_spec, then check it. "
+        "component-backed publication with cover_spec, then check it. The cover manifest records "
+        "the exact interior PDF hash, manifest hash, page count and source; release metadata and "
+        "print receipts preserve the link to the delivered pair. Shared identity and embedded "
+        "PDF provenance supplement this link; matching filenames alone are not enough. "
         "Verify printer rules separately.",
         (
             "cover prepare cover.toml --output cover-preparation --json",
@@ -144,10 +151,42 @@ POLICY = (
     "Keep sessions and receipts private."
 )
 
+PRINT_GOAL = (
+    "The ultimate print-workflow deliverable is a verified pair of print-ready PDFs for KDP: "
+    "the complete interior and a separate paperback full-wrap cover, with metadata connecting "
+    "the cover to that exact interior. Previews and dimension proofs are intermediate artifacts, "
+    "not substitutes for this pair. Work only on the stage requested by the author; this goal "
+    "does not authorize unsolicited full builds, retailer uploads or publication. 'Print-ready' "
+    "means prepared and checked against explicit printer requirements, "
+    "not guaranteed KDP acceptance."
+)
+
+PRINT_PIPELINE = (
+    "Author and review mapped components incrementally. Share canonical bibliographic identity "
+    "between interior and cover, and preserve complete before/after review PDFs.",
+    "Finalize the interior layout and printing profile. Build the complete intended interior "
+    "projection with --require-clean from stable source; preflight it. Prepare cover geometry "
+    "from that actual interior manifest, not an estimated page count.",
+    "Author back cover, spine and front cover as one separate full-wrap PDF using cover_spec. "
+    "Include bleed, safe regions and barcode reservation from the verified printer profile. "
+    "A dimension proof is only a layout aid, never upload artwork.",
+    "After final authored changes are committed, rebuild the interior first and cover second "
+    "from the same clean source revision/tree, retaining caches. Refresh geometry against the "
+    "final interior bytes even if page count is unchanged. Check the wrap and both identities.",
+    "Export each chosen projection separately with export-print, retaining both receipts. "
+    "Preflight the exported PDFs. Assemble and verify a release with required interior and cover "
+    "roles, exact artifact hashes and the cover-to-interior link; retain review originals.",
+    "Hand off the two print PDFs plus release metadata and receipts. Only when explicitly "
+    "authorized, prepare a KDP plan, verify the account/draft/settings and upload to the existing "
+    "paperback draft. Upload persistence is not completed processing, approval or publication.",
+)
+
 
 def publishing_data() -> dict:
     return {
         "policy": POLICY,
+        "print_goal": PRINT_GOAL,
+        "print_pipeline": list(PRINT_PIPELINE),
         "workflows": [
             {
                 "topic": topic,
@@ -162,7 +201,13 @@ def publishing_data() -> dict:
 
 
 def publishing_guide() -> str:
-    sections = ["## Publishing and delivery tools", POLICY]
+    sections = [
+        "## Publishing and delivery tools",
+        PRINT_GOAL,
+        POLICY,
+        "### Print pipeline",
+        "\n".join(f"{i}. {step}" for i, step in enumerate(PRINT_PIPELINE, 1)),
+    ]
     for workflow in publishing_data()["workflows"]:
         sections.extend(
             [
