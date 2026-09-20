@@ -32,6 +32,7 @@
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
               ./README.md
+              ./docs
               ./components
               ./mathpub.toml
               ./publications

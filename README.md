@@ -29,6 +29,12 @@ For separate print PDFs with derivation receipts, see [verified print export](do
 
 For the complete review, release, cover, navigation and retailer workflow, see
 [publishing tools](docs/publishing-tools.md).
+Both `mathpub capabilities` and `mathpub capabilities --json` explain when to use
+these workflows, prerequisites, examples and approval boundaries. Read a bundled,
+version-matched manual with `mathpub capabilities --topic kdp` (or `preflight`,
+`export-print`, `release`, `cover`, `review`, `identity`, `navigation`, `layout`).
+These manuals are available from installed MathPub inside authoring libraries;
+agents do not need a checkout of the framework documentation.
 
 No host Python, SageMath, TeX installation, or font installation is used. With Nix flakes enabled:
 

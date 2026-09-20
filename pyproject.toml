@@ -28,6 +28,9 @@ mathpub = "mathpub.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mathpub"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"docs" = "mathpub/publishing_docs"
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
